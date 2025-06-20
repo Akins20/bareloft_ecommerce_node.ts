@@ -1,0 +1,4 @@
+export declare const WishlistItemModel: any;
+export declare const WishlistItemSchema = "\nmodel WishlistItem {\n  id        String   @id @default(cuid())\n  userId    String   @map(\"user_id\")\n  productId String   @map(\"product_id\")\n  createdAt DateTime @default(now()) @map(\"created_at\")\n\n  // Relations\n  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)\n  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)\n\n  @@unique([userId, productId])\n  @@map(\"wishlist_items\")\n}\n";
+export default WishlistItemModel;
+//# sourceMappingURL=WishlistItem.d.ts.map

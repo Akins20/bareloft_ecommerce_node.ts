@@ -1,0 +1,357 @@
+import { Router } from "express";
+import { CategoryController } from "../../controllers/products/CategoryController";
+import { authenticate } from "../../middleware/auth/authenticate";
+import { authorize } from "../../middleware/auth/authorize";
+import { validateRequest } from "../../middleware/validation/validateRequest";
+import { cacheMiddleware } from "../../middleware/cache/cacheMiddleware";
+import {
+  createCategorySchema,
+  updateCategorySchema,
+} from "../../utils/validation/schemas/productSchemas";
+
+const router = Router();
+
+// Initialize controller (will be injected via dependency injection)
+let categoryController: CategoryController;
+
+export const initializeCategoryRoutes = (controller: CategoryController) => {
+  categoryController = controller;
+  return router;
+};
+
+// ==================== PUBLIC CATEGORY ENDPOINTS ====================
+
+/**
+ * @route   GET /api/v1/categories
+ * @desc    Get all categories with optional filtering and pagination
+ * @access  Public
+ * @query   {
+ *   page?: number,
+ *   limit?: number,
+ *   search?: string,
+ *   parentId?: string,
+ *   isActive?: boolean,
+ *   includeProductCount?: boolean,
+ *   sortBy?: 'name' | 'sortOrder' | 'productCount' | 'created',
+ *   sortOrder?: 'asc' | 'desc'
+ * }
+ */
+router.get(
+  "/",
+  cacheMiddleware(300), // 5 minute cache
+  async (req, res, next) => {
+    try {
+      await categoryController.getCategories(req, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/categories/tree
+ * @desc    Get category tree structure (hierarchical)
+ * @access  Public
+ * @query   {
+ *   includeProductCount?: boolean,
+ *   activeOnly?: boolean
+ * }
+ */
+router.get(
+  "/tree",
+  cacheMiddleware(600), // 10 minute cache
+  async (req, res, next) => {
+    try {
+      await categoryController.getCategoryTree(req, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/categories/root
+ * @desc    Get root categories (top-level categories)
+ * @access  Public
+ * @query   {
+ *   includeProductCount?: boolean,
+ *   activeOnly?: boolean
+ * }
+ */
+router.get(
+  "/root",
+  cacheMiddleware(300), // 5 minute cache
+  async (req, res, next) => {
+    try {
+      await categoryController.getRootCategories(req, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/categories/featured
+ * @desc    Get featured categories
+ * @access  Public
+ * @query   { limit?: number }
+ */
+router.get(
+  "/featured",
+  cacheMiddleware(600), // 10 minute cache
+  async (req, res, next) => {
+    try {
+      await categoryController.getFeaturedCategories(req, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/categories/popular
+ * @desc    Get categories with most products
+ * @access  Public
+ * @query   { limit?: number }
+ */
+router.get(
+  "/popular",
+  cacheMiddleware(300), // 5 minute cache
+  async (req, res, next) => {
+    try {
+      await categoryController.getPopularCategories(req, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/categories/flat
+ * @desc    Get all categories as a flat list (for dropdowns)
+ * @access  Public
+ * @query   {
+ *   activeOnly?: boolean,
+ *   includeHierarchy?: boolean
+ * }
+ */
+router.get(
+  "/flat",
+  cacheMiddleware(300), // 5 minute cache
+  async (req, res, next) => {
+    try {
+      await categoryController.getFlatCategoryList(req, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/categories/search
+ * @desc    Search categories
+ * @access  Public
+ * @query   {
+ *   q: string,
+ *   limit?: number
+ * }
+ */
+router.get("/search", async (req, res, next) => {
+  try {
+    await categoryController.searchCategories(req, res);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   GET /api/v1/categories/slug/:slug
+ * @desc    Get category by slug (SEO-friendly)
+ * @access  Public
+ * @param   slug - Category slug
+ * @query   { includeProducts?: boolean }
+ */
+router.get(
+  "/slug/:slug",
+  cacheMiddleware(300), // 5 minute cache
+  async (req, res, next) => {
+    try {
+      await categoryController.getCategoryBySlug(req, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/categories/:id
+ * @desc    Get category by ID
+ * @access  Public
+ * @param   id - Category ID
+ * @query   { includeProducts?: boolean }
+ */
+router.get(
+  "/:id",
+  cacheMiddleware(300), // 5 minute cache
+  async (req, res, next) => {
+    try {
+      await categoryController.getCategoryById(req, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/categories/:id/children
+ * @desc    Get child categories of a parent category
+ * @access  Public
+ * @param   id - Parent category ID
+ * @query   {
+ *   includeProductCount?: boolean,
+ *   activeOnly?: boolean
+ * }
+ */
+router.get(
+  "/:id/children",
+  cacheMiddleware(300), // 5 minute cache
+  async (req, res, next) => {
+    try {
+      await categoryController.getChildCategories(req, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/categories/:id/breadcrumb
+ * @desc    Get category breadcrumb path
+ * @access  Public
+ * @param   id - Category ID
+ */
+router.get(
+  "/:id/breadcrumb",
+  cacheMiddleware(600), // 10 minute cache
+  async (req, res, next) => {
+    try {
+      await categoryController.getCategoryBreadcrumb(req, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/categories/:id/stats
+ * @desc    Get category statistics
+ * @access  Public
+ * @param   id - Category ID
+ */
+router.get(
+  "/:id/stats",
+  cacheMiddleware(300), // 5 minute cache
+  async (req, res, next) => {
+    try {
+      await categoryController.getCategoryStats(req, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/categories/:id/has-products
+ * @desc    Check if category has products
+ * @access  Public
+ * @param   id - Category ID
+ * @query   { includeSubcategories?: boolean }
+ */
+router.get(
+  "/:id/has-products",
+  cacheMiddleware(300), // 5 minute cache
+  async (req, res, next) => {
+    try {
+      await categoryController.checkCategoryHasProducts(req, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ==================== ADMIN CATEGORY ENDPOINTS ====================
+
+/**
+ * @route   POST /api/v1/categories
+ * @desc    Create new category (Admin only)
+ * @access  Private (Admin)
+ * @body    CreateCategoryRequest
+ */
+router.post(
+  "/",
+  authenticate,
+  authorize(["admin", "super_admin"]),
+  validateRequest(createCategorySchema),
+  async (req, res, next) => {
+    try {
+      // This would be handled by an admin-specific controller method
+      // For now, we'll use the existing controller structure
+      res.status(501).json({
+        success: false,
+        message: "Category creation endpoint not yet implemented",
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   PUT /api/v1/categories/:id
+ * @desc    Update category (Admin only)
+ * @access  Private (Admin)
+ * @param   id - Category ID
+ * @body    UpdateCategoryRequest
+ */
+router.put(
+  "/:id",
+  authenticate,
+  authorize(["admin", "super_admin"]),
+  validateRequest(updateCategorySchema),
+  async (req, res, next) => {
+    try {
+      // This would be handled by an admin-specific controller method
+      res.status(501).json({
+        success: false,
+        message: "Category update endpoint not yet implemented",
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   DELETE /api/v1/categories/:id
+ * @desc    Delete category (Admin only)
+ * @access  Private (Admin)
+ * @param   id - Category ID
+ */
+router.delete(
+  "/:id",
+  authenticate,
+  authorize(["admin", "super_admin"]),
+  async (req, res, next) => {
+    try {
+      // This would be handled by an admin-specific controller method
+      res.status(501).json({
+        success: false,
+        message: "Category deletion endpoint not yet implemented",
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+export default router;

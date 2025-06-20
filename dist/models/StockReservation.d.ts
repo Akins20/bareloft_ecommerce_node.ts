@@ -1,0 +1,4 @@
+export declare const StockReservationModel: any;
+export declare const StockReservationSchema = "\nmodel StockReservation {\n  id          String    @id @default(cuid())\n  inventoryId String    @map(\"inventory_id\")\n  productId   String    @map(\"product_id\")\n  orderId     String?   @map(\"order_id\")\n  cartId      String?   @map(\"cart_id\")\n  quantity    Int\n  reason      String\n  expiresAt   DateTime  @map(\"expires_at\")\n  isReleased  Boolean   @default(false) @map(\"is_released\")\n  createdAt   DateTime  @default(now()) @map(\"created_at\")\n  releasedAt  DateTime? @map(\"released_at\")\n\n  // Relations\n  inventory   Inventory @relation(fields: [inventoryId], references: [id])\n  order       Order?    @relation(fields: [orderId], references: [id])\n  cart        Cart?     @relation(fields: [cartId], references: [id])\n\n  @@map(\"stock_reservations\")\n}\n";
+export default StockReservationModel;
+//# sourceMappingURL=StockReservation.d.ts.map

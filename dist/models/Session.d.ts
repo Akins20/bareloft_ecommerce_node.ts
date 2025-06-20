@@ -1,0 +1,4 @@
+export declare const SessionModel: any;
+export declare const SessionSchema = "\nmodel Session {\n  id           String    @id @default(cuid())\n  userId       String    @map(\"user_id\")\n  accessToken  String    @unique @map(\"access_token\")\n  refreshToken String    @unique @map(\"refresh_token\")\n  deviceInfo   Json?     @map(\"device_info\")\n  ipAddress    String?   @map(\"ip_address\")\n  userAgent    String?   @map(\"user_agent\")\n  isActive     Boolean   @default(true) @map(\"is_active\")\n  expiresAt    DateTime  @map(\"expires_at\")\n  lastUsedAt   DateTime? @map(\"last_used_at\")\n  createdAt    DateTime  @default(now()) @map(\"created_at\")\n  updatedAt    DateTime  @updatedAt @map(\"updated_at\")\n\n  // Relations\n  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@map(\"sessions\")\n}\n";
+export default SessionModel;
+//# sourceMappingURL=Session.d.ts.map

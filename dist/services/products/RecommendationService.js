@@ -1,0 +1,680 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.RecommendationService = void 0;
+const BaseService_1 = require("../BaseService");
+const models_1 = require("../../models");
+const types_1 = require("../../types");
+class RecommendationService extends BaseService_1.BaseService {
+    productRepository;
+    cacheService;
+    constructor(productRepository, cacheService) {
+        super();
+        this.productRepository = productRepository;
+        this.cacheService = cacheService;
+    }
+    /**
+     * Get personalized recommendations for a user
+     * Combines collaborative filtering and content-based filtering
+     */
+    async getPersonalizedRecommendations(userId, options = {}) {
+        try {
+            const { limit = 10 } = options;
+            const cacheKey = `recommendations:user:${userId}:${JSON.stringify(options)}`;
+            // Check cache first
+            const cached = await this.cacheService.get(cacheKey);
+            if (cached)
+                return cached;
+            // Get user behavior data
+            const userBehavior = await this.getUserBehavior(userId);
+            if (this.isNewUser(userBehavior)) {
+                // For new users, use trending and popular products
+                return this.getTrendingRecommendations(options);
+            }
+            // Generate recommendations using multiple strategies
+            const [collaborativeRecommendations, contentBasedRecommendations, trendingRecommendations,] = await Promise.all([
+                this.getCollaborativeRecommendations(userId, userBehavior, limit),
+                this.getContentBasedRecommendations(userId, userBehavior, limit),
+                this.getTrendingRecommendations({
+                    ...options,
+                    limit: Math.ceil(limit / 3),
+                }),
+            ]);
+            // Merge and rank recommendations
+            const mergedRecommendations = this.mergeRecommendations([
+                { recommendations: collaborativeRecommendations, weight: 0.4 },
+                { recommendations: contentBasedRecommendations, weight: 0.4 },
+                { recommendations: trendingRecommendations, weight: 0.2 },
+            ], limit);
+            // Apply filters
+            const filteredRecommendations = await this.applyFilters(mergedRecommendations, options);
+            // Cache recommendations for 1 hour
+            await this.cacheService.set(cacheKey, filteredRecommendations, 3600);
+            return filteredRecommendations;
+        }
+        catch (error) {
+            this.handleError("Error generating personalized recommendations", error);
+        }
+    }
+    /**
+     * Get product recommendations based on a specific product (similar products)
+     */
+    async getSimilarProducts(productId, options = {}) {
+        try {
+            const { limit = 8 } = options;
+            const cacheKey = `recommendations:similar:${productId}:${JSON.stringify(options)}`;
+            const cached = await this.cacheService.get(cacheKey);
+            if (cached)
+                return cached;
+            // Get the source product
+            const sourceProduct = await this.productRepository.findById(productId);
+            if (!sourceProduct) {
+                throw new types_1.AppError("Product not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+            }
+            // Find similar products using multiple criteria
+            const similarProducts = await this.findSimilarProducts(sourceProduct, limit * 2);
+            // Rank by similarity
+            const rankedProducts = this.rankBySimilarity(sourceProduct, similarProducts);
+            // Apply filters and limit
+            const filteredProducts = await this.applyFilters(rankedProducts.slice(0, limit), options);
+            // Cache for 2 hours
+            await this.cacheService.set(cacheKey, filteredProducts, 7200);
+            return filteredProducts;
+        }
+        catch (error) {
+            this.handleError("Error getting similar products", error);
+        }
+    }
+    /**
+     * Get frequently bought together recommendations
+     */
+    async getFrequentlyBoughtTogether(productId, options = {}) {
+        try {
+            const { limit = 5 } = options;
+            const cacheKey = `recommendations:bought-together:${productId}`;
+            const cached = await this.cacheService.get(cacheKey);
+            if (cached)
+                return cached;
+            // Find products frequently bought together
+            const coOccurrenceData = await this.getProductCoOccurrence(productId);
+            // Get product details for top co-occurring products
+            const productIds = coOccurrenceData
+                .slice(0, limit)
+                .map((item) => item.productId);
+            const products = await this.productRepository.findManyByIds(productIds);
+            // Maintain order based on co-occurrence frequency
+            const orderedProducts = productIds
+                .map((id) => products.find((p) => p.id === id))
+                .filter(Boolean);
+            // Cache for 6 hours
+            await this.cacheService.set(cacheKey, orderedProducts, 21600);
+            return orderedProducts;
+        }
+        catch (error) {
+            this.handleError("Error getting frequently bought together products", error);
+        }
+    }
+    /**
+     * Get trending/popular recommendations
+     */
+    async getTrendingRecommendations(options = {}) {
+        try {
+            const { limit = 10 } = options;
+            const cacheKey = `recommendations:trending:${JSON.stringify(options)}`;
+            const cached = await this.cacheService.get(cacheKey);
+            if (cached)
+                return cached;
+            // Get trending products based on recent sales, views, and ratings
+            const trendingProducts = await this.getTrendingProducts(limit * 2);
+            // Apply filters
+            const filteredProducts = await this.applyFilters(trendingProducts.slice(0, limit), options);
+            // Cache for 30 minutes (trending data changes frequently)
+            await this.cacheService.set(cacheKey, filteredProducts, 1800);
+            return filteredProducts;
+        }
+        catch (error) {
+            this.handleError("Error getting trending recommendations", error);
+        }
+    }
+    /**
+     * Get category-based recommendations
+     */
+    async getCategoryRecommendations(categoryId, options = {}) {
+        try {
+            const { limit = 12, userId } = options;
+            // Get user preferences if available
+            let userBehavior = null;
+            if (userId) {
+                userBehavior = await this.getUserBehavior(userId);
+            }
+            // Get top products in category
+            const categoryProducts = await this.getTopCategoryProducts(categoryId, userBehavior, limit * 2);
+            // Apply filters
+            const filteredProducts = await this.applyFilters(categoryProducts.slice(0, limit), options);
+            return filteredProducts;
+        }
+        catch (error) {
+            this.handleError("Error getting category recommendations", error);
+        }
+    }
+    /**
+     * Get cross-sell recommendations (complementary products)
+     */
+    async getCrossSellRecommendations(cartItems, options = {}) {
+        try {
+            const { limit = 6 } = options;
+            if (cartItems.length === 0) {
+                return this.getTrendingRecommendations(options);
+            }
+            // Find complementary products for cart items
+            const complementaryProducts = await this.findComplementaryProducts(cartItems, limit * 2);
+            // Apply filters
+            const filteredProducts = await this.applyFilters(complementaryProducts.slice(0, limit), options);
+            return filteredProducts;
+        }
+        catch (error) {
+            this.handleError("Error getting cross-sell recommendations", error);
+        }
+    }
+    /**
+     * Get upsell recommendations (higher-value alternatives)
+     */
+    async getUpsellRecommendations(productId, options = {}) {
+        try {
+            const { limit = 4 } = options;
+            const sourceProduct = await this.productRepository.findById(productId);
+            if (!sourceProduct) {
+                throw new types_1.AppError("Product not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+            }
+            // Find higher-value products in same category
+            const upsellProducts = await this.findUpsellProducts(sourceProduct, limit * 2);
+            // Apply filters
+            const filteredProducts = await this.applyFilters(upsellProducts.slice(0, limit), options);
+            return filteredProducts;
+        }
+        catch (error) {
+            this.handleError("Error getting upsell recommendations", error);
+        }
+    }
+    // Private helper methods
+    async getUserBehavior(userId) {
+        const cacheKey = `user-behavior:${userId}`;
+        const cached = await this.cacheService.get(cacheKey);
+        if (cached)
+            return cached;
+        const [orders, cart, wishlist, reviews] = await Promise.all([
+            models_1.OrderModel.findMany({
+                where: { userId, status: "DELIVERED" },
+                include: { items: { include: { product: true } } },
+            }),
+            models_1.CartModel.findFirst({
+                where: { userId },
+                include: { items: { include: { product: true } } },
+            }),
+            models_1.WishlistItemModel.findMany({
+                where: { userId },
+                include: { product: true },
+            }),
+            models_1.ProductReviewModel.findMany({
+                where: { userId },
+                include: { product: true },
+            }),
+        ]);
+        const purchasedProducts = orders.flatMap((order) => order.items.map((item) => item.productId));
+        const cartProducts = cart?.items.map((item) => item.productId) || [];
+        const wishlistProducts = wishlist.map((item) => item.productId);
+        const reviewedProducts = reviews.map((review) => review.productId);
+        // Calculate category preferences
+        const categoryPreferences = {};
+        const brandPreferences = {};
+        let totalSpent = 0;
+        let minPrice = Infinity;
+        let maxPrice = 0;
+        orders.forEach((order) => {
+            order.items.forEach((item) => {
+                const category = item.product.categoryId;
+                const brand = item.product.brand;
+                const price = Number(item.unitPrice);
+                categoryPreferences[category] =
+                    (categoryPreferences[category] || 0) + 1;
+                if (brand) {
+                    brandPreferences[brand] = (brandPreferences[brand] || 0) + 1;
+                }
+                totalSpent += price * item.quantity;
+                minPrice = Math.min(minPrice, price);
+                maxPrice = Math.max(maxPrice, price);
+            });
+        });
+        const totalItems = purchasedProducts.length;
+        const avgPrice = totalItems > 0 ? totalSpent / totalItems : 0;
+        const behavior = {
+            userId,
+            viewedProducts: [], // Would come from analytics/tracking
+            purchasedProducts,
+            cartProducts,
+            wishlistProducts,
+            reviewedProducts,
+            categoryPreferences,
+            brandPreferences,
+            priceRange: {
+                min: minPrice === Infinity ? 0 : minPrice,
+                max: maxPrice,
+                avg: avgPrice,
+            },
+        };
+        // Cache for 1 hour
+        await this.cacheService.set(cacheKey, behavior, 3600);
+        return behavior;
+    }
+    isNewUser(behavior) {
+        return (behavior.purchasedProducts.length === 0 &&
+            behavior.wishlistProducts.length === 0 &&
+            behavior.reviewedProducts.length === 0);
+    }
+    async getCollaborativeRecommendations(userId, userBehavior, limit) {
+        // Find users with similar behavior
+        const similarUsers = await this.findSimilarUsers(userId, userBehavior);
+        // Get products purchased by similar users
+        const recommendedProductIds = new Set();
+        for (const similarUser of similarUsers.slice(0, 10)) {
+            const userOrders = await models_1.OrderModel.findMany({
+                where: { userId: similarUser.userId, status: "DELIVERED" },
+                include: { items: true },
+            });
+            userOrders.forEach((order) => {
+                order.items.forEach((item) => {
+                    if (!userBehavior.purchasedProducts.includes(item.productId)) {
+                        recommendedProductIds.add(item.productId);
+                    }
+                });
+            });
+        }
+        // Get product details
+        const products = await this.productRepository.findManyByIds(Array.from(recommendedProductIds).slice(0, limit));
+        return products;
+    }
+    async getContentBasedRecommendations(userId, userBehavior, limit) {
+        // Get user's preferred categories and brands
+        const topCategories = Object.entries(userBehavior.categoryPreferences)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 3)
+            .map(([categoryId]) => categoryId);
+        const topBrands = Object.entries(userBehavior.brandPreferences)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 3)
+            .map(([brand]) => brand);
+        // Find products matching user preferences
+        const where = {
+            isActive: true,
+            id: { notIn: userBehavior.purchasedProducts },
+        };
+        if (topCategories.length > 0) {
+            where.categoryId = { in: topCategories };
+        }
+        if (topBrands.length > 0) {
+            where.brand = { in: topBrands };
+        }
+        // Price range filter
+        if (userBehavior.priceRange.avg > 0) {
+            const minPrice = userBehavior.priceRange.avg * 0.7;
+            const maxPrice = userBehavior.priceRange.avg * 1.5;
+            where.price = { gte: minPrice, lte: maxPrice };
+        }
+        const products = await models_1.ProductModel.findMany({
+            where,
+            include: {
+                category: true,
+                images: { where: { isPrimary: true } },
+                inventory: true,
+            },
+            orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }],
+            take: limit,
+        });
+        return products.map(this.transformProduct);
+    }
+    async findSimilarProducts(sourceProduct, limit) {
+        const where = {
+            isActive: true,
+            id: { not: sourceProduct.id },
+        };
+        // Same category first priority
+        where.categoryId = sourceProduct.categoryId;
+        let products = await models_1.ProductModel.findMany({
+            where,
+            include: {
+                category: true,
+                images: { where: { isPrimary: true } },
+                inventory: true,
+            },
+            take: limit,
+        });
+        // If not enough products in same category, expand to same brand
+        if (products.length < limit && sourceProduct.brand) {
+            const brandProducts = await models_1.ProductModel.findMany({
+                where: {
+                    isActive: true,
+                    id: {
+                        not: sourceProduct.id,
+                        notIn: products.map((p) => p.id),
+                    },
+                    brand: sourceProduct.brand,
+                },
+                include: {
+                    category: true,
+                    images: { where: { isPrimary: true } },
+                    inventory: true,
+                },
+                take: limit - products.length,
+            });
+            products = [...products, ...brandProducts];
+        }
+        return products.map(this.transformProduct);
+    }
+    rankBySimilarity(sourceProduct, products) {
+        return products
+            .map((product) => ({
+            product,
+            similarity: this.calculateSimilarity(sourceProduct, product),
+        }))
+            .sort((a, b) => b.similarity - a.similarity)
+            .map(({ product }) => product);
+    }
+    calculateSimilarity(product1, product2) {
+        let similarity = 0;
+        // Category match (highest weight)
+        if (product1.categoryId === product2.categoryId) {
+            similarity += 0.4;
+        }
+        // Brand match
+        if (product1.brand && product2.brand && product1.brand === product2.brand) {
+            similarity += 0.3;
+        }
+        // Price similarity (within 50% range)
+        const priceDiff = Math.abs(Number(product1.price) - Number(product2.price));
+        const avgPrice = (Number(product1.price) + Number(product2.price)) / 2;
+        const priceRatio = priceDiff / avgPrice;
+        if (priceRatio <= 0.5) {
+            similarity += 0.2 * (1 - priceRatio);
+        }
+        // Feature flags similarity
+        if (product1.isFeatured === product2.isFeatured) {
+            similarity += 0.1;
+        }
+        return similarity;
+    }
+    async getProductCoOccurrence(productId) {
+        // Find orders containing the source product
+        const ordersWithProduct = await models_1.OrderModel.findMany({
+            where: {
+                items: {
+                    some: { productId },
+                },
+                status: "DELIVERED",
+            },
+            include: {
+                items: true,
+            },
+        });
+        // Count co-occurrences
+        const coOccurrenceCounts = {};
+        ordersWithProduct.forEach((order) => {
+            order.items.forEach((item) => {
+                if (item.productId !== productId) {
+                    coOccurrenceCounts[item.productId] =
+                        (coOccurrenceCounts[item.productId] || 0) + 1;
+                }
+            });
+        });
+        return Object.entries(coOccurrenceCounts)
+            .map(([productId, count]) => ({
+            productId,
+            coOccurrenceCount: count,
+        }))
+            .sort((a, b) => b.coOccurrenceCount - a.coOccurrenceCount);
+    }
+    async getTrendingProducts(limit) {
+        // Calculate trending score based on recent sales and ratings
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const trendingData = await models_1.OrderModel.findMany({
+            where: {
+                createdAt: { gte: thirtyDaysAgo },
+                status: "DELIVERED",
+            },
+            include: {
+                items: {
+                    include: {
+                        product: {
+                            include: {
+                                category: true,
+                                images: { where: { isPrimary: true } },
+                                inventory: true,
+                                reviews: {
+                                    where: { isApproved: true },
+                                    select: { rating: true },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        });
+        // Calculate trending scores
+        const productScores = {};
+        trendingData.forEach((order) => {
+            order.items.forEach((item) => {
+                const productId = item.productId;
+                const product = item.product;
+                if (!productScores[productId]) {
+                    const avgRating = product.reviews.length > 0
+                        ? product.reviews.reduce((sum, r) => sum + r.rating, 0) / product.reviews.length
+                        : 0;
+                    productScores[productId] = {
+                        product,
+                        salesCount: 0,
+                        totalRevenue: 0,
+                        avgRating,
+                        trendingScore: 0,
+                    };
+                }
+                productScores[productId].salesCount += item.quantity;
+                productScores[productId].totalRevenue += Number(item.totalPrice);
+            });
+        });
+        // Calculate trending scores
+        Object.values(productScores).forEach((data) => {
+            // Trending score = (sales_count * 0.4) + (revenue_normalized * 0.4) + (rating * 0.2)
+            const salesScore = Math.min(data.salesCount / 10, 10); // Normalize to 0-10
+            const revenueScore = Math.min(data.totalRevenue / 100000, 10); // Normalize to 0-10
+            const ratingScore = data.avgRating; // Already 0-5, scale to 0-10
+            data.trendingScore =
+                salesScore * 0.4 + revenueScore * 0.4 + ratingScore * 0.2;
+        });
+        return Object.values(productScores)
+            .sort((a, b) => b.trendingScore - a.trendingScore)
+            .slice(0, limit)
+            .map((data) => this.transformProduct(data.product));
+    }
+    async getTopCategoryProducts(categoryId, userBehavior, limit) {
+        const where = {
+            categoryId,
+            isActive: true,
+        };
+        // If user has behavior data, prefer their price range
+        if (userBehavior && userBehavior.priceRange.avg > 0) {
+            const minPrice = userBehavior.priceRange.avg * 0.5;
+            const maxPrice = userBehavior.priceRange.avg * 2;
+            where.price = { gte: minPrice, lte: maxPrice };
+        }
+        const products = await models_1.ProductModel.findMany({
+            where,
+            include: {
+                category: true,
+                images: { where: { isPrimary: true } },
+                inventory: true,
+                reviews: {
+                    where: { isApproved: true },
+                    select: { rating: true },
+                },
+            },
+            orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }],
+            take: limit,
+        });
+        return products.map(this.transformProduct);
+    }
+    async findComplementaryProducts(cartItemIds, limit) {
+        // Find products frequently bought with cart items
+        const complementaryIds = new Set();
+        for (const itemId of cartItemIds) {
+            const coOccurrence = await this.getProductCoOccurrence(itemId);
+            coOccurrence.slice(0, 5).forEach(({ productId }) => {
+                if (!cartItemIds.includes(productId)) {
+                    complementaryIds.add(productId);
+                }
+            });
+        }
+        const products = await this.productRepository.findManyByIds(Array.from(complementaryIds).slice(0, limit));
+        return products;
+    }
+    async findUpsellProducts(sourceProduct, limit) {
+        const minPrice = Number(sourceProduct.price) * 1.2; // 20% higher
+        const maxPrice = Number(sourceProduct.price) * 3; // Up to 3x price
+        const products = await models_1.ProductModel.findMany({
+            where: {
+                categoryId: sourceProduct.categoryId,
+                isActive: true,
+                id: { not: sourceProduct.id },
+                price: { gte: minPrice, lte: maxPrice },
+            },
+            include: {
+                category: true,
+                images: { where: { isPrimary: true } },
+                inventory: true,
+            },
+            orderBy: [
+                { isFeatured: "desc" },
+                { price: "asc" }, // Start with lower upsell prices
+            ],
+            take: limit,
+        });
+        return products.map(this.transformProduct);
+    }
+    async findSimilarUsers(userId, userBehavior) {
+        // Simple implementation - in production, you'd use more sophisticated algorithms
+        const otherUsers = await models_1.OrderModel.findMany({
+            where: {
+                userId: { not: userId },
+                status: "DELIVERED",
+            },
+            include: {
+                items: true,
+                user: true,
+            },
+            distinct: ["userId"],
+        });
+        const userSimilarities = new Map();
+        otherUsers.forEach((order) => {
+            const otherUserId = order.userId;
+            const purchasedProducts = order.items.map((item) => item.productId);
+            // Calculate Jaccard similarity
+            const intersection = userBehavior.purchasedProducts.filter((productId) => purchasedProducts.includes(productId)).length;
+            const union = new Set([
+                ...userBehavior.purchasedProducts,
+                ...purchasedProducts,
+            ]).size;
+            const similarity = union > 0 ? intersection / union : 0;
+            if (similarity > 0) {
+                userSimilarities.set(otherUserId, Math.max(userSimilarities.get(otherUserId) || 0, similarity));
+            }
+        });
+        return Array.from(userSimilarities.entries())
+            .map(([userId, similarity]) => ({ userId, similarity }))
+            .sort((a, b) => b.similarity - a.similarity);
+    }
+    mergeRecommendations(sources, limit) {
+        const productScores = new Map();
+        sources.forEach(({ recommendations, weight }) => {
+            recommendations.forEach((product, index) => {
+                const positionScore = 1 - index / recommendations.length;
+                const weightedScore = positionScore * weight;
+                const existing = productScores.get(product.id);
+                if (existing) {
+                    existing.score += weightedScore;
+                }
+                else {
+                    productScores.set(product.id, {
+                        product,
+                        score: weightedScore,
+                    });
+                }
+            });
+        });
+        return Array.from(productScores.values())
+            .sort((a, b) => b.score - a.score)
+            .slice(0, limit)
+            .map(({ product }) => product);
+    }
+    async applyFilters(products, options) {
+        let filtered = [...products];
+        // Filter out of stock
+        if (options.excludeOutOfStock) {
+            filtered = filtered.filter((product) => product.inventory && product.inventory.quantity > 0);
+        }
+        // Include/exclude categories
+        if (options.includeCategories?.length) {
+            filtered = filtered.filter((product) => options.includeCategories.includes(product.categoryId));
+        }
+        if (options.excludeCategories?.length) {
+            filtered = filtered.filter((product) => !options.excludeCategories.includes(product.categoryId));
+        }
+        // Price range filter
+        if (options.priceRange) {
+            filtered = filtered.filter((product) => {
+                const price = Number(product.price);
+                return ((!options.priceRange.min || price >= options.priceRange.min) &&
+                    (!options.priceRange.max || price <= options.priceRange.max));
+            });
+        }
+        return filtered;
+    }
+    transformProduct(product) {
+        return {
+            id: product.id,
+            name: product.name,
+            slug: product.slug,
+            description: product.description,
+            shortDescription: product.shortDescription,
+            sku: product.sku,
+            price: Number(product.price),
+            comparePrice: product.comparePrice
+                ? Number(product.comparePrice)
+                : undefined,
+            categoryId: product.categoryId,
+            brand: product.brand,
+            weight: product.weight ? Number(product.weight) : undefined,
+            dimensions: product.dimensions,
+            isActive: product.isActive,
+            isFeatured: product.isFeatured,
+            seoTitle: product.seoTitle,
+            seoDescription: product.seoDescription,
+            createdAt: product.createdAt,
+            updatedAt: product.updatedAt,
+            category: product.category,
+            images: product.images || [],
+            inventory: product.inventory,
+            reviews: product.reviews || [],
+            averageRating: product.reviews?.length > 0
+                ? product.reviews.reduce((sum, r) => sum + r.rating, 0) /
+                    product.reviews.length
+                : 0,
+            totalReviews: product.reviews?.length || 0,
+            isInStock: product.inventory ? product.inventory.quantity > 0 : false,
+            discountPercentage: product.comparePrice
+                ? Math.round(((Number(product.comparePrice) - Number(product.price)) /
+                    Number(product.comparePrice)) *
+                    100)
+                : undefined,
+        };
+    }
+}
+exports.RecommendationService = RecommendationService;
+//# sourceMappingURL=RecommendationService.js.map

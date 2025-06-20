@@ -1,0 +1,1 @@
+{"version":3,"file":"errorLogging.d.ts","sourceRoot":"","sources":["../../../src/middleware/logging/errorLogging.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,QAAQ,EAAE,YAAY,EAAE,MAAM,SAAS,CAAC;AAuI1D;;GAEG;AACH,eAAO,MAAM,WAAW,GACtB,OAAO,GAAG,EACV,KAAK,OAAO,EACZ,KAAK,QAAQ,EACb,MAAM,YAAY,KACjB,IAgEF,CAAC"}
