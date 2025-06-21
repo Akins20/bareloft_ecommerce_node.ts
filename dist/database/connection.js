@@ -158,11 +158,15 @@ class DatabaseManager {
     }
     /**
      * Execute raw SQL query with logging
+     * @param query - The SQL query string
+     * @param params - Optional query parameters
+     * @returns Promise<T> - Query result cast to type T
      */
     async executeRaw(query, params) {
         const startTime = Date.now();
         try {
-            const result = await this.client.$queryRawUnsafe(query, ...(params || []));
+            // Remove generic type parameter and use type assertion instead
+            const result = (await this.client.$queryRawUnsafe(query, ...(params || [])));
             const duration = Date.now() - startTime;
             winston_1.logger.debug("Raw query executed:", {
                 query,
@@ -173,6 +177,32 @@ class DatabaseManager {
         }
         catch (error) {
             winston_1.logger.error("Raw query failed:", {
+                query,
+                params,
+                error: error instanceof Error ? error.message : "Unknown error",
+            });
+            throw error;
+        }
+    }
+    /**
+     * Execute raw SQL query with better type safety
+     * Alternative method for specific query types
+     */
+    async executeTypedQuery(query, params) {
+        const startTime = Date.now();
+        try {
+            const result = await this.client.$queryRawUnsafe(query, ...(params || []));
+            const duration = Date.now() - startTime;
+            winston_1.logger.debug("Typed query executed:", {
+                query,
+                params,
+                duration: `${duration}ms`,
+            });
+            // Type assertion for array results
+            return Array.isArray(result) ? result : [result];
+        }
+        catch (error) {
+            winston_1.logger.error("Typed query failed:", {
                 query,
                 params,
                 error: error instanceof Error ? error.message : "Unknown error",

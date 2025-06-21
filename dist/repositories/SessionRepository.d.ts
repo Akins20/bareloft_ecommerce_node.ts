@@ -1,99 +1,132 @@
-import { BaseRepository } from "./BaseRepository";
-import { Session, DeviceInfo } from "@/types";
 import { PrismaClient } from "@prisma/client";
-export declare class SessionRepository extends BaseRepository<Session> {
-    protected modelName: string;
-    constructor(database?: PrismaClient);
+import { BaseRepository } from "./BaseRepository";
+import { Session, DeviceInfo } from "../types";
+interface CreateSessionData {
+    userId: string;
+    sessionId: string;
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: Date;
+    deviceInfo?: DeviceInfo;
+    ipAddress?: string;
+    userAgent?: string;
+    isActive: boolean;
+}
+interface UpdateSessionData {
+    accessToken?: string;
+    refreshToken?: string;
+    expiresAt?: Date;
+    isActive?: boolean;
+    lastUsedAt?: Date;
+    deviceInfo?: DeviceInfo;
+    ipAddress?: string;
+    userAgent?: string;
+}
+export declare class SessionRepository extends BaseRepository<Session, CreateSessionData, UpdateSessionData> {
+    constructor(prisma?: PrismaClient);
     /**
      * Create new session
      */
-    createSession(sessionData: {
-        userId: string;
-        sessionId: string;
-        accessToken: string;
-        refreshToken: string;
-        expiresAt: Date;
-        deviceInfo?: DeviceInfo;
-    }): Promise<Session>;
+    create(data: CreateSessionData): Promise<Session>;
     /**
      * Find session by session ID
      */
     findBySessionId(sessionId: string): Promise<Session | null>;
     /**
-     * Find active session by session ID
+     * Find session by access token
      */
-    findActiveSession(sessionId: string): Promise<Session | null>;
+    findByAccessToken(accessToken: string): Promise<Session | null>;
     /**
-     * Find all active sessions for a user
+     * Find session by refresh token
      */
-    findUserActiveSessions(userId: string): Promise<Session[]>;
+    findByRefreshToken(refreshToken: string): Promise<Session | null>;
+    /**
+     * Get all active sessions for a user
+     */
+    findActiveSessionsByUserId(userId: string): Promise<Session[]>;
     /**
      * Update session tokens
      */
     updateTokens(sessionId: string, accessToken: string, refreshToken: string): Promise<Session>;
     /**
+     * Update session last used time
+     */
+    updateLastUsed(sessionId: string): Promise<Session>;
+    /**
      * Deactivate session (logout)
      */
-    deactivateSession(sessionId: string): Promise<Session>;
+    deactivateSession(sessionId: string): Promise<boolean>;
     /**
-     * Deactivate all sessions for a user
+     * Deactivate all user sessions (logout from all devices)
      */
-    deactivateUserSessions(userId: string): Promise<number>;
+    deactivateAllUserSessions(userId: string): Promise<number>;
     /**
-     * Clean up expired sessions
+     * Deactivate session by access token
      */
-    cleanupExpiredSessions(): Promise<number>;
+    deactivateByAccessToken(accessToken: string): Promise<boolean>;
     /**
-     * Get session statistics for user
+     * Clean up expired sessions (maintenance task)
+     */
+    cleanupExpiredSessions(): Promise<{
+        deletedCount: number;
+    }>;
+    /**
+     * Limit user sessions (keep only N most recent)
+     */
+    limitUserSessions(userId: string, maxSessions?: number): Promise<number>;
+    /**
+     * Get session analytics for user
      */
     getUserSessionStats(userId: string): Promise<{
         totalSessions: number;
         activeSessions: number;
-        expiredSessions: number;
-        deviceTypes: Record<string, number>;
-        recentSessions: Session[];
+        recentLogins: Date[];
+        deviceTypes: {
+            type: string;
+            count: number;
+        }[];
+        ipAddresses: {
+            ip: string;
+            count: number;
+            lastUsed: Date;
+        }[];
     }>;
     /**
-     * Find sessions by device type
-     */
-    findSessionsByDeviceType(deviceType: "mobile" | "desktop" | "tablet", limit?: number): Promise<Session[]>;
-    /**
-     * Get concurrent sessions count
-     */
-    getConcurrentSessionsCount(): Promise<number>;
-    /**
-     * Find sessions by IP address (for security monitoring)
-     */
-    findSessionsByIP(ipAddress: string): Promise<Session[]>;
-    /**
-     * Get session analytics for admin dashboard
+     * Get admin session analytics
      */
     getSessionAnalytics(dateFrom: Date, dateTo: Date): Promise<{
         totalSessions: number;
         activeSessions: number;
         averageSessionDuration: number;
-        deviceTypeDistribution: Record<string, number>;
-        browserDistribution: Record<string, number>;
-        loginsByHour: {
-            hour: number;
+        sessionsByDevice: {
+            device: string;
             count: number;
         }[];
-        topCountries: {
-            country: string;
-            count: number;
+        sessionsByDay: {
+            date: string;
+            sessions: number;
+        }[];
+        topIpAddresses: {
+            ip: string;
+            sessions: number;
         }[];
     }>;
     /**
-     * Extend session expiration
+     * Check for suspicious session activity
      */
-    extendSession(sessionId: string, additionalHours?: number): Promise<Session>;
-    /**
-     * Find suspicious sessions (for security monitoring)
-     */
-    findSuspiciousSessions(): Promise<{
-        multipleIPs: Session[];
-        multipleDevices: Session[];
-        longRunning: Session[];
+    detectSuspiciousActivity(userId: string): Promise<{
+        hasAlerts: boolean;
+        alerts: {
+            type: string;
+            message: string;
+            severity: "low" | "medium" | "high";
+            data?: any;
+        }[];
     }>;
+    /**
+     * Refresh session expiry
+     */
+    refreshSession(sessionId: string, newExpiryDate: Date): Promise<Session>;
 }
+export {};
 //# sourceMappingURL=SessionRepository.d.ts.map

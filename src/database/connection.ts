@@ -27,18 +27,21 @@ const createPrismaClient = () => {
 
   // Log database queries in development
   if (process.env.NODE_ENV === "development") {
-    client.$on("query", (e) => {
-      logger.debug("Database Query:", {
-        query: e.query,
-        params: e.params,
-        duration: `${e.duration}ms`,
-        target: e.target,
-      });
-    });
+    client.$on(
+      "query",
+      (e: { query: any; params: any; duration: any; target: any }) => {
+        logger.debug("Database Query:", {
+          query: e.query,
+          params: e.params,
+          duration: `${e.duration}ms`,
+          target: e.target,
+        });
+      }
+    );
   }
 
   // Log database errors
-  client.$on("error", (e) => {
+  client.$on("error", (e: { message: any; target: any }) => {
     logger.error("Database Error:", {
       message: e.message,
       target: e.target,
@@ -46,7 +49,7 @@ const createPrismaClient = () => {
   });
 
   // Log database info
-  client.$on("info", (e) => {
+  client.$on("info", (e: { message: any; target: any }) => {
     logger.info("Database Info:", {
       message: e.message,
       target: e.target,
@@ -54,7 +57,7 @@ const createPrismaClient = () => {
   });
 
   // Log database warnings
-  client.$on("warn", (e) => {
+  client.$on("warn", (e: { message: any; target: any }) => {
     logger.warn("Database Warning:", {
       message: e.message,
       target: e.target,
@@ -183,15 +186,20 @@ export class DatabaseManager {
 
   /**
    * Execute raw SQL query with logging
+   * @param query - The SQL query string
+   * @param params - Optional query parameters
+   * @returns Promise<T> - Query result cast to type T
    */
   public async executeRaw<T = any>(query: string, params?: any[]): Promise<T> {
     const startTime = Date.now();
 
     try {
-      const result = await this.client.$queryRawUnsafe<T>(
+      // Remove generic type parameter and use type assertion instead
+      const result = (await this.client.$queryRawUnsafe(
         query,
         ...(params || [])
-      );
+      )) as T;
+
       const duration = Date.now() - startTime;
 
       logger.debug("Raw query executed:", {
@@ -203,6 +211,41 @@ export class DatabaseManager {
       return result;
     } catch (error) {
       logger.error("Raw query failed:", {
+        query,
+        params,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Execute raw SQL query with better type safety
+   * Alternative method for specific query types
+   */
+  public async executeTypedQuery<T>(
+    query: string,
+    params?: any[]
+  ): Promise<T[]> {
+    const startTime = Date.now();
+
+    try {
+      const result = await this.client.$queryRawUnsafe(
+        query,
+        ...(params || [])
+      );
+      const duration = Date.now() - startTime;
+
+      logger.debug("Typed query executed:", {
+        query,
+        params,
+        duration: `${duration}ms`,
+      });
+
+      // Type assertion for array results
+      return Array.isArray(result) ? (result as T[]) : ([result] as T[]);
+    } catch (error) {
+      logger.error("Typed query failed:", {
         query,
         params,
         error: error instanceof Error ? error.message : "Unknown error",

@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.db = exports.DatabaseConnection = exports.prisma = void 0;
-// src/config/database.ts
 const client_1 = require("@prisma/client");
 const environment_1 = require("./environment");
 // Create Prisma client instance
@@ -11,7 +10,9 @@ exports.prisma = new client_1.PrismaClient({
             url: environment_1.config.database.url,
         },
     },
-    log: environment_1.config.nodeEnv === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
+    log: environment_1.config.nodeEnv === "development"
+        ? ["query", "info", "warn", "error"]
+        : ["error"],
 });
 // Database connection management
 class DatabaseConnection {
@@ -34,10 +35,10 @@ class DatabaseConnection {
         try {
             await this.client.$connect();
             this.isConnected = true;
-            console.log('✅ Database connected successfully');
+            console.log("✅ Database connected successfully");
         }
         catch (error) {
-            console.error('❌ Database connection failed:', error);
+            console.error("❌ Database connection failed:", error);
             throw error;
         }
     }
@@ -48,10 +49,10 @@ class DatabaseConnection {
         try {
             await this.client.$disconnect();
             this.isConnected = false;
-            console.log('✅ Database disconnected successfully');
+            console.log("✅ Database disconnected successfully");
         }
         catch (error) {
-            console.error('❌ Database disconnection failed:', error);
+            console.error("❌ Database disconnection failed:", error);
             throw error;
         }
     }
@@ -64,7 +65,7 @@ class DatabaseConnection {
             return true;
         }
         catch (error) {
-            console.error('❌ Database health check failed:', error);
+            console.error("❌ Database health check failed:", error);
             return false;
         }
     }
@@ -78,13 +79,13 @@ exports.DatabaseConnection = DatabaseConnection;
 // Export database instance
 exports.db = DatabaseConnection.getInstance();
 // Graceful shutdown handler
-process.on('SIGINT', async () => {
-    console.log('🔄 Graceful shutdown initiated...');
+process.on("SIGINT", async () => {
+    console.log("🔄 Graceful shutdown initiated...");
     await exports.db.disconnect();
     process.exit(0);
 });
-process.on('SIGTERM', async () => {
-    console.log('🔄 Graceful shutdown initiated...');
+process.on("SIGTERM", async () => {
+    console.log("🔄 Graceful shutdown initiated...");
     await exports.db.disconnect();
     process.exit(0);
 });

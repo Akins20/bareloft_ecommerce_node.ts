@@ -1,12 +1,13 @@
-// src/config/redis.ts
-import Redis from 'ioredis';
-import { config } from './environment';
+import Redis from "ioredis";
+import { config } from "./environment";
 
-// Redis client configuration
+// Parse Redis URL
+const redisUrl = new URL(config.redis.url);
+
+// Redis client configuration - conditionally build object
 const redisConfig = {
-  host: new URL(config.redis.url).hostname,
-  port: parseInt(new URL(config.redis.url).port) || 6379,
-  password: new URL(config.redis.url).password || undefined,
+  host: redisUrl.hostname,
+  port: parseInt(redisUrl.port) || 6379,
   retryDelayOnFailover: 100,
   maxRetriesPerRequest: 3,
   lazyConnect: true,
@@ -14,6 +15,8 @@ const redisConfig = {
   family: 4,
   connectTimeout: 10000,
   commandTimeout: 5000,
+  // Only include password if it exists
+  ...(redisUrl.password && { password: redisUrl.password }),
 };
 
 // Create Redis client
@@ -38,23 +41,23 @@ export class RedisConnection {
   }
 
   private setupEventHandlers(): void {
-    this.client.on('connect', () => {
-      console.log('✅ Redis connected successfully');
+    this.client.on("connect", () => {
+      console.log("✅ Redis connected successfully");
       this.isConnected = true;
     });
 
-    this.client.on('error', (error) => {
-      console.error('❌ Redis connection error:', error);
+    this.client.on("error", (error) => {
+      console.error("❌ Redis connection error:", error);
       this.isConnected = false;
     });
 
-    this.client.on('close', () => {
-      console.log('🔄 Redis connection closed');
+    this.client.on("close", () => {
+      console.log("🔄 Redis connection closed");
       this.isConnected = false;
     });
 
-    this.client.on('reconnecting', () => {
-      console.log('🔄 Redis reconnecting...');
+    this.client.on("reconnecting", () => {
+      console.log("🔄 Redis reconnecting...");
     });
   }
 
@@ -66,7 +69,7 @@ export class RedisConnection {
     try {
       await this.client.connect();
     } catch (error) {
-      console.error('❌ Redis connection failed:', error);
+      console.error("❌ Redis connection failed:", error);
       throw error;
     }
   }
@@ -78,9 +81,9 @@ export class RedisConnection {
 
     try {
       await this.client.disconnect();
-      console.log('✅ Redis disconnected successfully');
+      console.log("✅ Redis disconnected successfully");
     } catch (error) {
-      console.error('❌ Redis disconnection failed:', error);
+      console.error("❌ Redis disconnection failed:", error);
       throw error;
     }
   }
@@ -92,9 +95,9 @@ export class RedisConnection {
   public async healthCheck(): Promise<boolean> {
     try {
       const result = await this.client.ping();
-      return result === 'PONG';
+      return result === "PONG";
     } catch (error) {
-      console.error('❌ Redis health check failed:', error);
+      console.error("❌ Redis health check failed:", error);
       return false;
     }
   }
@@ -110,7 +113,11 @@ export class RedisConnection {
     }
   }
 
-  public async set(key: string, value: any, ttlSeconds?: number): Promise<boolean> {
+  public async set(
+    key: string,
+    value: any,
+    ttlSeconds?: number
+  ): Promise<boolean> {
     try {
       const serializedValue = JSON.stringify(value);
       if (ttlSeconds) {
@@ -169,13 +176,17 @@ export class RedisConnection {
       await this.client.flushdb();
       return true;
     } catch (error) {
-      console.error('❌ Redis FLUSH error:', error);
+      console.error("❌ Redis FLUSH error:", error);
       return false;
     }
   }
 
   // Session management
-  public async setSession(sessionId: string, sessionData: any, ttlSeconds: number): Promise<boolean> {
+  public async setSession(
+    sessionId: string,
+    sessionData: any,
+    ttlSeconds: number
+  ): Promise<boolean> {
     return await this.set(`session:${sessionId}`, sessionData, ttlSeconds);
   }
 
@@ -188,32 +199,36 @@ export class RedisConnection {
   }
 
   // Rate limiting
-  public async checkRateLimit(key: string, limit: number, windowSeconds: number): Promise<{
+  public async checkRateLimit(
+    key: string,
+    limit: number,
+    windowSeconds: number
+  ): Promise<{
     allowed: boolean;
     remaining: number;
     resetTime: number;
   }> {
     try {
       const current = await this.increment(`ratelimit:${key}`);
-      
+
       if (current === 1) {
         await this.expire(`ratelimit:${key}`, windowSeconds);
       }
-      
+
       const ttl = await this.client.ttl(`ratelimit:${key}`);
-      const resetTime = Date.now() + (ttl * 1000);
-      
+      const resetTime = Date.now() + ttl * 1000;
+
       return {
         allowed: current <= limit,
         remaining: Math.max(0, limit - current),
-        resetTime
+        resetTime,
       };
     } catch (error) {
       console.error(`❌ Redis rate limit error for key ${key}:`, error);
       return {
         allowed: true,
         remaining: limit,
-        resetTime: Date.now() + (windowSeconds * 1000)
+        resetTime: Date.now() + windowSeconds * 1000,
       };
     }
   }
@@ -223,10 +238,10 @@ export class RedisConnection {
 export const redisClient = RedisConnection.getInstance();
 
 // Graceful shutdown handler
-process.on('SIGINT', async () => {
+process.on("SIGINT", async () => {
   await redisClient.disconnect();
 });
 
-process.on('SIGTERM', async () => {
+process.on("SIGTERM", async () => {
   await redisClient.disconnect();
 });

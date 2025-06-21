@@ -1,4 +1,4 @@
-import Redis from 'ioredis';
+import Redis from "ioredis";
 export declare const redis: Redis;
 export declare class RedisConnection {
     private static instance;

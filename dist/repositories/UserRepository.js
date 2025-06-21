@@ -1,44 +1,27 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UserRepository = void 0;
-const client_1 = require("@prisma/client");
 const BaseRepository_1 = require("./BaseRepository");
-const winston_1 = require("../utils/logger/winston");
-const nigerian_1 = require("../utils/helpers/nigerian");
+const types_1 = require("../types");
 class UserRepository extends BaseRepository_1.BaseRepository {
-    modelName = "user";
+    constructor(prisma) {
+        super(prisma, "User");
+    }
     /**
-     * Find user by phone number (Nigerian format)
+     * Find user by phone number
      */
     async findByPhoneNumber(phoneNumber) {
         try {
-            const formattedPhone = nigerian_1.NigerianPhoneUtils.format(phoneNumber);
-            winston_1.logger.debug("Finding user by phone number:", {
-                original: phoneNumber,
-                formatted: formattedPhone,
-            });
-            const user = await this.model.findUnique({
-                where: { phoneNumber: formattedPhone },
-                include: {
-                    addresses: true,
-                    orders: {
-                        take: 5,
-                        orderBy: { createdAt: "desc" },
-                    },
+            return await this.findFirst({ phoneNumber }, {
+                addresses: true,
+                reviews: {
+                    include: { product: true },
+                    orderBy: { createdAt: "desc" },
                 },
             });
-            if (user) {
-                winston_1.logger.debug("User found by phone number:", { id: user.id });
-            }
-            else {
-                winston_1.logger.debug("User not found by phone number:", {
-                    phoneNumber: formattedPhone,
-                });
-            }
-            return user;
         }
         catch (error) {
-            winston_1.logger.error("Error finding user by phone number:", error);
+            this.handleError("Error finding user by phone number", error);
             throw error;
         }
     }
@@ -47,93 +30,71 @@ class UserRepository extends BaseRepository_1.BaseRepository {
      */
     async findByEmail(email) {
         try {
-            winston_1.logger.debug("Finding user by email:", { email });
-            const user = await this.model.findUnique({
-                where: { email: email.toLowerCase() },
-                include: {
-                    addresses: true,
-                    orders: {
-                        take: 5,
-                        orderBy: { createdAt: "desc" },
-                    },
+            return await this.findFirst({ email }, {
+                addresses: true,
+                reviews: {
+                    include: { product: true },
+                    orderBy: { createdAt: "desc" },
                 },
             });
-            if (user) {
-                winston_1.logger.debug("User found by email:", { id: user.id });
-            }
-            return user;
         }
         catch (error) {
-            winston_1.logger.error("Error finding user by email:", error);
+            this.handleError("Error finding user by email", error);
             throw error;
         }
     }
     /**
-     * Create user with Nigerian phone validation
+     * Create new user with validation
      */
     async createUser(userData) {
         try {
-            const formattedPhone = nigerian_1.NigerianPhoneUtils.format(userData.phoneNumber);
-            if (!nigerian_1.NigerianPhoneUtils.validate(formattedPhone)) {
-                throw new Error("Invalid Nigerian phone number format");
+            // Check if phone number already exists
+            const existingUser = await this.findByPhoneNumber(userData.phoneNumber);
+            if (existingUser) {
+                throw new types_1.AppError("Phone number already registered", types_1.HTTP_STATUS.CONFLICT, types_1.ERROR_CODES.RESOURCE_ALREADY_EXISTS);
             }
-            winston_1.logger.debug("Creating user with validated phone:", {
-                originalPhone: userData.phoneNumber,
-                formattedPhone,
+            // Check if email already exists (if provided)
+            if (userData.email) {
+                const existingEmail = await this.findByEmail(userData.email);
+                if (existingEmail) {
+                    throw new types_1.AppError("Email already registered", types_1.HTTP_STATUS.CONFLICT, types_1.ERROR_CODES.RESOURCE_ALREADY_EXISTS);
+                }
+            }
+            return await this.create(userData, {
+                addresses: true,
             });
-            const user = await this.create({
-                ...userData,
-                phoneNumber: formattedPhone,
-                email: userData.email?.toLowerCase(),
-                role: userData.role || client_1.UserRole.CUSTOMER,
-                isVerified: false,
-                isActive: true,
-            });
-            winston_1.logger.info("User created successfully:", {
-                id: user.id,
-                phoneNumber: formattedPhone,
-            });
-            return user;
         }
         catch (error) {
-            winston_1.logger.error("Error creating user:", error);
+            this.handleError("Error creating user", error);
             throw error;
         }
     }
     /**
      * Update user profile
      */
-    async updateProfile(userId, updates) {
+    async updateProfile(userId, profileData) {
         try {
-            winston_1.logger.debug("Updating user profile:", { userId, updates });
-            const user = await this.update(userId, {
-                ...updates,
-                email: updates.email?.toLowerCase(),
-                updatedAt: new Date(),
+            // If email is being updated, check for conflicts
+            if (profileData.email) {
+                const existingEmail = await this.findFirst({
+                    email: profileData.email,
+                    id: { not: userId },
+                });
+                if (existingEmail) {
+                    throw new types_1.AppError("Email already in use by another account", types_1.HTTP_STATUS.CONFLICT, types_1.ERROR_CODES.RESOURCE_CONFLICT);
+                }
+            }
+            return await this.update(userId, profileData, {
+                addresses: true,
+                reviews: {
+                    include: { product: true },
+                    orderBy: { createdAt: "desc" },
+                    take: 5,
+                },
             });
-            winston_1.logger.info("User profile updated:", { userId });
-            return user;
         }
         catch (error) {
-            winston_1.logger.error("Error updating user profile:", error);
-            throw error;
-        }
-    }
-    /**
-     * Verify user phone number
-     */
-    async verifyPhoneNumber(userId) {
-        try {
-            winston_1.logger.debug("Verifying user phone number:", { userId });
-            const user = await this.update(userId, {
-                isVerified: true,
-                updatedAt: new Date(),
-            });
-            winston_1.logger.info("User phone verified:", { userId });
-            return user;
-        }
-        catch (error) {
-            winston_1.logger.error("Error verifying user phone:", error);
+            this.handleError("Error updating user profile", error);
             throw error;
         }
     }
@@ -142,263 +103,398 @@ class UserRepository extends BaseRepository_1.BaseRepository {
      */
     async updateLastLogin(userId) {
         try {
-            const user = await this.update(userId, {
+            await this.update(userId, {
                 lastLoginAt: new Date(),
-                updatedAt: new Date(),
             });
-            winston_1.logger.debug("Updated user last login:", { userId });
-            return user;
         }
         catch (error) {
-            winston_1.logger.error("Error updating last login:", error);
+            this.handleError("Error updating last login", error);
+            // Don't throw - this is not critical
+        }
+    }
+    /**
+     * Verify user account
+     */
+    async verifyUser(userId) {
+        try {
+            return await this.update(userId, {
+                isVerified: true,
+                status: "ACTIVE",
+            });
+        }
+        catch (error) {
+            this.handleError("Error verifying user", error);
             throw error;
         }
     }
     /**
-     * Find users by role with pagination
+     * Suspend user account
      */
-    async findByRole(role, pagination) {
+    async suspendUser(userId, reason) {
         try {
-            winston_1.logger.debug("Finding users by role:", { role, pagination });
-            const page = pagination.page || 1;
-            const limit = Math.min(pagination.limit || 20, 100);
-            const skip = (page - 1) * limit;
-            const [items, totalItems] = await Promise.all([
-                this.model.findMany({
-                    where: { role },
-                    take: limit,
-                    skip,
-                    orderBy: { createdAt: "desc" },
-                    include: {
-                        addresses: true,
-                        _count: {
-                            select: {
-                                orders: true,
-                            },
+            return await this.update(userId, {
+                status: "SUSPENDED",
+            });
+        }
+        catch (error) {
+            this.handleError("Error suspending user", error);
+            throw error;
+        }
+    }
+    /**
+     * Activate user account
+     */
+    async activateUser(userId) {
+        try {
+            return await this.update(userId, {
+                status: "ACTIVE",
+            });
+        }
+        catch (error) {
+            this.handleError("Error activating user", error);
+            throw error;
+        }
+    }
+    /**
+     * Find users with filters and pagination
+     */
+    async findUsersWithFilters(queryParams) {
+        try {
+            const { search, role, isVerified, isActive, dateFrom, dateTo, page = 1, limit = 20, sortBy = "createdAt", sortOrder = "desc", } = queryParams;
+            // Build where clause
+            const where = {};
+            // Search in names, email, and phone
+            if (search) {
+                where.OR = [
+                    { firstName: { contains: search, mode: "insensitive" } },
+                    { lastName: { contains: search, mode: "insensitive" } },
+                    { email: { contains: search, mode: "insensitive" } },
+                    { phoneNumber: { contains: search } },
+                ];
+            }
+            // Filter by role
+            if (role) {
+                where.role = role;
+            }
+            // Filter by verification status
+            if (typeof isVerified === "boolean") {
+                where.isVerified = isVerified;
+            }
+            // Filter by active status
+            if (typeof isActive === "boolean") {
+                where.status = isActive ? "ACTIVE" : { not: "ACTIVE" };
+            }
+            // Filter by date range
+            if (dateFrom || dateTo) {
+                where.createdAt = {};
+                if (dateFrom)
+                    where.createdAt.gte = dateFrom;
+                if (dateTo)
+                    where.createdAt.lte = dateTo;
+            }
+            return await this.findMany(where, {
+                include: {
+                    addresses: true,
+                    _count: {
+                        select: {
+                            orders: true,
+                            reviews: true,
                         },
                     },
-                }),
-                this.model.count({ where: { role } }),
-            ]);
-            const totalPages = Math.ceil(totalItems / limit);
-            return {
-                items,
-                pagination: {
-                    currentPage: page,
-                    totalPages,
-                    totalItems,
-                    itemsPerPage: limit,
-                    hasNextPage: page < totalPages,
-                    hasPreviousPage: page > 1,
                 },
-            };
+                orderBy: this.buildOrderBy(sortBy, sortOrder),
+                pagination: { page, limit },
+            });
         }
         catch (error) {
-            winston_1.logger.error("Error finding users by role:", error);
+            this.handleError("Error finding users with filters", error);
             throw error;
         }
     }
     /**
-     * Search users by name or phone
+     * Get user statistics
      */
-    async searchUsers(query, pagination) {
+    async getUserStats() {
         try {
-            winston_1.logger.debug("Searching users:", { query, pagination });
-            const page = pagination.page || 1;
-            const limit = Math.min(pagination.limit || 20, 100);
-            const skip = (page - 1) * limit;
-            // Try to format as phone number for search
-            const formattedPhone = nigerian_1.NigerianPhoneUtils.format(query);
-            const isPhoneSearch = nigerian_1.NigerianPhoneUtils.validate(formattedPhone);
-            const whereCondition = {
-                OR: [
-                    {
-                        firstName: {
-                            contains: query,
-                            mode: client_1.Prisma.QueryMode.insensitive,
-                        },
-                    },
-                    {
-                        lastName: {
-                            contains: query,
-                            mode: client_1.Prisma.QueryMode.insensitive,
-                        },
-                    },
-                    {
-                        email: {
-                            contains: query,
-                            mode: client_1.Prisma.QueryMode.insensitive,
-                        },
-                    },
-                    ...(isPhoneSearch
-                        ? [
-                            {
-                                phoneNumber: {
-                                    contains: formattedPhone,
-                                },
-                            },
-                        ]
-                        : []),
-                ],
-            };
-            const [items, totalItems] = await Promise.all([
-                this.model.findMany({
-                    where: whereCondition,
-                    take: limit,
-                    skip,
-                    orderBy: { createdAt: "desc" },
-                    include: {
-                        addresses: true,
-                        _count: {
-                            select: {
-                                orders: true,
-                            },
-                        },
-                    },
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const weekStart = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            const [totalUsers, newUsersToday, newUsersThisWeek, newUsersThisMonth, verifiedUsers, activeUsers, usersByRole, recentUsers,] = await Promise.all([
+                this.count(),
+                this.count({
+                    createdAt: { gte: today },
                 }),
-                this.model.count({ where: whereCondition }),
+                this.count({
+                    createdAt: { gte: weekStart },
+                }),
+                this.count({
+                    createdAt: { gte: monthStart },
+                }),
+                this.count({
+                    isVerified: true,
+                }),
+                this.count({
+                    status: "ACTIVE",
+                }),
+                this.groupBy(["role"], {}, undefined, {
+                    _count: { id: true },
+                }),
+                this.findMany({}, {
+                    orderBy: { createdAt: "desc" },
+                    pagination: { page: 1, limit: 10 },
+                }),
             ]);
-            const totalPages = Math.ceil(totalItems / limit);
-            winston_1.logger.debug(`Found ${items.length} users matching search`);
+            // Transform role counts
+            const roleStats = usersByRole.reduce((acc, group) => {
+                acc[group.role] = group._count.id;
+                return acc;
+            }, {
+                CUSTOMER: 0,
+                ADMIN: 0,
+                SUPER_ADMIN: 0,
+            });
             return {
-                items,
-                pagination: {
-                    currentPage: page,
-                    totalPages,
-                    totalItems,
-                    itemsPerPage: limit,
-                    hasNextPage: page < totalPages,
-                    hasPreviousPage: page > 1,
-                },
+                totalUsers,
+                newUsersToday,
+                newUsersThisWeek,
+                newUsersThisMonth,
+                verifiedUsers,
+                activeUsers,
+                usersByRole: roleStats,
+                recentUsers: recentUsers.data,
             };
         }
         catch (error) {
-            winston_1.logger.error("Error searching users:", error);
+            this.handleError("Error getting user statistics", error);
             throw error;
         }
     }
     /**
-     * Get user with full profile including orders and addresses
+     * Find customers with orders
      */
-    async findByIdWithFullProfile(userId) {
+    async findCustomersWithOrders(pagination) {
         try {
-            winston_1.logger.debug("Finding user with full profile:", { userId });
-            const user = await this.model.findUnique({
+            return await this.findMany({ role: "CUSTOMER" }, {
+                include: {
+                    orders: {
+                        orderBy: { createdAt: "desc" },
+                        take: 3,
+                        include: {
+                            items: {
+                                include: { product: true },
+                                take: 2,
+                            },
+                        },
+                    },
+                    _count: {
+                        select: { orders: true },
+                    },
+                },
+                orderBy: { createdAt: "desc" },
+                pagination,
+            });
+        }
+        catch (error) {
+            this.handleError("Error finding customers with orders", error);
+            throw error;
+        }
+    }
+    /**
+     * Find users by location (state)
+     */
+    async findUsersByLocation(state) {
+        try {
+            const result = await this.findMany({
+                addresses: {
+                    some: {
+                        state,
+                        isDefault: true,
+                    },
+                },
+            });
+            return result.data;
+        }
+        catch (error) {
+            this.handleError("Error finding users by location", error);
+            throw error;
+        }
+    }
+    /**
+     * Find top customers by order value
+     */
+    async findTopCustomers(limit = 10) {
+        try {
+            // This would be a complex query in real implementation
+            // For now, return users with their order aggregations
+            const customers = await this.prisma.user.findMany({
+                where: { role: "CUSTOMER" },
+                include: {
+                    orders: {
+                        where: { status: "DELIVERED" },
+                        select: {
+                            totalAmount: true,
+                            createdAt: true,
+                        },
+                    },
+                },
+                take: limit * 2, // Get more to filter and sort
+            });
+            const customerStats = customers
+                .map((customer) => {
+                const totalSpent = customer.orders.reduce((sum, order) => sum + Number(order.totalAmount), 0);
+                const orderCount = customer.orders.length;
+                const lastOrderDate = customer.orders.length > 0
+                    ? new Date(Math.max(...customer.orders.map((o) => o.createdAt.getTime())))
+                    : new Date(0);
+                return {
+                    user: customer,
+                    totalSpent,
+                    orderCount,
+                    lastOrderDate,
+                };
+            })
+                .filter((stat) => stat.orderCount > 0)
+                .sort((a, b) => b.totalSpent - a.totalSpent)
+                .slice(0, limit);
+            return customerStats;
+        }
+        catch (error) {
+            this.handleError("Error finding top customers", error);
+            throw error;
+        }
+    }
+    /**
+     * Find inactive users (no login in X days)
+     */
+    async findInactiveUsers(daysSinceLastLogin = 30, pagination) {
+        try {
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - daysSinceLastLogin);
+            return await this.findMany({
+                OR: [{ lastLoginAt: { lt: cutoffDate } }, { lastLoginAt: null }],
+                status: "ACTIVE",
+            }, {
+                orderBy: { lastLoginAt: "asc" },
+                pagination,
+            });
+        }
+        catch (error) {
+            this.handleError("Error finding inactive users", error);
+            throw error;
+        }
+    }
+    /**
+     * Search users by multiple criteria
+     */
+    async searchUsers(searchTerm, filters = {}, pagination) {
+        try {
+            const searchFields = ["firstName", "lastName", "email", "phoneNumber"];
+            const where = { ...filters };
+            // Add location filter if state is provided
+            if (filters.state) {
+                where.addresses = {
+                    some: {
+                        state: filters.state,
+                    },
+                };
+                delete where.state; // Remove from top level
+            }
+            return await this.search(searchTerm, searchFields, where, {
+                include: {
+                    addresses: true,
+                    _count: {
+                        select: {
+                            orders: true,
+                            reviews: true,
+                        },
+                    },
+                },
+                pagination,
+            });
+        }
+        catch (error) {
+            this.handleError("Error searching users", error);
+            throw error;
+        }
+    }
+    /**
+     * Get user activity summary
+     */
+    async getUserActivitySummary(userId) {
+        try {
+            const user = await this.prisma.user.findUnique({
                 where: { id: userId },
                 include: {
-                    addresses: {
-                        orderBy: { createdAt: "desc" },
-                    },
                     orders: {
-                        take: 10,
-                        orderBy: { createdAt: "desc" },
+                        where: { status: "DELIVERED" },
                         include: {
                             items: {
                                 include: {
                                     product: {
-                                        select: {
-                                            name: true,
-                                            images: {
-                                                where: { isPrimary: true },
-                                                take: 1,
-                                            },
-                                        },
+                                        include: { category: true },
                                     },
                                 },
                             },
                         },
                     },
-                    reviews: {
-                        take: 5,
-                        orderBy: { createdAt: "desc" },
-                        include: {
-                            product: {
-                                select: {
-                                    name: true,
-                                },
-                            },
-                        },
-                    },
-                    wishlist: {
-                        include: {
-                            product: {
-                                include: {
-                                    images: {
-                                        where: { isPrimary: true },
-                                        take: 1,
-                                    },
-                                },
-                            },
-                        },
-                    },
+                    reviews: true,
                 },
             });
-            return user;
-        }
-        catch (error) {
-            winston_1.logger.error("Error finding user with full profile:", error);
-            throw error;
-        }
-    }
-    /**
-     * Deactivate user account
-     */
-    async deactivateUser(userId) {
-        try {
-            winston_1.logger.debug("Deactivating user:", { userId });
-            const user = await this.update(userId, {
-                isActive: false,
-                updatedAt: new Date(),
+            if (!user) {
+                throw new types_1.AppError("User not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+            }
+            const orderCount = user.orders.length;
+            const totalSpent = user.orders.reduce((sum, order) => sum + Number(order.totalAmount), 0);
+            const reviewCount = user.reviews.length;
+            const averageRating = reviewCount > 0
+                ? user.reviews.reduce((sum, review) => sum + review.rating, 0) /
+                    reviewCount
+                : 0;
+            // Get last activity (latest order or review)
+            const lastOrderDate = user.orders.length > 0
+                ? new Date(Math.max(...user.orders.map((o) => o.createdAt.getTime())))
+                : new Date(0);
+            const lastReviewDate = user.reviews.length > 0
+                ? new Date(Math.max(...user.reviews.map((r) => r.createdAt.getTime())))
+                : new Date(0);
+            const lastActivity = new Date(Math.max(lastOrderDate.getTime(), lastReviewDate.getTime()));
+            // Calculate favorite categories
+            const categoryStats = new Map();
+            user.orders.forEach((order) => {
+                order.items.forEach((item) => {
+                    const categoryName = item.product.category.name;
+                    categoryStats.set(categoryName, (categoryStats.get(categoryName) || 0) + 1);
+                });
             });
-            winston_1.logger.info("User deactivated:", { userId });
-            return user;
+            const favoriteCategories = Array.from(categoryStats.entries())
+                .map(([categoryName, orderCount]) => ({ categoryName, orderCount }))
+                .sort((a, b) => b.orderCount - a.orderCount)
+                .slice(0, 5);
+            return {
+                orderCount,
+                totalSpent,
+                reviewCount,
+                averageRating,
+                lastActivity,
+                joinDate: user.createdAt,
+                favoriteCategories,
+            };
         }
         catch (error) {
-            winston_1.logger.error("Error deactivating user:", error);
+            this.handleError("Error getting user activity summary", error);
             throw error;
         }
     }
     /**
-     * Get user statistics for admin dashboard
+     * Bulk update user statuses
      */
-    async getUserStats() {
+    async bulkUpdateStatus(userIds, status) {
         try {
-            winston_1.logger.debug("Getting user statistics");
-            const currentMonth = new Date();
-            currentMonth.setDate(1);
-            currentMonth.setHours(0, 0, 0, 0);
-            const [totalUsers, activeUsers, verifiedUsers, newUsersThisMonth, usersByRole,] = await Promise.all([
-                this.count(),
-                this.count({ isActive: true }),
-                this.count({ isVerified: true }),
-                this.count({
-                    createdAt: {
-                        gte: currentMonth,
-                    },
-                }),
-                this.model.groupBy({
-                    by: ["role"],
-                    _count: {
-                        id: true,
-                    },
-                }),
-            ]);
-            const roleStats = usersByRole.reduce((acc, item) => {
-                acc[item.role] = item._count.id;
-                return acc;
-            }, {});
-            const stats = {
-                totalUsers,
-                activeUsers,
-                verifiedUsers,
-                newUsersThisMonth,
-                usersByRole: roleStats,
-            };
-            winston_1.logger.debug("User statistics calculated:", stats);
-            return stats;
+            return await this.updateMany({ id: { in: userIds } }, { status });
         }
         catch (error) {
-            winston_1.logger.error("Error getting user statistics:", error);
+            this.handleError("Error bulk updating user statuses", error);
             throw error;
         }
     }

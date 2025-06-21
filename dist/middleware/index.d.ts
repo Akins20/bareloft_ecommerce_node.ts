@@ -33,26 +33,26 @@ export interface CacheConfig {
  * Creates a standardized middleware stack for different route types
  */
 export declare const createMiddlewareStack: {
-    public: () => (((req: import("cors").CorsRequest, res: {
+    public: () => (((fn: (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => Promise<any>) => (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => void) | ((req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => void) | ((req: import("cors").CorsRequest, res: {
         statusCode?: number | undefined;
         setHeader(key: string, value: string): any;
         end(): any;
-    }, next: (err?: any) => any) => void) | ((fn: (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => Promise<any>) => (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => void) | ((req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => void))[];
-    authenticated: () => (((req: import("cors").CorsRequest, res: {
+    }, next: (err?: any) => any) => void))[];
+    authenticated: () => (((fn: (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => Promise<any>) => (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => void) | ((req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => void) | ((req: import("cors").CorsRequest, res: {
         statusCode?: number | undefined;
         setHeader(key: string, value: string): any;
         end(): any;
-    }, next: (err?: any) => any) => void) | ((fn: (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => Promise<any>) => (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => void) | ((req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => void))[];
-    admin: () => (((req: import("cors").CorsRequest, res: {
+    }, next: (err?: any) => any) => void))[];
+    admin: () => (((fn: (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => Promise<any>) => (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => void) | ((req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => void) | ((req: import("cors").CorsRequest, res: {
         statusCode?: number | undefined;
         setHeader(key: string, value: string): any;
         end(): any;
-    }, next: (err?: any) => any) => void) | ((fn: (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => Promise<any>) => (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => void) | ((req: import("../types").AuthenticatedRequest, res: import("express").Response, next: import("express").NextFunction) => void) | ((req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => void))[];
-    payment: () => (((req: import("cors").CorsRequest, res: {
+    }, next: (err?: any) => any) => void) | ((req: import("../types").AuthenticatedRequest, res: import("express").Response, next: import("express").NextFunction) => void))[];
+    payment: () => (((fn: (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => Promise<any>) => (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => void) | ((req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => void) | ((req: import("cors").CorsRequest, res: {
         statusCode?: number | undefined;
         setHeader(key: string, value: string): any;
         end(): any;
-    }, next: (err?: any) => any) => void) | ((fn: (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => Promise<any>) => (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => void) | ((req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => void))[];
+    }, next: (err?: any) => any) => void))[];
 };
 export declare const middlewarePresets: {
     development: {

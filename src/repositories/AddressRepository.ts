@@ -1,0 +1,446 @@
+import { PrismaClient } from "@prisma/client";
+import { BaseRepository } from "./BaseRepository";
+import {
+  Address,
+  CreateAddressRequest,
+  UpdateAddressRequest,
+  NigerianPhoneNumber,
+  NigerianState,
+  AppError,
+  HTTP_STATUS,
+  ERROR_CODES,
+} from "../types";
+
+interface CreateAddressData {
+  userId: string;
+  type: "shipping" | "billing";
+  firstName: string;
+  lastName: string;
+  company?: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: NigerianState;
+  postalCode?: string;
+  country: string;
+  phoneNumber: NigerianPhoneNumber;
+  isDefault: boolean;
+}
+
+interface UpdateAddressData {
+  type?: "shipping" | "billing";
+  firstName?: string;
+  lastName?: string;
+  company?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: NigerianState;
+  postalCode?: string;
+  phoneNumber?: NigerianPhoneNumber;
+  isDefault?: boolean;
+}
+
+export class AddressRepository extends BaseRepository<
+  Address,
+  CreateAddressData,
+  UpdateAddressData
+> {
+  constructor(prisma?: PrismaClient) {
+    super(prisma || new PrismaClient(), "Address");
+  }
+
+  /**
+   * Get all addresses for a user
+   */
+  async findByUserId(userId: string): Promise<Address[]> {
+    try {
+      const result = await this.findMany(
+        { userId },
+        {
+          orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
+        }
+      );
+      return result.data;
+    } catch (error) {
+      throw new AppError(
+        "Error fetching user addresses",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
+    }
+  }
+
+  /**
+   * Get user's default address by type
+   */
+  async findDefaultAddress(
+    userId: string,
+    type?: "shipping" | "billing"
+  ): Promise<Address | null> {
+    try {
+      const where: any = {
+        userId,
+        isDefault: true,
+      };
+
+      if (type) {
+        where.type = type;
+      }
+
+      return await this.findFirst(where);
+    } catch (error) {
+      throw new AppError(
+        "Error fetching default address",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
+    }
+  }
+
+  /**
+   * Create new address
+   */
+  async createAddress(
+    userId: string,
+    data: CreateAddressRequest
+  ): Promise<Address> {
+    try {
+      return await this.transaction(async (prisma) => {
+        // If setting as default, unset other default addresses of same type
+        if (data.isDefault) {
+          await prisma.address.updateMany({
+            where: {
+              userId,
+              type: data.type,
+              isDefault: true,
+            },
+            data: {
+              isDefault: false,
+            },
+          });
+        }
+
+        // If this is the user's first address, make it default
+        const existingAddresses = await prisma.address.count({
+          where: { userId, type: data.type },
+        });
+
+        const addressData: CreateAddressData = {
+          userId,
+          type: data.type,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          company: data.company,
+          addressLine1: data.addressLine1,
+          addressLine2: data.addressLine2,
+          city: data.city,
+          state: data.state,
+          postalCode: data.postalCode,
+          country: "NG", // Always Nigeria
+          phoneNumber: data.phoneNumber,
+          isDefault: data.isDefault ?? existingAddresses === 0,
+        };
+
+        return await prisma.address.create({
+          data: addressData,
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        });
+      });
+    } catch (error) {
+      throw new AppError(
+        "Error creating address",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
+    }
+  }
+
+  /**
+   * Update address
+   */
+  async updateAddress(
+    addressId: string,
+    userId: string,
+    data: UpdateAddressRequest
+  ): Promise<Address> {
+    try {
+      return await this.transaction(async (prisma) => {
+        // Verify address belongs to user
+        const existingAddress = await prisma.address.findFirst({
+          where: { id: addressId, userId },
+        });
+
+        if (!existingAddress) {
+          throw new AppError(
+            "Address not found",
+            HTTP_STATUS.NOT_FOUND,
+            ERROR_CODES.RESOURCE_NOT_FOUND
+          );
+        }
+
+        // If setting as default, unset other default addresses of same type
+        if (data.isDefault) {
+          await prisma.address.updateMany({
+            where: {
+              userId,
+              type: existingAddress.type,
+              isDefault: true,
+              id: { not: addressId },
+            },
+            data: {
+              isDefault: false,
+            },
+          });
+        }
+
+        return await prisma.address.update({
+          where: { id: addressId },
+          data,
+        });
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError(
+        "Error updating address",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
+    }
+  }
+
+  /**
+   * Delete address
+   */
+  async deleteAddress(addressId: string, userId: string): Promise<boolean> {
+    try {
+      return await this.transaction(async (prisma) => {
+        // Verify address belongs to user
+        const existingAddress = await prisma.address.findFirst({
+          where: { id: addressId, userId },
+        });
+
+        if (!existingAddress) {
+          throw new AppError(
+            "Address not found",
+            HTTP_STATUS.NOT_FOUND,
+            ERROR_CODES.RESOURCE_NOT_FOUND
+          );
+        }
+
+        // Delete the address
+        await prisma.address.delete({
+          where: { id: addressId },
+        });
+
+        // If deleted address was default, set another address as default
+        if (existingAddress.isDefault) {
+          const nextAddress = await prisma.address.findFirst({
+            where: {
+              userId,
+              type: existingAddress.type,
+            },
+            orderBy: { createdAt: "desc" },
+          });
+
+          if (nextAddress) {
+            await prisma.address.update({
+              where: { id: nextAddress.id },
+              data: { isDefault: true },
+            });
+          }
+        }
+
+        return true;
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError(
+        "Error deleting address",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
+    }
+  }
+
+  /**
+   * Set address as default
+   */
+  async setAsDefault(addressId: string, userId: string): Promise<Address> {
+    try {
+      return await this.transaction(async (prisma) => {
+        // Get the address to be set as default
+        const address = await prisma.address.findFirst({
+          where: { id: addressId, userId },
+        });
+
+        if (!address) {
+          throw new AppError(
+            "Address not found",
+            HTTP_STATUS.NOT_FOUND,
+            ERROR_CODES.RESOURCE_NOT_FOUND
+          );
+        }
+
+        // Unset other default addresses of same type
+        await prisma.address.updateMany({
+          where: {
+            userId,
+            type: address.type,
+            isDefault: true,
+            id: { not: addressId },
+          },
+          data: {
+            isDefault: false,
+          },
+        });
+
+        // Set this address as default
+        return await prisma.address.update({
+          where: { id: addressId },
+          data: { isDefault: true },
+        });
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError(
+        "Error setting default address",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
+    }
+  }
+
+  /**
+   * Get addresses by Nigerian state
+   */
+  async findByState(state: NigerianState): Promise<Address[]> {
+    try {
+      const result = await this.findMany(
+        { state },
+        {
+          orderBy: { createdAt: "desc" },
+        }
+      );
+      return result.data;
+    } catch (error) {
+      throw new AppError(
+        "Error fetching addresses by state",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
+    }
+  }
+
+  /**
+   * Validate Nigerian address
+   */
+  validateNigerianAddress(data: CreateAddressRequest): {
+    isValid: boolean;
+    errors: string[];
+  } {
+    const errors: string[] = [];
+
+    // Required fields validation
+    if (!data.firstName?.trim()) {
+      errors.push("First name is required");
+    }
+
+    if (!data.lastName?.trim()) {
+      errors.push("Last name is required");
+    }
+
+    if (!data.addressLine1?.trim()) {
+      errors.push("Address line 1 is required");
+    }
+
+    if (!data.city?.trim()) {
+      errors.push("City is required");
+    }
+
+    if (!data.state?.trim()) {
+      errors.push("State is required");
+    }
+
+    if (!data.phoneNumber?.trim()) {
+      errors.push("Phone number is required");
+    }
+
+    // Nigerian phone number validation
+    if (data.phoneNumber && !this.isValidNigerianPhone(data.phoneNumber)) {
+      errors.push("Invalid Nigerian phone number format");
+    }
+
+    // Nigerian states validation
+    const validStates = [
+      "Abia",
+      "Adamawa",
+      "Akwa Ibom",
+      "Anambra",
+      "Bauchi",
+      "Bayelsa",
+      "Benue",
+      "Borno",
+      "Cross River",
+      "Delta",
+      "Ebonyi",
+      "Edo",
+      "Ekiti",
+      "Enugu",
+      "Gombe",
+      "Imo",
+      "Jigawa",
+      "Kaduna",
+      "Kano",
+      "Katsina",
+      "Kebbi",
+      "Kogi",
+      "Kwara",
+      "Lagos",
+      "Nasarawa",
+      "Niger",
+      "Ogun",
+      "Ondo",
+      "Osun",
+      "Oyo",
+      "Plateau",
+      "Rivers",
+      "Sokoto",
+      "Taraba",
+      "Yobe",
+      "Zamfara",
+      "FCT",
+    ];
+
+    if (data.state && !validStates.includes(data.state)) {
+      errors.push("Invalid Nigerian state");
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
+
+  /**
+   * Helper: Validate Nigerian phone number
+   */
+  private isValidNigerianPhone(phone: string): boolean {
+    const nigerianPhoneRegex = /^(\+234)[789][01][0-9]{8}$/;
+    return nigerianPhoneRegex.test(phone);
+  }
+}

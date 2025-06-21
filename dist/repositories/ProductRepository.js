@@ -2,184 +2,154 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProductRepository = void 0;
 const BaseRepository_1 = require("./BaseRepository");
+const types_1 = require("../types");
 class ProductRepository extends BaseRepository_1.BaseRepository {
-    modelName = "product";
-    constructor(database) {
-        super(database);
+    constructor(prisma) {
+        super(prisma, "Product");
     }
     /**
      * Find product by slug
      */
     async findBySlug(slug) {
         try {
-            return await this.model.findUnique({
-                where: { slug },
-                include: {
-                    category: true,
-                    images: {
-                        orderBy: { sortOrder: "asc" },
-                    },
-                    inventory: true,
-                    reviews: {
-                        where: { isApproved: true },
-                        include: {
-                            user: {
-                                select: {
-                                    firstName: true,
-                                    lastName: true,
-                                    avatar: true,
-                                },
-                            },
-                        },
-                        orderBy: { createdAt: "desc" },
-                        take: 10,
-                    },
+            return await this.findFirst({ slug, isActive: true }, {
+                category: true,
+                images: {
+                    orderBy: { sortOrder: "asc" },
                 },
+                reviews: {
+                    include: { user: true },
+                    orderBy: { createdAt: "desc" },
+                    take: 10,
+                },
+                inventory: true,
             });
         }
         catch (error) {
-            console.error(`Error finding product by slug ${slug}:`, error);
+            this.handleError("Error finding product by slug", error);
             throw error;
         }
     }
     /**
      * Find product by SKU
      */
-    async findBySku(sku) {
+    async findBySKU(sku) {
         try {
-            return await this.model.findUnique({
-                where: { sku },
-                include: {
-                    category: true,
-                    inventory: true,
-                },
+            return await this.findFirst({ sku }, {
+                category: true,
+                images: true,
+                inventory: true,
             });
         }
         catch (error) {
-            console.error(`Error finding product by SKU ${sku}:`, error);
+            this.handleError("Error finding product by SKU", error);
             throw error;
         }
     }
     /**
-     * Create product with relationships
+     * Create product with validation
      */
     async createProduct(productData) {
         try {
-            return await this.db.$transaction(async (prisma) => {
-                // Create product
-                const product = await prisma.product.create({
-                    data: {
-                        name: productData.name,
-                        slug: productData.slug,
-                        description: productData.description,
-                        shortDescription: productData.shortDescription,
-                        sku: productData.sku,
-                        price: productData.price,
-                        comparePrice: productData.comparePrice,
-                        categoryId: productData.categoryId,
-                        brand: productData.brand,
-                        weight: productData.weight,
-                        dimensions: productData.dimensions,
-                        isActive: productData.isActive ?? true,
-                        isFeatured: productData.isFeatured ?? false,
-                        seoTitle: productData.seoTitle,
-                        seoDescription: productData.seoDescription,
-                    },
-                });
-                // Create inventory
-                await prisma.inventory.create({
-                    data: {
-                        productId: product.id,
-                        quantity: productData.inventory.quantity,
-                        reservedQuantity: 0,
-                        lowStockThreshold: productData.inventory.lowStockThreshold ?? 10,
-                        trackInventory: productData.inventory.trackInventory ?? true,
-                    },
-                });
-                // Create images if provided
-                if (productData.images && productData.images.length > 0) {
-                    await prisma.productImage.createMany({
-                        data: productData.images.map((image, index) => ({
-                            productId: product.id,
-                            imageUrl: image.imageUrl,
-                            altText: image.altText,
-                            sortOrder: index,
-                            isPrimary: image.isPrimary ?? index === 0,
-                        })),
-                    });
-                }
-                // Create initial inventory movement
-                await prisma.inventoryMovement.create({
-                    data: {
-                        productId: product.id,
-                        type: "RESTOCK",
-                        quantity: productData.inventory.quantity,
-                        previousQuantity: 0,
-                        newQuantity: productData.inventory.quantity,
-                        reason: "Initial stock",
-                    },
-                });
-                return product;
+            // Check if SKU already exists
+            const existingSKU = await this.findBySKU(productData.sku);
+            if (existingSKU) {
+                throw new types_1.AppError("SKU already exists", types_1.HTTP_STATUS.CONFLICT, types_1.ERROR_CODES.RESOURCE_ALREADY_EXISTS);
+            }
+            // Check if slug already exists
+            const existingSlug = await this.findBySlug(productData.slug);
+            if (existingSlug) {
+                throw new types_1.AppError("Slug already exists", types_1.HTTP_STATUS.CONFLICT, types_1.ERROR_CODES.RESOURCE_ALREADY_EXISTS);
+            }
+            return await this.create(productData, {
+                category: true,
+                images: true,
+                inventory: true,
             });
         }
         catch (error) {
-            console.error("Error creating product:", error);
+            this.handleError("Error creating product", error);
+            throw error;
+        }
+    }
+    /**
+     * Update product with validation
+     */
+    async updateProduct(productId, productData) {
+        try {
+            // Check SKU uniqueness if being updated
+            if (productData.sku) {
+                const existingSKU = await this.findFirst({
+                    sku: productData.sku,
+                    id: { not: productId },
+                });
+                if (existingSKU) {
+                    throw new types_1.AppError("SKU already exists", types_1.HTTP_STATUS.CONFLICT, types_1.ERROR_CODES.RESOURCE_CONFLICT);
+                }
+            }
+            // Check slug uniqueness if being updated
+            if (productData.slug) {
+                const existingSlug = await this.findFirst({
+                    slug: productData.slug,
+                    id: { not: productId },
+                });
+                if (existingSlug) {
+                    throw new types_1.AppError("Slug already exists", types_1.HTTP_STATUS.CONFLICT, types_1.ERROR_CODES.RESOURCE_CONFLICT);
+                }
+            }
+            return await this.update(productId, productData, {
+                category: true,
+                images: true,
+                inventory: true,
+                reviews: {
+                    take: 5,
+                    orderBy: { createdAt: "desc" },
+                },
+            });
+        }
+        catch (error) {
+            this.handleError("Error updating product", error);
             throw error;
         }
     }
     /**
      * Find products with advanced filtering
      */
-    async findWithFilters(params) {
+    async findProductsWithFilters(queryParams) {
         try {
-            const page = params.page || 1;
-            const limit = Math.min(params.limit || 20, 100);
-            const skip = (page - 1) * limit;
+            const { categoryId, categorySlug, brand, priceMin, priceMax, isActive = true, isFeatured, inStock, hasDiscount, rating, sortBy = "createdAt", sortOrder = "desc", availability, query, page = 1, limit = 20, } = queryParams;
             // Build where clause
-            const where = {};
-            // Active products only (unless admin)
-            if (params.isActive !== false) {
-                where.isActive = true;
+            const where = { isActive };
+            // Category filter
+            if (categoryId) {
+                where.categoryId = categoryId;
             }
-            if (params.query) {
-                where.OR = [
-                    { name: { contains: params.query, mode: "insensitive" } },
-                    { description: { contains: params.query, mode: "insensitive" } },
-                    { brand: { contains: params.query, mode: "insensitive" } },
-                    { sku: { contains: params.query, mode: "insensitive" } },
-                ];
+            else if (categorySlug) {
+                where.category = { slug: categorySlug };
             }
-            if (params.categoryId) {
-                where.categoryId = params.categoryId;
+            // Brand filter
+            if (brand) {
+                where.brand = { contains: brand, mode: "insensitive" };
             }
-            if (params.categorySlug) {
-                where.category = {
-                    slug: params.categorySlug,
-                };
-            }
-            if (params.brand) {
-                where.brand = { contains: params.brand, mode: "insensitive" };
-            }
-            if (params.priceMin || params.priceMax) {
+            // Price range filter
+            if (priceMin !== undefined || priceMax !== undefined) {
                 where.price = {};
-                if (params.priceMin)
-                    where.price.gte = params.priceMin;
-                if (params.priceMax)
-                    where.price.lte = params.priceMax;
+                if (priceMin !== undefined)
+                    where.price.gte = priceMin;
+                if (priceMax !== undefined)
+                    where.price.lte = priceMax;
             }
-            if (params.isFeatured) {
-                where.isFeatured = true;
+            // Featured filter
+            if (typeof isFeatured === "boolean") {
+                where.isFeatured = isFeatured;
             }
-            if (params.hasDiscount) {
+            // Discount filter
+            if (hasDiscount) {
                 where.comparePrice = { gt: 0 };
             }
-            if (params.inStock) {
-                where.inventory = {
-                    quantity: { gt: 0 },
-                };
-            }
-            if (params.availability) {
-                switch (params.availability) {
+            // Stock availability filter
+            if (inStock || availability) {
+                switch (availability) {
                     case "in_stock":
                         where.inventory = { quantity: { gt: 0 } };
                         break;
@@ -188,74 +158,125 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
                         break;
                     case "low_stock":
                         where.inventory = {
-                            quantity: { lte: { inventory: { lowStockThreshold: true } } },
+                            quantity: {
+                                gt: 0,
+                                lte: { path: ["lowStockThreshold"] },
+                            },
                         };
                         break;
+                    default:
+                        if (inStock) {
+                            where.inventory = { quantity: { gt: 0 } };
+                        }
                 }
             }
-            // Build orderBy clause
-            let orderBy = {};
-            switch (params.sortBy) {
-                case "price":
-                    orderBy = { price: params.sortOrder || "asc" };
-                    break;
+            // Rating filter
+            if (rating) {
+                where.reviews = {
+                    some: {},
+                };
+                // Would need to calculate average rating in a more complex query
+            }
+            // Search query
+            if (query) {
+                where.OR = [
+                    { name: { contains: query, mode: "insensitive" } },
+                    { description: { contains: query, mode: "insensitive" } },
+                    { brand: { contains: query, mode: "insensitive" } },
+                    { sku: { contains: query, mode: "insensitive" } },
+                ];
+            }
+            // Build order by
+            let orderBy = { createdAt: "desc" };
+            switch (sortBy) {
                 case "name":
-                    orderBy = { name: params.sortOrder || "asc" };
+                    orderBy = { name: sortOrder };
+                    break;
+                case "price":
+                    orderBy = { price: sortOrder };
                     break;
                 case "created":
-                    orderBy = { createdAt: params.sortOrder || "desc" };
-                    break;
-                case "rating":
-                    // This would require a complex aggregation query
-                    orderBy = { createdAt: "desc" }; // Fallback
+                    orderBy = { createdAt: sortOrder };
                     break;
                 case "popularity":
-                    // This would require view/order count tracking
-                    orderBy = { createdAt: "desc" }; // Fallback
-                    break;
-                default:
+                    // Would order by sales count or view count
                     orderBy = { createdAt: "desc" };
+                    break;
+                case "discount":
+                    // Order by discount percentage
+                    orderBy = { comparePrice: sortOrder };
+                    break;
             }
-            const [products, total, facets] = await Promise.all([
-                this.model.findMany({
-                    where,
-                    take: limit,
-                    skip,
-                    orderBy,
-                    include: {
-                        category: {
-                            select: {
-                                id: true,
-                                name: true,
-                                slug: true,
-                            },
-                        },
-                        images: {
-                            where: { isPrimary: true },
-                            take: 1,
-                        },
-                        inventory: {
-                            select: {
-                                quantity: true,
-                                reservedQuantity: true,
-                            },
-                        },
-                        _count: {
-                            select: {
-                                reviews: {
-                                    where: { isApproved: true },
-                                },
-                            },
+            const result = await this.findMany(where, {
+                include: {
+                    category: true,
+                    images: {
+                        where: { isPrimary: true },
+                        take: 1,
+                    },
+                    inventory: true,
+                    reviews: {
+                        select: { rating: true },
+                    },
+                    _count: {
+                        select: {
+                            reviews: true,
+                            orderItems: true,
                         },
                     },
-                }),
-                this.model.count({ where }),
-                this.getFacets(where),
-            ]);
-            return { products, total, facets };
+                },
+                orderBy,
+                pagination: { page, limit },
+            });
+            // Get filter options for the response
+            const filters = await this.getFilterOptions(where);
+            // Calculate facets
+            const facets = await this.getProductFacets(where);
+            return {
+                products: result.data.map(this.transformProductForList),
+                pagination: result.pagination,
+                filters,
+                facets,
+            };
         }
         catch (error) {
-            console.error("Error finding products with filters:", error);
+            this.handleError("Error finding products with filters", error);
+            throw error;
+        }
+    }
+    /**
+     * Search products
+     */
+    async searchProducts(searchTerm, filters = {}, pagination) {
+        try {
+            const searchFields = ["name", "description", "brand", "sku"];
+            const where = {
+                isActive: true,
+                ...filters,
+            };
+            // Add inventory filter for stock
+            if (filters.inStock) {
+                where.inventory = { quantity: { gt: 0 } };
+                delete where.inStock;
+            }
+            return await this.search(searchTerm, searchFields, where, {
+                include: {
+                    category: true,
+                    images: {
+                        where: { isPrimary: true },
+                        take: 1,
+                    },
+                    inventory: true,
+                    reviews: {
+                        select: { rating: true },
+                        take: 5,
+                    },
+                },
+                pagination,
+            });
+        }
+        catch (error) {
+            this.handleError("Error searching products", error);
             throw error;
         }
     }
@@ -264,48 +285,11 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
      */
     async getFeaturedProducts(limit = 12) {
         try {
-            return await this.model.findMany({
-                where: {
-                    isFeatured: true,
-                    isActive: true,
-                    inventory: {
-                        quantity: { gt: 0 },
-                    },
-                },
-                take: limit,
-                include: {
-                    category: {
-                        select: {
-                            id: true,
-                            name: true,
-                            slug: true,
-                        },
-                    },
-                    images: {
-                        where: { isPrimary: true },
-                        take: 1,
-                    },
-                    inventory: true,
-                },
-                orderBy: { createdAt: "desc" },
-            });
-        }
-        catch (error) {
-            console.error("Error getting featured products:", error);
-            throw error;
-        }
-    }
-    /**
-     * Get products by category
-     */
-    async getByCategory(categoryId, limit = 20) {
-        try {
-            return await this.model.findMany({
-                where: {
-                    categoryId,
-                    isActive: true,
-                },
-                take: limit,
+            const result = await this.findMany({
+                isActive: true,
+                isFeatured: true,
+                inventory: { quantity: { gt: 0 } },
+            }, {
                 include: {
                     category: true,
                     images: {
@@ -313,12 +297,46 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
                         take: 1,
                     },
                     inventory: true,
+                    reviews: {
+                        select: { rating: true },
+                    },
                 },
                 orderBy: { createdAt: "desc" },
+                pagination: { page: 1, limit },
+            });
+            return result.data;
+        }
+        catch (error) {
+            this.handleError("Error getting featured products", error);
+            throw error;
+        }
+    }
+    /**
+     * Get products by category
+     */
+    async getProductsByCategory(categoryId, pagination) {
+        try {
+            return await this.findMany({
+                categoryId,
+                isActive: true,
+            }, {
+                include: {
+                    category: true,
+                    images: {
+                        where: { isPrimary: true },
+                        take: 1,
+                    },
+                    inventory: true,
+                    reviews: {
+                        select: { rating: true },
+                    },
+                },
+                orderBy: { createdAt: "desc" },
+                pagination,
             });
         }
         catch (error) {
-            console.error(`Error getting products by category ${categoryId}:`, error);
+            this.handleError("Error getting products by category", error);
             throw error;
         }
     }
@@ -327,27 +345,17 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
      */
     async getRelatedProducts(productId, limit = 8) {
         try {
-            // Get the product to find related products in same category
-            const product = await this.model.findUnique({
-                where: { id: productId },
-                select: { categoryId: true, brand: true },
-            });
-            if (!product)
+            // Get the current product to find related ones
+            const currentProduct = await this.findById(productId, { category: true });
+            if (!currentProduct) {
                 return [];
-            return await this.model.findMany({
-                where: {
-                    AND: [
-                        { id: { not: productId } },
-                        { isActive: true },
-                        {
-                            OR: [
-                                { categoryId: product.categoryId },
-                                { brand: product.brand },
-                            ],
-                        },
-                    ],
-                },
-                take: limit,
+            }
+            const result = await this.findMany({
+                categoryId: currentProduct.categoryId,
+                isActive: true,
+                id: { not: productId },
+                inventory: { quantity: { gt: 0 } },
+            }, {
                 include: {
                     category: true,
                     images: {
@@ -355,74 +363,121 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
                         take: 1,
                     },
                     inventory: true,
+                    reviews: {
+                        select: { rating: true },
+                    },
                 },
                 orderBy: { createdAt: "desc" },
+                pagination: { page: 1, limit },
             });
+            return result.data;
         }
         catch (error) {
-            console.error(`Error getting related products for ${productId}:`, error);
+            this.handleError("Error getting related products", error);
             throw error;
         }
     }
     /**
-     * Search products with full-text search
+     * Get best selling products
      */
-    async searchProducts(query, params) {
+    async getBestSellingProducts(limit = 10, categoryId) {
         try {
-            const startTime = Date.now();
-            const page = params.page || 1;
-            const limit = Math.min(params.limit || 20, 100);
-            const skip = (page - 1) * limit;
-            // Build search conditions
-            const searchConditions = {
-                AND: [
-                    { isActive: true },
-                    {
-                        OR: [
-                            { name: { contains: query, mode: "insensitive" } },
-                            { description: { contains: query, mode: "insensitive" } },
-                            { brand: { contains: query, mode: "insensitive" } },
-                            { sku: { contains: query, mode: "insensitive" } },
-                        ],
+            const where = { isActive: true };
+            if (categoryId) {
+                where.categoryId = categoryId;
+            }
+            // This would typically involve aggregating order items
+            // For now, get products with most order items
+            const products = await this.prisma.product.findMany({
+                where,
+                include: {
+                    category: true,
+                    images: {
+                        where: { isPrimary: true },
+                        take: 1,
                     },
-                ],
-            };
-            // Add additional filters
-            if (params.categoryId) {
-                searchConditions.AND.push({ categoryId: params.categoryId });
-            }
-            if (params.priceMin || params.priceMax) {
-                const priceFilter = {};
-                if (params.priceMin)
-                    priceFilter.gte = params.priceMin;
-                if (params.priceMax)
-                    priceFilter.lte = params.priceMax;
-                searchConditions.AND.push({ price: priceFilter });
-            }
-            const [products, total] = await Promise.all([
-                this.model.findMany({
-                    where: searchConditions,
-                    take: limit,
-                    skip,
-                    include: {
-                        category: true,
-                        images: {
-                            where: { isPrimary: true },
-                            take: 1,
+                    inventory: true,
+                    orderItems: {
+                        include: {
+                            order: {
+                                where: { status: "DELIVERED" },
+                            },
                         },
-                        inventory: true,
                     },
-                    orderBy: params.sortBy === "price"
-                        ? { price: params.sortOrder || "asc" }
-                        : { createdAt: "desc" },
-                }),
-                this.model.count({ where: searchConditions }),
-            ]);
-            const searchTime = Date.now() - startTime;
-            return { products, total, searchTime };
+                    reviews: {
+                        select: { rating: true },
+                    },
+                },
+                take: limit * 2, // Get more to calculate and sort
+            });
+            const productsWithSales = products
+                .map((product) => ({
+                ...product,
+                salesCount: product.orderItems
+                    .filter((item) => item.order.status === "DELIVERED")
+                    .reduce((sum, item) => sum + item.quantity, 0),
+            }))
+                .sort((a, b) => b.salesCount - a.salesCount)
+                .slice(0, limit);
+            return productsWithSales;
         }
         catch (error) {
-            console.error(`Error searching products with query "${query}":`, error);
+            this.handleError("Error getting best selling products", error);
+            throw error;
+        }
+    }
+    /**
+     * Get products with low stock
+     */
+    async getLowStockProducts(limit) {
+        try {
+            const result = await this.findMany({
+                isActive: true,
+                inventory: {
+                    quantity: {
+                        gt: 0,
+                        lte: { path: ["lowStockThreshold"] },
+                    },
+                },
+            }, {
+                include: {
+                    category: true,
+                    inventory: true,
+                },
+                orderBy: [{ inventory: { quantity: "asc" } }],
+                pagination: limit ? { page: 1, limit } : undefined,
+            });
+            return result.data.map((product) => ({
+                ...product,
+                currentStock: product.inventory?.quantity || 0,
+                threshold: product.inventory?.lowStockThreshold || 0,
+            }));
+        }
+        catch (error) {
+            this.handleError("Error getting low stock products", error);
+            throw error;
+        }
+    }
+    /**
+     * Get out of stock products
+     */
+    async getOutOfStockProducts(limit) {
+        try {
+            const result = await this.findMany({
+                isActive: true,
+                inventory: { quantity: { lte: 0 } },
+            }, {
+                include: {
+                    category: true,
+                    inventory: true,
+                },
+                orderBy: { updatedAt: "desc" },
+                pagination: limit ? { page: 1, limit } : undefined,
+            });
+            return result.data;
+        }
+        catch (error) {
+            this.handleError("Error getting out of stock products", error);
             throw error;
         }
     }
@@ -431,262 +486,158 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
      */
     async getProductAnalytics() {
         try {
-            const [totalProducts, activeProducts, inStockProducts, outOfStockProducts, lowStockProducts, featuredProducts, topCategories, topBrands, recentlyAdded, inventoryValue,] = await Promise.all([
-                this.model.count(),
-                this.model.count({ where: { isActive: true } }),
-                this.model.count({
-                    where: {
-                        inventory: { quantity: { gt: 0 } },
-                    },
+            const [totalProducts, activeProducts, inactiveProducts, inStockProducts, outOfStockProducts, lowStockProducts, featuredProducts, categoryStats, brandStats, priceStats,] = await Promise.all([
+                this.count(),
+                this.count({ isActive: true }),
+                this.count({ isActive: false }),
+                this.count({
+                    isActive: true,
+                    inventory: { quantity: { gt: 0 } },
                 }),
-                this.model.count({
-                    where: {
-                        inventory: { quantity: { lte: 0 } },
-                    },
+                this.count({
+                    isActive: true,
+                    inventory: { quantity: { lte: 0 } },
                 }),
-                this.model.count({
-                    where: {
-                        inventory: {
-                            quantity: { lte: { inventory: { lowStockThreshold: true } } },
+                this.count({
+                    isActive: true,
+                    inventory: {
+                        quantity: {
+                            gt: 0,
+                            lte: { path: ["lowStockThreshold"] },
                         },
                     },
                 }),
-                this.model.count({ where: { isFeatured: true } }),
-                this.getTopCategories(10),
-                this.getTopBrands(10),
-                this.model.findMany({
-                    take: 10,
-                    orderBy: { createdAt: "desc" },
-                    include: {
-                        category: true,
-                        images: {
-                            where: { isPrimary: true },
-                            take: 1,
-                        },
-                    },
-                }),
-                this.getTotalInventoryValue(),
+                this.count({ isFeatured: true }),
+                this.getCategoryAnalytics(),
+                this.getBrandAnalytics(),
+                this.getPriceAnalytics(),
             ]);
-            const averagePrice = await this.getAveragePrice();
+            // Calculate total inventory value
+            const inventoryValue = await this.prisma.inventory.aggregate({
+                _sum: {
+                    quantity: true,
+                },
+                where: {
+                    product: { isActive: true },
+                },
+            });
+            const avgPriceResult = await this.aggregate({ isActive: true }, { _avg: { price: true } });
             return {
                 totalProducts,
                 activeProducts,
-                inactiveProducts: totalProducts - activeProducts,
+                inactiveProducts,
                 inStockProducts,
                 outOfStockProducts,
                 lowStockProducts,
                 featuredProducts,
-                totalValue: inventoryValue,
-                averagePrice,
-                topCategories,
-                topBrands,
-                priceDistribution: await this.getPriceDistribution(),
-                recentlyAdded,
-                mostViewed: [], // Would need view tracking
-                bestRated: [], // Would need rating aggregation
+                totalValue: 0, // Would calculate from inventory * cost
+                averagePrice: Number(avgPriceResult._avg.price) || 0,
+                topCategories: categoryStats,
+                topBrands: brandStats,
+                priceDistribution: priceStats,
+                recentlyAdded: [],
+                mostViewed: [],
+                bestRated: [],
             };
         }
         catch (error) {
-            console.error("Error getting product analytics:", error);
+            this.handleError("Error getting product analytics", error);
             throw error;
         }
     }
     /**
-     * Update product with inventory
+     * Bulk update product status
      */
-    async updateProductWithInventory(productId, productData, inventoryData) {
+    async bulkUpdateStatus(productIds, isActive) {
         try {
-            return await this.db.$transaction(async (prisma) => {
-                // Update product
-                const product = await prisma.product.update({
-                    where: { id: productId },
-                    data: productData,
-                });
-                // Update inventory if provided
-                if (inventoryData) {
-                    const currentInventory = await prisma.inventory.findUnique({
-                        where: { productId },
-                    });
-                    if (currentInventory && inventoryData.quantity !== undefined) {
-                        // Update inventory quantity
-                        await prisma.inventory.update({
-                            where: { productId },
-                            data: {
-                                quantity: inventoryData.quantity,
-                                lowStockThreshold: inventoryData.lowStockThreshold,
-                                trackInventory: inventoryData.trackInventory,
-                            },
-                        });
-                        // Create inventory movement record
-                        if (inventoryData.quantity !== currentInventory.quantity) {
-                            await prisma.inventoryMovement.create({
-                                data: {
-                                    productId,
-                                    type: "ADJUSTMENT",
-                                    quantity: inventoryData.quantity - currentInventory.quantity,
-                                    previousQuantity: currentInventory.quantity,
-                                    newQuantity: inventoryData.quantity,
-                                    reason: inventoryData.reason || "Manual adjustment",
-                                },
-                            });
-                        }
-                    }
-                }
-                return product;
-            });
+            return await this.updateMany({ id: { in: productIds } }, { isActive });
         }
         catch (error) {
-            console.error(`Error updating product with inventory ${productId}:`, error);
+            this.handleError("Error bulk updating product status", error);
             throw error;
         }
     }
     /**
-     * Check if SKU exists
+     * Bulk update product category
      */
-    async skuExists(sku, excludeProductId) {
+    async bulkUpdateCategory(productIds, categoryId) {
         try {
-            const where = { sku };
-            if (excludeProductId) {
-                where.id = { not: excludeProductId };
-            }
-            const product = await this.model.findUnique({
-                where,
-                select: { id: true },
-            });
-            return !!product;
+            return await this.updateMany({ id: { in: productIds } }, { categoryId });
         }
         catch (error) {
-            console.error(`Error checking SKU existence ${sku}:`, error);
-            return false;
-        }
-    }
-    /**
-     * Check if slug exists
-     */
-    async slugExists(slug, excludeProductId) {
-        try {
-            const where = { slug };
-            if (excludeProductId) {
-                where.id = { not: excludeProductId };
-            }
-            const product = await this.model.findUnique({
-                where,
-                select: { id: true },
-            });
-            return !!product;
-        }
-        catch (error) {
-            console.error(`Error checking slug existence ${slug}:`, error);
-            return false;
-        }
-    }
-    /**
-     * Get low stock products
-     */
-    async getLowStockProducts(limit = 50) {
-        try {
-            return await this.model.findMany({
-                where: {
-                    isActive: true,
-                    inventory: {
-                        trackInventory: true,
-                        quantity: {
-                            lte: { inventory: { lowStockThreshold: true } },
-                        },
-                    },
-                },
-                take: limit,
-                include: {
-                    category: true,
-                    inventory: true,
-                },
-                orderBy: {
-                    inventory: { quantity: "asc" },
-                },
-            });
-        }
-        catch (error) {
-            console.error("Error getting low stock products:", error);
-            throw error;
-        }
-    }
-    /**
-     * Get products by brand
-     */
-    async getByBrand(brand, limit = 20) {
-        try {
-            return await this.model.findMany({
-                where: {
-                    brand: { contains: brand, mode: "insensitive" },
-                    isActive: true,
-                },
-                take: limit,
-                include: {
-                    category: true,
-                    images: {
-                        where: { isPrimary: true },
-                        take: 1,
-                    },
-                    inventory: true,
-                },
-                orderBy: { createdAt: "desc" },
-            });
-        }
-        catch (error) {
-            console.error(`Error getting products by brand ${brand}:`, error);
-            throw error;
-        }
-    }
-    /**
-     * Bulk update products
-     */
-    async bulkUpdate(updates) {
-        try {
-            let updatedCount = 0;
-            await this.db.$transaction(async (prisma) => {
-                for (const update of updates) {
-                    await prisma.product.update({
-                        where: { id: update.id },
-                        data: update.data,
-                    });
-                    updatedCount++;
-                }
-            });
-            return updatedCount;
-        }
-        catch (error) {
-            console.error("Error in bulk update:", error);
+            this.handleError("Error bulk updating product category", error);
             throw error;
         }
     }
     // Private helper methods
-    async getFacets(where) {
+    async getFilterOptions(baseWhere) {
+        try {
+            // Get available categories
+            const categories = await this.prisma.category.findMany({
+                where: {
+                    products: { some: baseWhere },
+                    isActive: true,
+                },
+                select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                    _count: {
+                        select: { products: true },
+                    },
+                },
+            });
+            // Get available brands
+            const brands = await this.groupBy(["brand"], { ...baseWhere, brand: { not: null } }, undefined, { _count: { id: true } });
+            // Get price range
+            const priceRange = await this.aggregate(baseWhere, {
+                _min: { price: true },
+                _max: { price: true },
+            });
+            return {
+                categories: categories.map((cat) => ({
+                    id: cat.id,
+                    name: cat.name,
+                    slug: cat.slug,
+                    count: cat._count.products,
+                })),
+                brands: brands.map((brand) => ({
+                    name: brand.brand,
+                    count: brand._count.id,
+                })),
+                priceRange: {
+                    min: Number(priceRange._min.price) || 0,
+                    max: Number(priceRange._max.price) || 0,
+                },
+            };
+        }
+        catch (error) {
+            return {
+                categories: [],
+                brands: [],
+                priceRange: { min: 0, max: 0 },
+            };
+        }
+    }
+    async getProductFacets(baseWhere) {
         try {
             const [totalProducts, inStock, outOfStock, onSale, featured] = await Promise.all([
-                this.model.count({ where }),
-                this.model.count({
-                    where: {
-                        ...where,
-                        inventory: { quantity: { gt: 0 } },
-                    },
+                this.count(baseWhere),
+                this.count({
+                    ...baseWhere,
+                    inventory: { quantity: { gt: 0 } },
                 }),
-                this.model.count({
-                    where: {
-                        ...where,
-                        inventory: { quantity: { lte: 0 } },
-                    },
+                this.count({
+                    ...baseWhere,
+                    inventory: { quantity: { lte: 0 } },
                 }),
-                this.model.count({
-                    where: {
-                        ...where,
-                        comparePrice: { gt: 0 },
-                    },
+                this.count({
+                    ...baseWhere,
+                    comparePrice: { gt: 0 },
                 }),
-                this.model.count({
-                    where: {
-                        ...where,
-                        isFeatured: true,
-                    },
+                this.count({
+                    ...baseWhere,
+                    isFeatured: true,
                 }),
             ]);
             return {
@@ -698,7 +649,6 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
             };
         }
         catch (error) {
-            console.error("Error getting facets:", error);
             return {
                 totalProducts: 0,
                 inStock: 0,
@@ -708,139 +658,36 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
             };
         }
     }
-    async getTopCategories(limit) {
-        try {
-            return await this.db.category
-                .findMany({
-                take: limit,
-                include: {
-                    _count: {
-                        select: {
-                            products: {
-                                where: { isActive: true },
-                            },
-                        },
-                    },
-                    products: {
-                        where: { isActive: true },
-                        select: { price: true },
-                    },
-                },
-                orderBy: {
-                    products: {
-                        _count: "desc",
-                    },
-                },
-            })
-                .then((categories) => categories.map((category) => ({
-                category: {
-                    id: category.id,
-                    name: category.name,
-                    slug: category.slug,
-                },
-                productCount: category._count.products,
-                totalValue: category.products.reduce((sum, p) => sum + Number(p.price), 0),
-            })));
-        }
-        catch (error) {
-            console.error("Error getting top categories:", error);
-            return [];
-        }
+    transformProductForList(product) {
+        // Calculate average rating
+        const averageRating = product.reviews && product.reviews.length > 0
+            ? product.reviews.reduce((sum, review) => sum + review.rating, 0) / product.reviews.length
+            : 0;
+        // Calculate discount percentage
+        const discountPercentage = product.comparePrice && product.comparePrice > product.price
+            ? Math.round(((product.comparePrice - product.price) / product.comparePrice) *
+                100)
+            : 0;
+        return {
+            ...product,
+            averageRating: Math.round(averageRating * 10) / 10,
+            totalReviews: product._count?.reviews || 0,
+            isInStock: product.inventory?.quantity > 0,
+            discountPercentage,
+            primaryImage: product.images?.[0]?.imageUrl || null,
+        };
     }
-    async getTopBrands(limit) {
-        try {
-            const brands = await this.model.groupBy({
-                by: ["brand"],
-                where: {
-                    isActive: true,
-                    brand: { not: null },
-                },
-                _count: {
-                    brand: true,
-                },
-                _avg: {
-                    price: true,
-                },
-                orderBy: {
-                    _count: {
-                        brand: "desc",
-                    },
-                },
-                take: limit,
-            });
-            return brands.map((brand) => ({
-                brand: brand.brand || "Unknown",
-                productCount: brand._count.brand,
-                totalValue: (brand._avg.price || 0) * brand._count.brand,
-            }));
-        }
-        catch (error) {
-            console.error("Error getting top brands:", error);
-            return [];
-        }
+    async getCategoryAnalytics() {
+        // Would implement category-based analytics
+        return [];
     }
-    async getTotalInventoryValue() {
-        try {
-            const result = await this.db.product.aggregate({
-                where: { isActive: true },
-                _sum: {
-                    price: true,
-                },
-            });
-            return Number(result._sum.price) || 0;
-        }
-        catch (error) {
-            console.error("Error getting total inventory value:", error);
-            return 0;
-        }
+    async getBrandAnalytics() {
+        // Would implement brand-based analytics
+        return [];
     }
-    async getAveragePrice() {
-        try {
-            const result = await this.db.product.aggregate({
-                where: { isActive: true },
-                _avg: {
-                    price: true,
-                },
-            });
-            return Number(result._avg.price) || 0;
-        }
-        catch (error) {
-            console.error("Error getting average price:", error);
-            return 0;
-        }
-    }
-    async getPriceDistribution() {
-        try {
-            // Define price ranges in Naira
-            const ranges = [
-                { min: 0, max: 5000, label: "₦0 - ₦5,000" },
-                { min: 5001, max: 15000, label: "₦5,001 - ₦15,000" },
-                { min: 15001, max: 50000, label: "₦15,001 - ₦50,000" },
-                { min: 50001, max: 150000, label: "₦50,001 - ₦150,000" },
-                { min: 150001, max: 500000, label: "₦150,001 - ₦500,000" },
-                { min: 500001, max: 9999999, label: "₦500,000+" },
-            ];
-            const distribution = await Promise.all(ranges.map(async (range) => {
-                const count = await this.model.count({
-                    where: {
-                        isActive: true,
-                        price: {
-                            gte: range.min,
-                            lte: range.max,
-                        },
-                    },
-                });
-                return {
-                    range: range.label,
-                    count,
-                };
-            }));
-            return distribution;
-        }
-        catch (error) {
-            console.error("Error getting price distribution:", error);
-            return [];
-        }
+    async getPriceAnalytics() {
+        // Would implement price distribution analytics
+        return [];
     }
 }
 exports.ProductRepository = ProductRepository;

@@ -147,12 +147,12 @@ bareloft-api/
 │   │   ├── BaseRepository.ts(Done)          # 🏗️ Base repository class
 │   │   ├── UserRepository.ts(Done)          # 👤 User data access
 │   │   ├── ProductRepository.ts(Done)       # 🛍️ Product data access
-│   │   ├── CategoryRepository.ts(Done)      # 📂 Category data access
-│   │   ├── OrderRepository.ts         # 📦 Order data access
-│   │   ├── CartRepository.ts          # 🛒 Cart data access
-│   │   ├── InventoryRepository.ts     # 📊 Inventory data access
-│   │   ├── AddressRepository.ts       # 🏠 Address data access
-│   │   ├── ReviewRepository.ts        # ⭐ Review data access
+│   │   ├── CategoryRepository.ts(Done)    # 📂 Category data access
+│   │   ├── OrderRepository.ts(Done)         # 📦 Order data access
+│   │   ├── CartRepository.ts(Done)          # 🛒 Cart data access
+│   │   ├── InventoryRepository.ts(Done)     # 📊 Inventory data access
+│   │   ├── AddressRepository.ts(Done)       # 🏠 Address data access
+│   │   ├── ReviewRepository.ts(Done)        # ⭐ Review data access
 │   │   ├── OTPRepository.ts(Done)           # 📱 OTP data access
 │   │   └── SessionRepository.ts(Done)       # 🔐 Session data access
 │   │
@@ -232,9 +232,9 @@ bareloft-api/
 │   │   │   └── nigerian.ts(Done)            # 🇳🇬 Nigerian-specific utils
 │   │   ├── security/
 │   │   │   ├── encryption.ts          # 🔐 Data encryption
-│   │   │   ├── hashing.ts             # #️⃣ Password hashing
+│   │   │   ├── hashing.ts(Done)             # #️⃣ Password hashing
 │   │   │   ├── jwt.ts                 # 🎫 JWT utilities
-│   │   │   └── csrf.ts                # 🛡️ CSRF protection
+│   │   │   └── csrf.ts(Done)                # 🛡️ CSRF protection
 │   │   ├── email/
 │   │   │   ├── templates/             # 📧 Email templates
 │   │   │   │   ├── welcome.html       # 👋 Welcome email

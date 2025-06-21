@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from "@prisma/client";
 export declare const prisma: any;
 export declare class DatabaseConnection {
     private static instance;

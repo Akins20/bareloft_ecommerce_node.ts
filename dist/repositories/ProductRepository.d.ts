@@ -1,9 +1,44 @@
-import { BaseRepository } from "./BaseRepository";
-import { Product, ProductQueryParams, ProductAnalytics } from "@/types";
 import { PrismaClient } from "@prisma/client";
-export declare class ProductRepository extends BaseRepository<Product> {
-    protected modelName: string;
-    constructor(database?: PrismaClient);
+import { BaseRepository } from "./BaseRepository";
+import { Product, ProductQueryParams, ProductListResponse, ProductAnalytics, PaginationParams } from "../types";
+export interface CreateProductData {
+    name: string;
+    slug: string;
+    description?: string;
+    shortDescription?: string;
+    sku: string;
+    price: number;
+    comparePrice?: number;
+    costPrice?: number;
+    categoryId: string;
+    brand?: string;
+    weight?: number;
+    dimensions?: any;
+    isActive?: boolean;
+    isFeatured?: boolean;
+    seoTitle?: string;
+    seoDescription?: string;
+}
+export interface UpdateProductData {
+    name?: string;
+    slug?: string;
+    description?: string;
+    shortDescription?: string;
+    sku?: string;
+    price?: number;
+    comparePrice?: number;
+    costPrice?: number;
+    categoryId?: string;
+    brand?: string;
+    weight?: number;
+    dimensions?: any;
+    isActive?: boolean;
+    isFeatured?: boolean;
+    seoTitle?: string;
+    seoDescription?: string;
+}
+export declare class ProductRepository extends BaseRepository<Product, CreateProductData, UpdateProductData> {
+    constructor(prisma: PrismaClient);
     /**
      * Find product by slug
      */
@@ -11,50 +46,32 @@ export declare class ProductRepository extends BaseRepository<Product> {
     /**
      * Find product by SKU
      */
-    findBySku(sku: string): Promise<Product | null>;
+    findBySKU(sku: string): Promise<Product | null>;
     /**
-     * Create product with relationships
+     * Create product with validation
      */
-    createProduct(productData: {
-        name: string;
-        slug: string;
-        description: string;
-        shortDescription?: string;
-        sku: string;
-        price: number;
-        comparePrice?: number;
-        categoryId: string;
-        brand?: string;
-        weight?: number;
-        dimensions?: object;
-        isActive?: boolean;
-        isFeatured?: boolean;
-        seoTitle?: string;
-        seoDescription?: string;
-        inventory: {
-            quantity: number;
-            lowStockThreshold?: number;
-            trackInventory?: boolean;
-        };
-        images?: {
-            imageUrl: string;
-            altText?: string;
-            isPrimary?: boolean;
-        }[];
-    }): Promise<Product>;
+    createProduct(productData: CreateProductData): Promise<Product>;
+    /**
+     * Update product with validation
+     */
+    updateProduct(productId: string, productData: UpdateProductData): Promise<Product>;
     /**
      * Find products with advanced filtering
      */
-    findWithFilters(params: ProductQueryParams): Promise<{
-        products: Product[];
-        total: number;
-        facets: {
-            totalProducts: number;
-            inStock: number;
-            outOfStock: number;
-            onSale: number;
-            featured: number;
-        };
+    findProductsWithFilters(queryParams: ProductQueryParams): Promise<ProductListResponse>;
+    /**
+     * Search products
+     */
+    searchProducts(searchTerm: string, filters?: {
+        categoryId?: string;
+        priceMin?: number;
+        priceMax?: number;
+        brand?: string;
+        inStock?: boolean;
+    }, pagination?: PaginationParams): Promise<{
+        data: Product[];
+        pagination: any;
+        searchMeta: any;
     }>;
     /**
      * Get featured products
@@ -63,60 +80,52 @@ export declare class ProductRepository extends BaseRepository<Product> {
     /**
      * Get products by category
      */
-    getByCategory(categoryId: string, limit?: number): Promise<Product[]>;
+    getProductsByCategory(categoryId: string, pagination?: PaginationParams): Promise<{
+        data: Product[];
+        pagination: any;
+    }>;
     /**
      * Get related products
      */
     getRelatedProducts(productId: string, limit?: number): Promise<Product[]>;
     /**
-     * Search products with full-text search
+     * Get best selling products
      */
-    searchProducts(query: string, params: ProductQueryParams): Promise<{
-        products: Product[];
-        total: number;
-        searchTime: number;
-    }>;
+    getBestSellingProducts(limit?: number, categoryId?: string): Promise<Array<Product & {
+        salesCount: number;
+    }>>;
+    /**
+     * Get products with low stock
+     */
+    getLowStockProducts(limit?: number): Promise<Array<Product & {
+        currentStock: number;
+        threshold: number;
+    }>>;
+    /**
+     * Get out of stock products
+     */
+    getOutOfStockProducts(limit?: number): Promise<Product[]>;
     /**
      * Get product analytics
      */
     getProductAnalytics(): Promise<ProductAnalytics>;
     /**
-     * Update product with inventory
+     * Bulk update product status
      */
-    updateProductWithInventory(productId: string, productData: Partial<Product>, inventoryData?: {
-        quantity?: number;
-        lowStockThreshold?: number;
-        trackInventory?: boolean;
-        reason?: string;
-    }): Promise<Product>;
+    bulkUpdateStatus(productIds: string[], isActive: boolean): Promise<{
+        count: number;
+    }>;
     /**
-     * Check if SKU exists
+     * Bulk update product category
      */
-    skuExists(sku: string, excludeProductId?: string): Promise<boolean>;
-    /**
-     * Check if slug exists
-     */
-    slugExists(slug: string, excludeProductId?: string): Promise<boolean>;
-    /**
-     * Get low stock products
-     */
-    getLowStockProducts(limit?: number): Promise<Product[]>;
-    /**
-     * Get products by brand
-     */
-    getByBrand(brand: string, limit?: number): Promise<Product[]>;
-    /**
-     * Bulk update products
-     */
-    bulkUpdate(updates: {
-        id: string;
-        data: Partial<Product>;
-    }[]): Promise<number>;
-    private getFacets;
-    private getTopCategories;
-    private getTopBrands;
-    private getTotalInventoryValue;
-    private getAveragePrice;
-    private getPriceDistribution;
+    bulkUpdateCategory(productIds: string[], categoryId: string): Promise<{
+        count: number;
+    }>;
+    private getFilterOptions;
+    private getProductFacets;
+    private transformProductForList;
+    private getCategoryAnalytics;
+    private getBrandAnalytics;
+    private getPriceAnalytics;
 }
 //# sourceMappingURL=ProductRepository.d.ts.map

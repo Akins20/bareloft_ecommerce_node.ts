@@ -45,8 +45,16 @@ export declare class DatabaseManager {
     }>;
     /**
      * Execute raw SQL query with logging
+     * @param query - The SQL query string
+     * @param params - Optional query parameters
+     * @returns Promise<T> - Query result cast to type T
      */
     executeRaw<T = any>(query: string, params?: any[]): Promise<T>;
+    /**
+     * Execute raw SQL query with better type safety
+     * Alternative method for specific query types
+     */
+    executeTypedQuery<T>(query: string, params?: any[]): Promise<T[]>;
     /**
      * Begin transaction
      */

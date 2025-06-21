@@ -1,56 +1,166 @@
-import { PrismaClient } from '@prisma/client';
-import { BaseEntity, PaginationParams, PaginationMeta } from '../types';
-export interface Repository<T extends BaseEntity> {
-    findById(id: string): Promise<T | null>;
-    findAll(params?: PaginationParams): Promise<T[]>;
-    findWithPagination(params: PaginationParams): Promise<{
-        items: T[];
+import { PrismaClient } from "@prisma/client";
+import { PaginationParams, PaginationMeta } from "../types";
+export declare abstract class BaseRepository<T, CreateData, UpdateData> {
+    protected prisma: PrismaClient;
+    protected modelName: string;
+    constructor(prisma: PrismaClient, modelName: string);
+    /**
+     * Find by ID
+     */
+    findById(id: string, include?: any): Promise<T | null>;
+    /**
+     * Find first record matching criteria
+     */
+    findFirst(where: any, include?: any): Promise<T | null>;
+    /**
+     * Find many records with pagination
+     */
+    findMany(where?: any, options?: {
+        include?: any;
+        orderBy?: any;
+        pagination?: PaginationParams;
+    }): Promise<{
+        data: T[];
         pagination: PaginationMeta;
     }>;
-    create(data: Omit<T, keyof BaseEntity>): Promise<T>;
-    update(id: string, data: Partial<T>): Promise<T>;
+    /**
+     * Create new record
+     */
+    create(data: CreateData, include?: any): Promise<T>;
+    /**
+     * Update record by ID
+     */
+    update(id: string, data: UpdateData, include?: any): Promise<T>;
+    /**
+     * Delete record by ID (soft delete if supported)
+     */
     delete(id: string): Promise<boolean>;
+    /**
+     * Count records matching criteria
+     */
     count(where?: any): Promise<number>;
-    exists(id: string): Promise<boolean>;
-}
-export declare abstract class BaseRepository<T extends BaseEntity> implements Repository<T> {
-    protected db: PrismaClient;
-    protected abstract modelName: string;
-    constructor(database?: PrismaClient);
-    protected get model(): any;
-    findById(id: string): Promise<T | null>;
-    findAll(params?: PaginationParams): Promise<T[]>;
-    findWithPagination(params: PaginationParams): Promise<{
-        items: T[];
-        pagination: PaginationMeta;
-    }>;
-    create(data: Omit<T, keyof BaseEntity>): Promise<T>;
-    update(id: string, data: Partial<T>): Promise<T>;
-    delete(id: string): Promise<boolean>;
-    count(where?: any): Promise<number>;
-    exists(id: string): Promise<boolean>;
-    protected executeQuery(query: any): Promise<any>;
-    createMany(data: Omit<T, keyof BaseEntity>[]): Promise<{
+    /**
+     * Check if record exists
+     */
+    exists(where: any): Promise<boolean>;
+    /**
+     * Create many records at once
+     */
+    createMany(data: CreateData[]): Promise<{
         count: number;
     }>;
-    findByIds(ids: string[]): Promise<T[]>;
-    findWhere(where: any, options?: {
-        orderBy?: any;
-        take?: number;
-        skip?: number;
-        include?: any;
-    }): Promise<T[]>;
-    findFirst(where: any, options?: {
-        orderBy?: any;
-        include?: any;
-    }): Promise<T | null>;
-    upsert(where: any, update: any, create: any): Promise<T>;
-    transaction<TResult>(callback: (prisma: PrismaClient) => Promise<TResult>): Promise<TResult>;
-    healthCheck(): Promise<{
-        status: 'healthy' | 'unhealthy';
-        totalRecords?: number;
-        error?: string;
+    /**
+     * Update many records matching criteria
+     */
+    updateMany(where: any, data: Partial<UpdateData>): Promise<{
+        count: number;
     }>;
-    softDelete(id: string): Promise<boolean>;
+    /**
+     * Delete many records matching criteria
+     */
+    deleteMany(where: any): Promise<{
+        count: number;
+    }>;
+    /**
+     * Find records with complex search
+     */
+    search(searchTerm: string, searchFields: string[], where?: any, options?: {
+        include?: any;
+        orderBy?: any;
+        pagination?: PaginationParams;
+    }): Promise<{
+        data: T[];
+        pagination: PaginationMeta;
+        searchMeta: {
+            term: string;
+            fields: string[];
+            totalResults: number;
+        };
+    }>;
+    /**
+     * Execute raw transaction
+     */
+    transaction<R>(callback: (prisma: PrismaClient) => Promise<R>): Promise<R>;
+    /**
+     * Batch operations with transaction
+     */
+    batchOperations(operations: Array<{
+        type: "create" | "update" | "delete";
+        data?: any;
+        where?: any;
+    }>): Promise<any[]>;
+    /**
+     * Get aggregated data
+     */
+    aggregate(where: any | undefined, aggregations: {
+        _count?: any;
+        _sum?: any;
+        _avg?: any;
+        _min?: any;
+        _max?: any;
+    }): Promise<any>;
+    /**
+     * Group records by field
+     */
+    groupBy(by: string[], where?: any, having?: any, aggregations?: {
+        _count?: any;
+        _sum?: any;
+        _avg?: any;
+        _min?: any;
+        _max?: any;
+    }): Promise<any[]>;
+    /**
+     * Find records created in date range
+     */
+    findByDateRange(startDate: Date, endDate: Date, options?: {
+        include?: any;
+        orderBy?: any;
+        pagination?: PaginationParams;
+    }): Promise<{
+        data: T[];
+        pagination: PaginationMeta;
+    }>;
+    /**
+     * Find recent records
+     */
+    findRecent(days?: number, options?: {
+        include?: any;
+        orderBy?: any;
+        pagination?: PaginationParams;
+    }): Promise<{
+        data: T[];
+        pagination: PaginationMeta;
+    }>;
+    /**
+     * Get the Prisma model for this repository
+     */
+    protected getModel(): any;
+    /**
+     * Check if model supports soft delete
+     */
+    protected supportsSoftDelete(): boolean;
+    /**
+     * Handle repository errors
+     */
+    protected handleError(message: string, error: any): void;
+    /**
+     * Build pagination metadata
+     */
+    protected buildPagination(page: number, limit: number, total: number): PaginationMeta;
+    /**
+     * Validate pagination parameters
+     */
+    protected validatePagination(pagination?: PaginationParams): {
+        page: number;
+        limit: number;
+    };
+    /**
+     * Build order by clause from sort parameters
+     */
+    protected buildOrderBy(sortBy?: string, sortOrder?: "asc" | "desc"): any;
+    /**
+     * Build where clause for soft delete support
+     */
+    protected buildWhereWithSoftDelete(where?: any): any;
 }
 //# sourceMappingURL=BaseRepository.d.ts.map

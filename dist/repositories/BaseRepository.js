@@ -1,311 +1,440 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BaseRepository = void 0;
-const connection_1 = require("../database/connection");
-const winston_1 = require("../utils/logger/winston");
-// Abstract base repository class (enhanced version of your existing class)
+const types_1 = require("../types");
 class BaseRepository {
-    db;
-    constructor(database = connection_1.prisma) {
-        this.db = database;
+    prisma;
+    modelName;
+    constructor(prisma, modelName) {
+        this.prisma = prisma;
+        this.modelName = modelName;
     }
-    // Get the Prisma model delegate (keeping your existing method)
-    get model() {
-        return this.db[this.modelName];
-    }
-    // Find entity by ID (enhanced with better logging)
-    async findById(id) {
+    /**
+     * Find by ID
+     */
+    async findById(id, include) {
         try {
-            winston_1.logger.debug(`Finding ${this.modelName} by ID:`, { id });
-            const entity = await this.model.findUnique({
-                where: { id }
-            });
-            if (entity) {
-                winston_1.logger.debug(`Found ${this.modelName}:`, { id });
-            }
-            else {
-                winston_1.logger.debug(`${this.modelName} not found:`, { id });
-            }
-            return entity;
-        }
-        catch (error) {
-            winston_1.logger.error(`Error finding ${this.modelName} by ID ${id}:`, error);
-            throw error;
-        }
-    }
-    // Find all entities (enhanced with better defaults)
-    async findAll(params) {
-        try {
-            winston_1.logger.debug(`Finding all ${this.modelName}:`, { params });
-            const entities = await this.model.findMany({
-                orderBy: params?.sortBy ? {
-                    [params.sortBy]: params.sortOrder || 'desc'
-                } : {
-                    createdAt: 'desc'
-                }
-            });
-            winston_1.logger.debug(`Found ${entities.length} ${this.modelName} records`);
-            return entities;
-        }
-        catch (error) {
-            winston_1.logger.error(`Error finding all ${this.modelName}:`, error);
-            throw error;
-        }
-    }
-    // Find entities with pagination (enhanced with better validation)
-    async findWithPagination(params) {
-        try {
-            const page = Math.max(params.page || 1, 1); // Ensure page is at least 1
-            const limit = Math.min(Math.max(params.limit || 20, 1), 100); // Between 1-100
-            const skip = (page - 1) * limit;
-            winston_1.logger.debug(`Finding ${this.modelName} with pagination:`, { page, limit, skip });
-            const [items, totalItems] = await Promise.all([
-                this.model.findMany({
-                    take: limit,
-                    skip,
-                    orderBy: params.sortBy ? {
-                        [params.sortBy]: params.sortOrder || 'desc'
-                    } : {
-                        createdAt: 'desc'
-                    }
-                }),
-                this.model.count()
-            ]);
-            const totalPages = Math.ceil(totalItems / limit);
-            const pagination = {
-                currentPage: page,
-                totalPages,
-                totalItems,
-                itemsPerPage: limit,
-                hasNextPage: page < totalPages,
-                hasPreviousPage: page > 1
-            };
-            winston_1.logger.debug(`Found ${items.length} of ${totalItems} ${this.modelName} records`);
-            return { items, pagination };
-        }
-        catch (error) {
-            winston_1.logger.error(`Error finding ${this.modelName} with pagination:`, error);
-            throw error;
-        }
-    }
-    // Create new entity (enhanced with better logging)
-    async create(data) {
-        try {
-            winston_1.logger.debug(`Creating ${this.modelName}:`, { data });
-            const entity = await this.model.create({
-                data
-            });
-            winston_1.logger.info(`Created ${this.modelName}:`, { id: entity.id });
-            return entity;
-        }
-        catch (error) {
-            winston_1.logger.error(`Error creating ${this.modelName}:`, error);
-            throw error;
-        }
-    }
-    // Update entity (enhanced with better logging)
-    async update(id, data) {
-        try {
-            winston_1.logger.debug(`Updating ${this.modelName}:`, { id, data });
-            const entity = await this.model.update({
+            const model = this.getModel();
+            return await model.findUnique({
                 where: { id },
-                data
+                include,
             });
-            winston_1.logger.info(`Updated ${this.modelName}:`, { id });
-            return entity;
         }
         catch (error) {
-            winston_1.logger.error(`Error updating ${this.modelName} with ID ${id}:`, error);
+            this.handleError("Error finding record by ID", error);
             throw error;
         }
     }
-    // Delete entity (enhanced with better error handling)
+    /**
+     * Find first record matching criteria
+     */
+    async findFirst(where, include) {
+        try {
+            const model = this.getModel();
+            return await model.findFirst({
+                where,
+                include,
+            });
+        }
+        catch (error) {
+            this.handleError("Error finding first record", error);
+            throw error;
+        }
+    }
+    /**
+     * Find many records with pagination
+     */
+    async findMany(where = {}, options = {}) {
+        try {
+            const model = this.getModel();
+            const { include, orderBy, pagination } = options;
+            // Default pagination
+            const page = pagination?.page || 1;
+            const limit = Math.min(pagination?.limit || 20, 100); // Max 100 items
+            const skip = (page - 1) * limit;
+            // Execute queries in parallel
+            const [data, total] = await Promise.all([
+                model.findMany({
+                    where,
+                    include,
+                    orderBy: orderBy || { createdAt: "desc" },
+                    skip,
+                    take: limit,
+                }),
+                model.count({ where }),
+            ]);
+            const totalPages = Math.ceil(total / limit);
+            return {
+                data,
+                pagination: {
+                    currentPage: page,
+                    totalPages,
+                    totalItems: total,
+                    itemsPerPage: limit,
+                    hasNextPage: page < totalPages,
+                    hasPreviousPage: page > 1,
+                },
+            };
+        }
+        catch (error) {
+            this.handleError("Error finding many records", error);
+            throw error;
+        }
+    }
+    /**
+     * Create new record
+     */
+    async create(data, include) {
+        try {
+            const model = this.getModel();
+            return await model.create({
+                data,
+                include,
+            });
+        }
+        catch (error) {
+            this.handleError("Error creating record", error);
+            throw error;
+        }
+    }
+    /**
+     * Update record by ID
+     */
+    async update(id, data, include) {
+        try {
+            const model = this.getModel();
+            // Check if record exists
+            const existing = await model.findUnique({ where: { id } });
+            if (!existing) {
+                throw new types_1.AppError(`${this.modelName} not found`, types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+            }
+            return await model.update({
+                where: { id },
+                data,
+                include,
+            });
+        }
+        catch (error) {
+            this.handleError("Error updating record", error);
+            throw error;
+        }
+    }
+    /**
+     * Delete record by ID (soft delete if supported)
+     */
     async delete(id) {
         try {
-            winston_1.logger.debug(`Deleting ${this.modelName}:`, { id });
-            await this.model.delete({
-                where: { id }
-            });
-            winston_1.logger.info(`Deleted ${this.modelName}:`, { id });
+            const model = this.getModel();
+            // Check if record exists
+            const existing = await model.findUnique({ where: { id } });
+            if (!existing) {
+                throw new types_1.AppError(`${this.modelName} not found`, types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+            }
+            // Check if model supports soft delete (has isDeleted field)
+            if (this.supportsSoftDelete()) {
+                await model.update({
+                    where: { id },
+                    data: { isDeleted: true, deletedAt: new Date() },
+                });
+            }
+            else {
+                await model.delete({ where: { id } });
+            }
             return true;
         }
         catch (error) {
-            winston_1.logger.error(`Error deleting ${this.modelName} with ID ${id}:`, error);
-            return false;
-        }
-    }
-    // Count entities (keeping your existing method)
-    async count(where) {
-        try {
-            const count = await this.model.count({ where });
-            winston_1.logger.debug(`Counted ${count} ${this.modelName} records`);
-            return count;
-        }
-        catch (error) {
-            winston_1.logger.error(`Error counting ${this.modelName}:`, error);
+            this.handleError("Error deleting record", error);
             throw error;
         }
     }
-    // Check if entity exists (keeping your existing method)
-    async exists(id) {
+    /**
+     * Count records matching criteria
+     */
+    async count(where = {}) {
         try {
-            const entity = await this.model.findUnique({
-                where: { id },
-                select: { id: true }
-            });
-            const exists = !!entity;
-            winston_1.logger.debug(`${this.modelName} exists check:`, { id, exists });
-            return exists;
+            const model = this.getModel();
+            return await model.count({ where });
         }
         catch (error) {
-            winston_1.logger.error(`Error checking existence of ${this.modelName} with ID ${id}:`, error);
-            return false;
-        }
-    }
-    // Execute custom query (keeping your existing method with better logging)
-    async executeQuery(query) {
-        try {
-            winston_1.logger.debug(`Executing custom query for ${this.modelName}`);
-            const result = await query;
-            winston_1.logger.debug(`Custom query completed for ${this.modelName}`);
-            return result;
-        }
-        catch (error) {
-            winston_1.logger.error(`Error executing custom query for ${this.modelName}:`, error);
+            this.handleError("Error counting records", error);
             throw error;
         }
     }
-    // Batch operations (enhanced with better logging)
+    /**
+     * Check if record exists
+     */
+    async exists(where) {
+        try {
+            const count = await this.count(where);
+            return count > 0;
+        }
+        catch (error) {
+            this.handleError("Error checking record existence", error);
+            throw error;
+        }
+    }
+    /**
+     * Create many records at once
+     */
     async createMany(data) {
         try {
-            winston_1.logger.debug(`Creating many ${this.modelName}:`, { count: data.length });
-            const result = await this.model.createMany({
+            const model = this.getModel();
+            return await model.createMany({
                 data,
-                skipDuplicates: true
+                skipDuplicates: true,
             });
-            winston_1.logger.info(`Created ${result.count} ${this.modelName} records`);
-            return result;
         }
         catch (error) {
-            winston_1.logger.error(`Error creating many ${this.modelName}:`, error);
+            this.handleError("Error creating many records", error);
             throw error;
         }
     }
-    // Find entities by multiple IDs (keeping your existing method)
-    async findByIds(ids) {
+    /**
+     * Update many records matching criteria
+     */
+    async updateMany(where, data) {
         try {
-            winston_1.logger.debug(`Finding ${this.modelName} by IDs:`, { count: ids.length });
-            const entities = await this.model.findMany({
-                where: {
-                    id: {
-                        in: ids
-                    }
-                }
-            });
-            winston_1.logger.debug(`Found ${entities.length} ${this.modelName} records by IDs`);
-            return entities;
-        }
-        catch (error) {
-            winston_1.logger.error(`Error finding ${this.modelName} by IDs:`, error);
-            throw error;
-        }
-    }
-    // Find with custom where clause (keeping your existing method)
-    async findWhere(where, options) {
-        try {
-            winston_1.logger.debug(`Finding ${this.modelName} with custom where:`, { where, options });
-            const entities = await this.model.findMany({
+            const model = this.getModel();
+            return await model.updateMany({
                 where,
-                ...options
+                data,
             });
-            winston_1.logger.debug(`Found ${entities.length} ${this.modelName} records with custom where`);
-            return entities;
         }
         catch (error) {
-            winston_1.logger.error(`Error finding ${this.modelName} with custom where:`, error);
+            this.handleError("Error updating many records", error);
             throw error;
         }
     }
-    // Find first matching entity (keeping your existing method)
-    async findFirst(where, options) {
+    /**
+     * Delete many records matching criteria
+     */
+    async deleteMany(where) {
         try {
-            winston_1.logger.debug(`Finding first ${this.modelName}:`, { where, options });
-            const entity = await this.model.findFirst({
-                where,
-                ...options
-            });
-            winston_1.logger.debug(`Found first ${this.modelName}:`, { found: !!entity });
-            return entity;
+            const model = this.getModel();
+            if (this.supportsSoftDelete()) {
+                return await model.updateMany({
+                    where,
+                    data: { isDeleted: true, deletedAt: new Date() },
+                });
+            }
+            else {
+                return await model.deleteMany({ where });
+            }
         }
         catch (error) {
-            winston_1.logger.error(`Error finding first ${this.modelName}:`, error);
+            this.handleError("Error deleting many records", error);
             throw error;
         }
     }
-    // Upsert operation (keeping your existing method with better logging)
-    async upsert(where, update, create) {
+    /**
+     * Find records with complex search
+     */
+    async search(searchTerm, searchFields, where = {}, options = {}) {
         try {
-            winston_1.logger.debug(`Upserting ${this.modelName}:`, { where });
-            const entity = await this.model.upsert({
-                where,
-                update,
-                create
-            });
-            winston_1.logger.info(`Upserted ${this.modelName}:`, { id: entity.id });
-            return entity;
+            // Build search conditions
+            const searchConditions = searchFields.map((field) => ({
+                [field]: {
+                    contains: searchTerm,
+                    mode: "insensitive",
+                },
+            }));
+            const searchWhere = {
+                ...where,
+                OR: searchConditions,
+            };
+            const result = await this.findMany(searchWhere, options);
+            return {
+                ...result,
+                searchMeta: {
+                    term: searchTerm,
+                    fields: searchFields,
+                    totalResults: result.pagination.totalItems,
+                },
+            };
         }
         catch (error) {
-            winston_1.logger.error(`Error upserting ${this.modelName}:`, error);
+            this.handleError("Error searching records", error);
             throw error;
         }
     }
-    // Additional helper methods for enhanced functionality
-    // Transaction support
+    /**
+     * Execute raw transaction
+     */
     async transaction(callback) {
         try {
-            winston_1.logger.debug(`Starting transaction for ${this.modelName}`);
-            const result = await this.db.$transaction(callback);
-            winston_1.logger.debug(`Transaction completed for ${this.modelName}`);
-            return result;
+            return await this.prisma.$transaction(callback);
         }
         catch (error) {
-            winston_1.logger.error(`Transaction failed for ${this.modelName}:`, error);
+            this.handleError("Error executing transaction", error);
             throw error;
         }
     }
-    // Health check for the repository
-    async healthCheck() {
+    /**
+     * Batch operations with transaction
+     */
+    async batchOperations(operations) {
         try {
-            const totalRecords = await this.count();
-            return {
-                status: 'healthy',
-                totalRecords,
-            };
+            return await this.transaction(async (prisma) => {
+                const model = prisma[this.modelName.toLowerCase()];
+                const results = [];
+                for (const operation of operations) {
+                    let result;
+                    switch (operation.type) {
+                        case "create":
+                            result = await model.create({ data: operation.data });
+                            break;
+                        case "update":
+                            result = await model.update({
+                                where: operation.where,
+                                data: operation.data,
+                            });
+                            break;
+                        case "delete":
+                            result = await model.delete({ where: operation.where });
+                            break;
+                    }
+                    results.push(result);
+                }
+                return results;
+            });
         }
         catch (error) {
-            return {
-                status: 'unhealthy',
-                error: error instanceof Error ? error.message : 'Unknown error',
-            };
+            this.handleError("Error executing batch operations", error);
+            throw error;
         }
     }
-    // Soft delete support (if model has deletedAt field)
-    async softDelete(id) {
+    /**
+     * Get aggregated data
+     */
+    async aggregate(where = {}, aggregations) {
         try {
-            winston_1.logger.debug(`Soft deleting ${this.modelName}:`, { id });
-            // Try to update with deletedAt timestamp
-            await this.model.update({
-                where: { id },
-                data: { deletedAt: new Date() }
+            const model = this.getModel();
+            return await model.aggregate({
+                where,
+                ...aggregations,
             });
-            winston_1.logger.info(`Soft deleted ${this.modelName}:`, { id });
-            return true;
         }
         catch (error) {
-            // If deletedAt field doesn't exist, fall back to hard delete
-            winston_1.logger.warn(`Soft delete not supported for ${this.modelName}, falling back to hard delete`);
-            return await this.delete(id);
+            this.handleError("Error getting aggregated data", error);
+            throw error;
         }
+    }
+    /**
+     * Group records by field
+     */
+    async groupBy(by, where = {}, having, aggregations) {
+        try {
+            const model = this.getModel();
+            return await model.groupBy({
+                by,
+                where,
+                having,
+                ...aggregations,
+            });
+        }
+        catch (error) {
+            this.handleError("Error grouping records", error);
+            throw error;
+        }
+    }
+    /**
+     * Find records created in date range
+     */
+    async findByDateRange(startDate, endDate, options = {}) {
+        const where = {
+            createdAt: {
+                gte: startDate,
+                lte: endDate,
+            },
+        };
+        return await this.findMany(where, options);
+    }
+    /**
+     * Find recent records
+     */
+    async findRecent(days = 7, options = {}) {
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+        return await this.findByDateRange(startDate, new Date(), options);
+    }
+    // Protected helper methods
+    /**
+     * Get the Prisma model for this repository
+     */
+    getModel() {
+        const modelKey = this.modelName.toLowerCase();
+        return this.prisma[modelKey];
+    }
+    /**
+     * Check if model supports soft delete
+     */
+    supportsSoftDelete() {
+        // Override in child classes if model supports soft delete
+        return false;
+    }
+    /**
+     * Handle repository errors
+     */
+    handleError(message, error) {
+        console.error(`${this.modelName} Repository Error:`, message, error);
+        // Convert Prisma errors to application errors
+        if (error.code === "P2002") {
+            throw new types_1.AppError("Unique constraint violation", types_1.HTTP_STATUS.CONFLICT, types_1.ERROR_CODES.RESOURCE_CONFLICT);
+        }
+        if (error.code === "P2025") {
+            throw new types_1.AppError(`${this.modelName} not found`, types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+        }
+        // Re-throw AppErrors as-is
+        if (error instanceof types_1.AppError) {
+            throw error;
+        }
+        // Convert other errors to internal server errors
+        throw new types_1.AppError(`Database operation failed: ${message}`, types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
+    }
+    /**
+     * Build pagination metadata
+     */
+    buildPagination(page, limit, total) {
+        const totalPages = Math.ceil(total / limit);
+        return {
+            currentPage: page,
+            totalPages,
+            totalItems: total,
+            itemsPerPage: limit,
+            hasNextPage: page < totalPages,
+            hasPreviousPage: page > 1,
+        };
+    }
+    /**
+     * Validate pagination parameters
+     */
+    validatePagination(pagination) {
+        const page = Math.max(1, pagination?.page || 1);
+        const limit = Math.min(Math.max(1, pagination?.limit || 20), 100);
+        return { page, limit };
+    }
+    /**
+     * Build order by clause from sort parameters
+     */
+    buildOrderBy(sortBy, sortOrder) {
+        if (!sortBy) {
+            return { createdAt: "desc" };
+        }
+        return {
+            [sortBy]: sortOrder || "asc",
+        };
+    }
+    /**
+     * Build where clause for soft delete support
+     */
+    buildWhereWithSoftDelete(where = {}) {
+        if (this.supportsSoftDelete()) {
+            return {
+                ...where,
+                isDeleted: false,
+            };
+        }
+        return where;
     }
 }
 exports.BaseRepository = BaseRepository;

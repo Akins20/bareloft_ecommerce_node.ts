@@ -1,91 +1,119 @@
-import { BaseRepository } from "./BaseRepository";
-import { Category, CategoryQueryParams } from "@/types";
 import { PrismaClient } from "@prisma/client";
-export declare class CategoryRepository extends BaseRepository<Category> {
-    protected modelName: string;
-    constructor(database?: PrismaClient);
+import { BaseRepository } from "./BaseRepository";
+import { Category, CategoryQueryParams, PaginationParams } from "../types";
+export interface CreateCategoryData {
+    name: string;
+    slug: string;
+    description?: string;
+    image?: string;
+    parentId?: string;
+    isActive?: boolean;
+    sortOrder?: number;
+    seoTitle?: string;
+    seoDescription?: string;
+}
+export interface UpdateCategoryData {
+    name?: string;
+    slug?: string;
+    description?: string;
+    image?: string;
+    parentId?: string;
+    isActive?: boolean;
+    sortOrder?: number;
+    seoTitle?: string;
+    seoDescription?: string;
+}
+export interface CategoryWithProducts extends Category {
+    productCount: number;
+    hasChildren: boolean;
+    products?: any[];
+}
+export declare class CategoryRepository extends BaseRepository<Category, CreateCategoryData, UpdateCategoryData> {
+    constructor(prisma: PrismaClient);
     /**
      * Find category by slug
      */
-    findBySlug(slug: string): Promise<Category | null>;
+    findBySlug(slug: string): Promise<CategoryWithProducts | null>;
     /**
-     * Get all root categories (no parent)
+     * Create category with validation
      */
-    getRootCategories(): Promise<Category[]>;
+    createCategory(categoryData: CreateCategoryData): Promise<Category>;
     /**
-     * Get category hierarchy (nested structure)
+     * Update category with validation
      */
-    getCategoryHierarchy(): Promise<Category[]>;
+    updateCategory(categoryId: string, categoryData: UpdateCategoryData): Promise<Category>;
+    /**
+     * Get category hierarchy (all categories with nested structure)
+     */
+    getCategoryHierarchy(): Promise<CategoryWithProducts[]>;
+    /**
+     * Get flat list of categories with filtering
+     */
+    getCategoriesWithFilters(queryParams: CategoryQueryParams): Promise<{
+        data: CategoryWithProducts[];
+        pagination: any;
+    }>;
+    /**
+     * Get top-level categories only
+     */
+    getRootCategories(): Promise<CategoryWithProducts[]>;
     /**
      * Get subcategories of a parent category
      */
-    getSubcategories(parentId: string): Promise<Category[]>;
+    getSubcategories(parentId: string, pagination?: PaginationParams): Promise<{
+        data: CategoryWithProducts[];
+        pagination: any;
+    }>;
     /**
      * Get category breadcrumb path
      */
-    getCategoryPath(categoryId: string): Promise<Category[]>;
+    getCategoryBreadcrumb(categoryId: string): Promise<Category[]>;
     /**
-     * Find categories with filtering
+     * Get categories with most products
      */
-    findWithFilters(params: CategoryQueryParams): Promise<{
-        categories: Category[];
-        total: number;
+    getPopularCategories(limit?: number): Promise<CategoryWithProducts[]>;
+    /**
+     * Search categories
+     */
+    searchCategories(searchTerm: string, pagination?: PaginationParams): Promise<{
+        data: CategoryWithProducts[];
+        pagination: any;
+        searchMeta: any;
     }>;
     /**
-     * Create category with unique slug
+     * Reorder categories within the same parent
      */
-    createCategory(categoryData: {
-        name: string;
-        slug: string;
-        description?: string;
-        parentId?: string;
-        isActive?: boolean;
-        sortOrder?: number;
-        imageUrl?: string;
-    }): Promise<Category>;
-    /**
-     * Update category sort order
-     */
-    updateSortOrder(categoryId: string, sortOrder: number): Promise<Category>;
+    reorderCategories(categoryOrders: Array<{
+        id: string;
+        sortOrder: number;
+    }>): Promise<void>;
     /**
      * Move category to different parent
      */
-    moveCategory(categoryId: string, newParentId?: string): Promise<Category>;
+    moveCategory(categoryId: string, newParentId: string | null): Promise<Category>;
     /**
-     * Get categories with product count
+     * Get category statistics
      */
-    getCategoriesWithProductCount(): Promise<Array<Category & {
-        productCount: number;
-    }>>;
+    getCategoryStatistics(): Promise<{
+        totalCategories: number;
+        activeCategories: number;
+        rootCategories: number;
+        categoriesWithProducts: number;
+        averageProductsPerCategory: number;
+        maxDepth: number;
+    }>;
     /**
-     * Get top categories by product count
+     * Bulk update category status
      */
-    getTopCategories(limit?: number): Promise<Array<Category & {
-        productCount: number;
-    }>>;
+    bulkUpdateStatus(categoryIds: string[], isActive: boolean): Promise<{
+        count: number;
+    }>;
     /**
-     * Check if slug exists
+     * Delete category (with children handling)
      */
-    slugExists(slug: string, excludeCategoryId?: string): Promise<boolean>;
-    /**
-     * Get category depth (how many levels deep)
-     */
-    getCategoryDepth(categoryId: string): Promise<number>;
-    /**
-     * Get all descendant categories
-     */
-    getDescendants(categoryId: string): Promise<Category[]>;
-    /**
-     * Delete category and handle children
-     */
-    deleteCategory(categoryId: string, handleChildren?: "delete" | "move_to_parent" | "move_to_root"): Promise<void>;
-    /**
-     * Bulk update categories
-     */
-    bulkUpdateSortOrder(updates: {
-        id: string;
-        sortOrder: number;
-    }[]): Promise<number>;
+    deleteCategory(categoryId: string, strategy?: "move_to_parent" | "delete_children"): Promise<boolean>;
     private wouldCreateCircularReference;
+    private transformCategoryWithCounts;
+    private calculateMaxDepth;
 }
 //# sourceMappingURL=CategoryRepository.d.ts.map

@@ -1,32 +1,25 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SessionRepository = void 0;
+const client_1 = require("@prisma/client");
 const BaseRepository_1 = require("./BaseRepository");
+const types_1 = require("../types");
 class SessionRepository extends BaseRepository_1.BaseRepository {
-    modelName = "session";
-    constructor(database) {
-        super(database);
+    constructor(prisma) {
+        super(prisma || new client_1.PrismaClient(), "Session");
     }
     /**
      * Create new session
      */
-    async createSession(sessionData) {
+    async create(data) {
         try {
-            return await this.model.create({
-                data: {
-                    userId: sessionData.userId,
-                    sessionId: sessionData.sessionId,
-                    accessToken: sessionData.accessToken,
-                    refreshToken: sessionData.refreshToken,
-                    expiresAt: sessionData.expiresAt,
-                    deviceInfo: sessionData.deviceInfo,
-                    isActive: true,
-                },
+            return await super.create({
+                ...data,
+                lastUsedAt: new Date(),
             });
         }
         catch (error) {
-            console.error("Error creating session:", error);
-            throw error;
+            throw new types_1.AppError("Error creating session", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
     /**
@@ -34,56 +27,85 @@ class SessionRepository extends BaseRepository_1.BaseRepository {
      */
     async findBySessionId(sessionId) {
         try {
-            return await this.model.findUnique({
-                where: { sessionId },
-            });
-        }
-        catch (error) {
-            console.error(`Error finding session by ID ${sessionId}:`, error);
-            throw error;
-        }
-    }
-    /**
-     * Find active session by session ID
-     */
-    async findActiveSession(sessionId) {
-        try {
-            return await this.model.findFirst({
-                where: {
-                    sessionId,
-                    isActive: true,
-                    expiresAt: {
-                        gt: new Date(),
+            return await this.findFirst({ sessionId }, {
+                user: {
+                    select: {
+                        id: true,
+                        phoneNumber: true,
+                        firstName: true,
+                        lastName: true,
+                        role: true,
+                        isActive: true,
                     },
                 },
             });
         }
         catch (error) {
-            console.error(`Error finding active session ${sessionId}:`, error);
-            throw error;
+            throw new types_1.AppError("Error finding session by session ID", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
     /**
-     * Find all active sessions for a user
+     * Find session by access token
      */
-    async findUserActiveSessions(userId) {
+    async findByAccessToken(accessToken) {
         try {
-            return await this.model.findMany({
-                where: {
-                    userId,
-                    isActive: true,
-                    expiresAt: {
-                        gt: new Date(),
+            return await this.findFirst({ accessToken, isActive: true }, {
+                user: {
+                    select: {
+                        id: true,
+                        phoneNumber: true,
+                        firstName: true,
+                        lastName: true,
+                        role: true,
+                        isActive: true,
                     },
-                },
-                orderBy: {
-                    createdAt: "desc",
                 },
             });
         }
         catch (error) {
-            console.error(`Error finding active sessions for user ${userId}:`, error);
-            throw error;
+            throw new types_1.AppError("Error finding session by access token", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
+        }
+    }
+    /**
+     * Find session by refresh token
+     */
+    async findByRefreshToken(refreshToken) {
+        try {
+            return await this.findFirst({ refreshToken, isActive: true }, {
+                user: {
+                    select: {
+                        id: true,
+                        phoneNumber: true,
+                        firstName: true,
+                        lastName: true,
+                        role: true,
+                        isActive: true,
+                    },
+                },
+            });
+        }
+        catch (error) {
+            throw new types_1.AppError("Error finding session by refresh token", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
+        }
+    }
+    /**
+     * Get all active sessions for a user
+     */
+    async findActiveSessionsByUserId(userId) {
+        try {
+            const result = await this.findMany({
+                userId,
+                isActive: true,
+                expiresAt: {
+                    gt: new Date(),
+                },
+            }, {
+                orderBy: { lastUsedAt: "desc" },
+            });
+            return result.data;
+        }
+        catch (error) {
+            throw new types_1.AppError("Error finding active sessions", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
     /**
@@ -91,18 +113,27 @@ class SessionRepository extends BaseRepository_1.BaseRepository {
      */
     async updateTokens(sessionId, accessToken, refreshToken) {
         try {
-            return await this.model.update({
-                where: { id: sessionId },
-                data: {
-                    accessToken,
-                    refreshToken,
-                    updatedAt: new Date(),
-                },
+            return await this.update(sessionId, {
+                accessToken,
+                refreshToken,
+                lastUsedAt: new Date(),
             });
         }
         catch (error) {
-            console.error(`Error updating session tokens ${sessionId}:`, error);
-            throw error;
+            throw new types_1.AppError("Error updating session tokens", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
+        }
+    }
+    /**
+     * Update session last used time
+     */
+    async updateLastUsed(sessionId) {
+        try {
+            return await this.update(sessionId, {
+                lastUsedAt: new Date(),
+            });
+        }
+        catch (error) {
+            throw new types_1.AppError("Error updating session last used time", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
     /**
@@ -110,319 +141,322 @@ class SessionRepository extends BaseRepository_1.BaseRepository {
      */
     async deactivateSession(sessionId) {
         try {
-            return await this.model.update({
-                where: { sessionId },
-                data: {
-                    isActive: false,
-                    updatedAt: new Date(),
-                },
+            await this.update(sessionId, {
+                isActive: false,
             });
+            return true;
         }
         catch (error) {
-            console.error(`Error deactivating session ${sessionId}:`, error);
-            throw error;
+            // Don't throw error on logout failure - just log it
+            console.error("Error deactivating session:", error);
+            return false;
         }
     }
     /**
-     * Deactivate all sessions for a user
+     * Deactivate all user sessions (logout from all devices)
      */
-    async deactivateUserSessions(userId) {
+    async deactivateAllUserSessions(userId) {
         try {
-            const result = await this.model.updateMany({
-                where: {
-                    userId,
-                    isActive: true,
-                },
-                data: {
-                    isActive: false,
-                    updatedAt: new Date(),
-                },
+            const result = await this.updateMany({
+                userId,
+                isActive: true,
+            }, {
+                isActive: false,
             });
             return result.count;
         }
         catch (error) {
-            console.error(`Error deactivating sessions for user ${userId}:`, error);
-            throw error;
+            throw new types_1.AppError("Error deactivating all user sessions", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
     /**
-     * Clean up expired sessions
+     * Deactivate session by access token
+     */
+    async deactivateByAccessToken(accessToken) {
+        try {
+            const session = await this.findByAccessToken(accessToken);
+            if (!session) {
+                return false;
+            }
+            await this.update(session.id, {
+                isActive: false,
+            });
+            return true;
+        }
+        catch (error) {
+            console.error("Error deactivating session by access token:", error);
+            return false;
+        }
+    }
+    /**
+     * Clean up expired sessions (maintenance task)
      */
     async cleanupExpiredSessions() {
         try {
-            const result = await this.model.deleteMany({
-                where: {
-                    OR: [
-                        {
-                            expiresAt: {
-                                lt: new Date(),
-                            },
+            const result = await this.deleteMany({
+                OR: [
+                    {
+                        expiresAt: {
+                            lt: new Date(),
                         },
-                        {
-                            isActive: false,
-                            updatedAt: {
-                                lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days old
-                            },
+                    },
+                    {
+                        isActive: false,
+                        updatedAt: {
+                            lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days old
                         },
-                    ],
-                },
+                    },
+                ],
             });
-            console.log(`🧹 Cleaned up ${result.count} expired sessions`);
-            return result.count;
+            return { deletedCount: result.count };
         }
         catch (error) {
-            console.error("Error cleaning up expired sessions:", error);
-            throw error;
+            throw new types_1.AppError("Error cleaning up expired sessions", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
     /**
-     * Get session statistics for user
+     * Limit user sessions (keep only N most recent)
      */
-    async getUserSessionStats(userId) {
+    async limitUserSessions(userId, maxSessions = 5) {
         try {
-            const [totalSessions, activeSessions, expiredSessions, allSessions] = await Promise.all([
-                this.model.count({ where: { userId } }),
-                this.model.count({
+            return await this.transaction(async (prisma) => {
+                // Get all active sessions for user, ordered by last used
+                const sessions = await prisma.session.findMany({
                     where: {
                         userId,
                         isActive: true,
-                        expiresAt: { gt: new Date() },
                     },
-                }),
-                this.model.count({
+                    orderBy: { lastUsedAt: "desc" },
+                });
+                // If under limit, no action needed
+                if (sessions.length <= maxSessions) {
+                    return 0;
+                }
+                // Deactivate oldest sessions
+                const sessionsToDeactivate = sessions.slice(maxSessions);
+                const sessionIds = sessionsToDeactivate.map((s) => s.id);
+                const result = await prisma.session.updateMany({
                     where: {
-                        userId,
-                        OR: [{ isActive: false }, { expiresAt: { lt: new Date() } }],
+                        id: {
+                            in: sessionIds,
+                        },
                     },
-                }),
-                this.model.findMany({
-                    where: { userId },
+                    data: {
+                        isActive: false,
+                    },
+                });
+                return result.count;
+            });
+        }
+        catch (error) {
+            throw new types_1.AppError("Error limiting user sessions", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
+        }
+    }
+    /**
+     * Get session analytics for user
+     */
+    async getUserSessionStats(userId) {
+        try {
+            const [sessions, recentSessions] = await Promise.all([
+                this.findMany({ userId }, {
                     orderBy: { createdAt: "desc" },
-                    take: 10,
+                    pagination: { page: 1, limit: 100 },
+                }),
+                this.findMany({
+                    userId,
+                    createdAt: {
+                        gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days
+                    },
+                }, {
+                    orderBy: { createdAt: "desc" },
                 }),
             ]);
-            // Analyze device types
-            const deviceTypes = {};
-            allSessions.forEach((session) => {
-                if (session.deviceInfo) {
-                    const deviceInfo = session.deviceInfo;
-                    const deviceType = deviceInfo.deviceType || "unknown";
-                    deviceTypes[deviceType] = (deviceTypes[deviceType] || 0) + 1;
+            const activeSessions = sessions.data.filter((s) => s.isActive && s.expiresAt > new Date()).length;
+            const recentLogins = recentSessions.data
+                .slice(0, 10)
+                .map((s) => s.createdAt);
+            // Aggregate device types
+            const deviceTypes = recentSessions.data.reduce((acc, session) => {
+                const deviceType = session.deviceInfo?.deviceType || "unknown";
+                const existing = acc.find((d) => d.type === deviceType);
+                if (existing) {
+                    existing.count++;
+                }
+                else {
+                    acc.push({ type: deviceType, count: 1 });
+                }
+                return acc;
+            }, []);
+            // Aggregate IP addresses
+            const ipMap = new Map();
+            recentSessions.data.forEach((session) => {
+                if (session.ipAddress) {
+                    const existing = ipMap.get(session.ipAddress);
+                    if (existing) {
+                        existing.count++;
+                        if (session.lastUsedAt && session.lastUsedAt > existing.lastUsed) {
+                            existing.lastUsed = session.lastUsedAt;
+                        }
+                    }
+                    else {
+                        ipMap.set(session.ipAddress, {
+                            ip: session.ipAddress,
+                            count: 1,
+                            lastUsed: session.lastUsedAt || session.createdAt,
+                        });
+                    }
                 }
             });
+            const ipAddresses = Array.from(ipMap.values()).sort((a, b) => b.lastUsed.getTime() - a.lastUsed.getTime());
             return {
-                totalSessions,
+                totalSessions: sessions.data.length,
                 activeSessions,
-                expiredSessions,
-                deviceTypes,
-                recentSessions: allSessions,
+                recentLogins,
+                deviceTypes: deviceTypes.sort((a, b) => b.count - a.count),
+                ipAddresses: ipAddresses.slice(0, 10),
             };
         }
         catch (error) {
-            console.error(`Error getting session stats for user ${userId}:`, error);
-            throw error;
+            throw new types_1.AppError("Error getting user session statistics", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
     /**
-     * Find sessions by device type
-     */
-    async findSessionsByDeviceType(deviceType, limit = 50) {
-        try {
-            return await this.model.findMany({
-                where: {
-                    isActive: true,
-                    deviceInfo: {
-                        path: ["deviceType"],
-                        equals: deviceType,
-                    },
-                },
-                orderBy: { createdAt: "desc" },
-                take: limit,
-            });
-        }
-        catch (error) {
-            console.error(`Error finding sessions by device type ${deviceType}:`, error);
-            throw error;
-        }
-    }
-    /**
-     * Get concurrent sessions count
-     */
-    async getConcurrentSessionsCount() {
-        try {
-            return await this.model.count({
-                where: {
-                    isActive: true,
-                    expiresAt: {
-                        gt: new Date(),
-                    },
-                },
-            });
-        }
-        catch (error) {
-            console.error("Error getting concurrent sessions count:", error);
-            throw error;
-        }
-    }
-    /**
-     * Find sessions by IP address (for security monitoring)
-     */
-    async findSessionsByIP(ipAddress) {
-        try {
-            return await this.model.findMany({
-                where: {
-                    deviceInfo: {
-                        path: ["ipAddress"],
-                        equals: ipAddress,
-                    },
-                },
-                orderBy: { createdAt: "desc" },
-            });
-        }
-        catch (error) {
-            console.error(`Error finding sessions by IP ${ipAddress}:`, error);
-            throw error;
-        }
-    }
-    /**
-     * Get session analytics for admin dashboard
+     * Get admin session analytics
      */
     async getSessionAnalytics(dateFrom, dateTo) {
         try {
-            const sessions = await this.model.findMany({
-                where: {
-                    createdAt: {
-                        gte: dateFrom,
-                        lte: dateTo,
-                    },
+            const where = {
+                createdAt: {
+                    gte: dateFrom,
+                    lte: dateTo,
                 },
-            });
-            const activeSessions = sessions.filter((s) => s.isActive && s.expiresAt > new Date()).length;
+            };
+            const [totalSessions, activeSessions, allSessions] = await Promise.all([
+                this.count(where),
+                this.count({
+                    ...where,
+                    isActive: true,
+                    expiresAt: { gt: new Date() },
+                }),
+                this.findMany(where, {
+                    pagination: { page: 1, limit: 10000 },
+                }),
+            ]);
             // Calculate average session duration
-            const completedSessions = sessions.filter((s) => !s.isActive);
+            const completedSessions = allSessions.data.filter((s) => !s.isActive && s.lastUsedAt);
             const totalDuration = completedSessions.reduce((sum, session) => {
-                const duration = session.updatedAt.getTime() - session.createdAt.getTime();
-                return sum + duration;
+                const duration = (session.lastUsedAt?.getTime() || 0) - session.createdAt.getTime();
+                return sum + Math.max(0, duration);
             }, 0);
             const averageSessionDuration = completedSessions.length > 0
-                ? totalDuration / completedSessions.length / 1000 / 60 // in minutes
+                ? totalDuration / completedSessions.length / (1000 * 60) // minutes
                 : 0;
-            // Device type distribution
-            const deviceTypeDistribution = {};
-            const browserDistribution = {};
-            const countryDistribution = {};
-            sessions.forEach((session) => {
-                if (session.deviceInfo) {
-                    const deviceInfo = session.deviceInfo;
-                    // Device type
-                    const deviceType = deviceInfo.deviceType || "unknown";
-                    deviceTypeDistribution[deviceType] =
-                        (deviceTypeDistribution[deviceType] || 0) + 1;
-                    // Browser
-                    const browser = deviceInfo.browser || "unknown";
-                    browserDistribution[browser] =
-                        (browserDistribution[browser] || 0) + 1;
-                    // Country
-                    const country = deviceInfo.location?.country || "unknown";
-                    countryDistribution[country] =
-                        (countryDistribution[country] || 0) + 1;
+            // Group by device type
+            const deviceMap = new Map();
+            allSessions.data.forEach((session) => {
+                const device = session.deviceInfo?.deviceType || "unknown";
+                deviceMap.set(device, (deviceMap.get(device) || 0) + 1);
+            });
+            const sessionsByDevice = Array.from(deviceMap.entries()).map(([device, count]) => ({ device, count }));
+            // Group by day
+            const dayMap = new Map();
+            allSessions.data.forEach((session) => {
+                const date = session.createdAt.toISOString().split("T")[0];
+                dayMap.set(date, (dayMap.get(date) || 0) + 1);
+            });
+            const sessionsByDay = Array.from(dayMap.entries())
+                .map(([date, sessions]) => ({ date, sessions }))
+                .sort((a, b) => a.date.localeCompare(b.date));
+            // Top IP addresses
+            const ipMap = new Map();
+            allSessions.data.forEach((session) => {
+                if (session.ipAddress) {
+                    ipMap.set(session.ipAddress, (ipMap.get(session.ipAddress) || 0) + 1);
                 }
             });
-            // Logins by hour
-            const hourlyMap = new Map();
-            sessions.forEach((session) => {
-                const hour = session.createdAt.getHours();
-                hourlyMap.set(hour, (hourlyMap.get(hour) || 0) + 1);
-            });
-            const loginsByHour = Array.from({ length: 24 }, (_, hour) => ({
-                hour,
-                count: hourlyMap.get(hour) || 0,
-            }));
-            // Top countries
-            const topCountries = Object.entries(countryDistribution)
-                .map(([country, count]) => ({ country, count }))
-                .sort((a, b) => b.count - a.count)
+            const topIpAddresses = Array.from(ipMap.entries())
+                .map(([ip, sessions]) => ({ ip, sessions }))
+                .sort((a, b) => b.sessions - a.sessions)
                 .slice(0, 10);
             return {
-                totalSessions: sessions.length,
+                totalSessions,
                 activeSessions,
-                averageSessionDuration: Math.round(averageSessionDuration),
-                deviceTypeDistribution,
-                browserDistribution,
-                loginsByHour,
-                topCountries,
+                averageSessionDuration: Number(averageSessionDuration.toFixed(2)),
+                sessionsByDevice,
+                sessionsByDay,
+                topIpAddresses,
             };
         }
         catch (error) {
-            console.error("Error getting session analytics:", error);
-            throw error;
+            throw new types_1.AppError("Error getting session analytics", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
     /**
-     * Extend session expiration
+     * Check for suspicious session activity
      */
-    async extendSession(sessionId, additionalHours = 24) {
+    async detectSuspiciousActivity(userId) {
         try {
-            const newExpiresAt = new Date(Date.now() + additionalHours * 60 * 60 * 1000);
-            return await this.model.update({
-                where: { sessionId },
-                data: {
-                    expiresAt: newExpiresAt,
-                    updatedAt: new Date(),
+            const alerts = [];
+            const recentSessions = await this.findMany({
+                userId,
+                createdAt: {
+                    gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // 24 hours
                 },
+            }, {
+                orderBy: { createdAt: "desc" },
             });
+            // Check for multiple IP addresses
+            const uniqueIPs = new Set(recentSessions.data.map((s) => s.ipAddress).filter((ip) => ip));
+            if (uniqueIPs.size > 3) {
+                alerts.push({
+                    type: "multiple_ips",
+                    message: `Login from ${uniqueIPs.size} different IP addresses in 24 hours`,
+                    severity: "medium",
+                    data: { ipCount: uniqueIPs.size },
+                });
+            }
+            // Check for rapid session creation
+            const sessionCount = recentSessions.data.length;
+            if (sessionCount > 10) {
+                alerts.push({
+                    type: "rapid_sessions",
+                    message: `${sessionCount} sessions created in 24 hours`,
+                    severity: "high",
+                    data: { sessionCount },
+                });
+            }
+            // Check for unusual device types
+            const deviceTypes = recentSessions.data.map((s) => s.deviceInfo?.deviceType);
+            const uniqueDevices = new Set(deviceTypes.filter((d) => d));
+            if (uniqueDevices.size > 2) {
+                alerts.push({
+                    type: "multiple_devices",
+                    message: `Login from ${uniqueDevices.size} different device types`,
+                    severity: "low",
+                    data: { deviceTypes: Array.from(uniqueDevices) },
+                });
+            }
+            return {
+                hasAlerts: alerts.length > 0,
+                alerts,
+            };
         }
         catch (error) {
-            console.error(`Error extending session ${sessionId}:`, error);
-            throw error;
+            throw new types_1.AppError("Error detecting suspicious activity", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
     /**
-     * Find suspicious sessions (for security monitoring)
+     * Refresh session expiry
      */
-    async findSuspiciousSessions() {
+    async refreshSession(sessionId, newExpiryDate) {
         try {
-            const now = new Date();
-            const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-            const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-            // Sessions with multiple IP addresses for same user
-            const multipleIPSessions = await this.db.$queryRaw `
-        SELECT s1.* FROM sessions s1
-        JOIN sessions s2 ON s1.user_id = s2.user_id AND s1.id != s2.id
-        WHERE s1.device_info->>'ipAddress' != s2.device_info->>'ipAddress'
-        AND s1.created_at > ${oneDayAgo}
-        AND s1.is_active = true
-      `;
-            // Sessions with multiple device types for same user
-            const multipleDeviceSessions = await this.db.$queryRaw `
-        SELECT s1.* FROM sessions s1
-        JOIN sessions s2 ON s1.user_id = s2.user_id AND s1.id != s2.id
-        WHERE s1.device_info->>'deviceType' != s2.device_info->>'deviceType'
-        AND s1.created_at > ${oneDayAgo}
-        AND s1.is_active = true
-      `;
-            // Long-running sessions (active for more than a week)
-            const longRunningSessions = await this.model.findMany({
-                where: {
-                    isActive: true,
-                    createdAt: {
-                        lt: oneWeekAgo,
-                    },
-                },
+            return await this.update(sessionId, {
+                expiresAt: newExpiryDate,
+                lastUsedAt: new Date(),
             });
-            return {
-                multipleIPs: multipleIPSessions,
-                multipleDevices: multipleDeviceSessions,
-                longRunning: longRunningSessions,
-            };
         }
         catch (error) {
-            console.error("Error finding suspicious sessions:", error);
-            return {
-                multipleIPs: [],
-                multipleDevices: [],
-                longRunning: [],
-            };
+            throw new types_1.AppError("Error refreshing session", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
 }

@@ -1,12 +1,54 @@
-import { BaseRepository } from "./BaseRepository";
-import { OTPCode, OTPPurpose, NigerianPhoneNumber } from "@/types";
 import { PrismaClient } from "@prisma/client";
+import { BaseRepository } from "./BaseRepository";
+import {
+  OTPCode,
+  OTPPurpose,
+  NigerianPhoneNumber,
+  AppError,
+  HTTP_STATUS,
+  ERROR_CODES,
+  CONSTANTS,
+} from "../types";
 
-export class OTPRepository extends BaseRepository<OTPCode> {
-  protected modelName = "otpCode";
+interface CreateOTPData {
+  phoneNumber: NigerianPhoneNumber;
+  code: string;
+  purpose: OTPPurpose;
+  expiresAt: Date;
+  isUsed: boolean;
+  attempts: number;
+  maxAttempts: number;
+  userId?: string;
+}
 
-  constructor(database?: PrismaClient) {
-    super(database);
+interface UpdateOTPData {
+  isUsed?: boolean;
+  attempts?: number;
+  userId?: string;
+}
+
+export class OTPRepository extends BaseRepository<
+  OTPCode,
+  CreateOTPData,
+  UpdateOTPData
+> {
+  constructor(prisma?: PrismaClient) {
+    super(prisma || new PrismaClient(), "OTPCode");
+  }
+
+  /**
+   * Create new OTP code
+   */
+  async create(data: CreateOTPData): Promise<OTPCode> {
+    try {
+      return await super.create(data);
+    } catch (error) {
+      throw new AppError(
+        "Error creating OTP code",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
+    }
   }
 
   /**
@@ -17,111 +59,47 @@ export class OTPRepository extends BaseRepository<OTPCode> {
     purpose: OTPPurpose
   ): Promise<OTPCode | null> {
     try {
-      return await this.model.findFirst({
-        where: {
-          phoneNumber,
-          purpose,
-          isUsed: false,
-          expiresAt: {
-            gt: new Date(),
-          },
-        },
-        orderBy: {
-          createdAt: "desc",
+      return await this.findFirst({
+        phoneNumber,
+        purpose,
+        isUsed: false,
+        expiresAt: {
+          gt: new Date(),
         },
       });
     } catch (error) {
-      console.error(`Error finding valid OTP for ${phoneNumber}:`, error);
-      throw error;
+      throw new AppError(
+        "Error finding valid OTP",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
     }
   }
 
   /**
-   * Find latest OTP for phone number and purpose (including expired/used)
+   * Find OTP by phone number and code
    */
-  async findLatestOTP(
+  async findByPhoneAndCode(
     phoneNumber: NigerianPhoneNumber,
+    code: string,
     purpose: OTPPurpose
   ): Promise<OTPCode | null> {
     try {
-      return await this.model.findFirst({
-        where: {
-          phoneNumber,
-          purpose,
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
-    } catch (error) {
-      console.error(`Error finding latest OTP for ${phoneNumber}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Create new OTP record
-   */
-  async createOTP(otpData: {
-    phoneNumber: NigerianPhoneNumber;
-    code: string;
-    purpose: OTPPurpose;
-    expiresAt: Date;
-    maxAttempts?: number;
-  }): Promise<OTPCode> {
-    try {
-      return await this.model.create({
-        data: {
-          phoneNumber: otpData.phoneNumber,
-          code: otpData.code,
-          purpose: otpData.purpose,
-          expiresAt: otpData.expiresAt,
-          isUsed: false,
-          attempts: 0,
-          maxAttempts: otpData.maxAttempts || 3,
+      return await this.findFirst({
+        phoneNumber,
+        code,
+        purpose,
+        isUsed: false,
+        expiresAt: {
+          gt: new Date(),
         },
       });
     } catch (error) {
-      console.error("Error creating OTP:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Mark OTP as used
-   */
-  async markAsUsed(id: string): Promise<OTPCode> {
-    try {
-      return await this.model.update({
-        where: { id },
-        data: {
-          isUsed: true,
-          updatedAt: new Date(),
-        },
-      });
-    } catch (error) {
-      console.error(`Error marking OTP as used ${id}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Increment OTP attempts
-   */
-  async incrementAttempts(id: string): Promise<OTPCode> {
-    try {
-      return await this.model.update({
-        where: { id },
-        data: {
-          attempts: {
-            increment: 1,
-          },
-          updatedAt: new Date(),
-        },
-      });
-    } catch (error) {
-      console.error(`Error incrementing OTP attempts ${id}:`, error);
-      throw error;
+      throw new AppError(
+        "Error finding OTP by phone and code",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
     }
   }
 
@@ -131,120 +109,136 @@ export class OTPRepository extends BaseRepository<OTPCode> {
   async invalidateExistingOTP(
     phoneNumber: NigerianPhoneNumber,
     purpose: OTPPurpose
-  ): Promise<number> {
+  ): Promise<void> {
     try {
-      const result = await this.model.updateMany({
-        where: {
+      await this.updateMany(
+        {
           phoneNumber,
           purpose,
           isUsed: false,
         },
-        data: {
+        {
           isUsed: true,
-          updatedAt: new Date(),
-        },
-      });
-
-      return result.count;
-    } catch (error) {
-      console.error(
-        `Error invalidating existing OTPs for ${phoneNumber}:`,
-        error
+        }
       );
-      throw error;
-    }
-  }
-
-  /**
-   * Clean up expired OTPs (for maintenance)
-   */
-  async cleanupExpiredOTPs(): Promise<number> {
-    try {
-      const result = await this.model.deleteMany({
-        where: {
-          expiresAt: {
-            lt: new Date(),
-          },
-        },
-      });
-
-      console.log(`🧹 Cleaned up ${result.count} expired OTP records`);
-      return result.count;
     } catch (error) {
-      console.error("Error cleaning up expired OTPs:", error);
-      throw error;
+      throw new AppError(
+        "Error invalidating existing OTPs",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
     }
   }
 
   /**
-   * Get OTP statistics for phone number
+   * Mark OTP as used
+   */
+  async markAsUsed(otpId: string): Promise<OTPCode> {
+    try {
+      return await this.update(otpId, {
+        isUsed: true,
+      });
+    } catch (error) {
+      throw new AppError(
+        "Error marking OTP as used",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
+    }
+  }
+
+  /**
+   * Increment OTP attempts
+   */
+  async incrementAttempts(otpId: string): Promise<OTPCode> {
+    try {
+      // Get current OTP to increment attempts
+      const currentOTP = await this.findById(otpId);
+      if (!currentOTP) {
+        throw new AppError(
+          "OTP not found",
+          HTTP_STATUS.NOT_FOUND,
+          ERROR_CODES.RESOURCE_NOT_FOUND
+        );
+      }
+
+      return await this.update(otpId, {
+        attempts: currentOTP.attempts + 1,
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError(
+        "Error incrementing OTP attempts",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
+    }
+  }
+
+  /**
+   * Get OTP usage statistics for phone number
    */
   async getOTPStats(
     phoneNumber: NigerianPhoneNumber,
-    hoursBack: number = 24
+    timeRange: number = 24 // hours
   ): Promise<{
-    totalRequested: number;
-    totalUsed: number;
-    totalExpired: number;
-    recentRequests: OTPCode[];
+    totalRequests: number;
+    successfulVerifications: number;
+    failedAttempts: number;
+    lastRequestAt?: Date;
   }> {
     try {
-      const cutoffTime = new Date(Date.now() - hoursBack * 60 * 60 * 1000);
+      const startTime = new Date();
+      startTime.setHours(startTime.getHours() - timeRange);
 
-      const [totalRequested, totalUsed, totalExpired, recentRequests] =
-        await Promise.all([
-          this.model.count({
-            where: {
-              phoneNumber,
-              createdAt: {
-                gte: cutoffTime,
-              },
+      const [totalOTPs, usedOTPs, failedOTPs, lastOTP] = await Promise.all([
+        this.count({
+          phoneNumber,
+          createdAt: {
+            gte: startTime,
+          },
+        }),
+        this.count({
+          phoneNumber,
+          isUsed: true,
+          createdAt: {
+            gte: startTime,
+          },
+        }),
+        this.count({
+          phoneNumber,
+          attempts: {
+            gte: CONSTANTS.MAX_OTP_ATTEMPTS,
+          },
+          createdAt: {
+            gte: startTime,
+          },
+        }),
+        this.findFirst(
+          {
+            phoneNumber,
+            createdAt: {
+              gte: startTime,
             },
-          }),
-          this.model.count({
-            where: {
-              phoneNumber,
-              isUsed: true,
-              createdAt: {
-                gte: cutoffTime,
-              },
-            },
-          }),
-          this.model.count({
-            where: {
-              phoneNumber,
-              isUsed: false,
-              expiresAt: {
-                lt: new Date(),
-              },
-              createdAt: {
-                gte: cutoffTime,
-              },
-            },
-          }),
-          this.model.findMany({
-            where: {
-              phoneNumber,
-              createdAt: {
-                gte: cutoffTime,
-              },
-            },
-            orderBy: {
-              createdAt: "desc",
-            },
-            take: 10,
-          }),
-        ]);
+          },
+          undefined // no include
+        ),
+      ]);
 
       return {
-        totalRequested,
-        totalUsed,
-        totalExpired,
-        recentRequests,
+        totalRequests: totalOTPs,
+        successfulVerifications: usedOTPs,
+        failedAttempts: failedOTPs,
+        lastRequestAt: lastOTP?.createdAt,
       };
     } catch (error) {
-      console.error(`Error getting OTP stats for ${phoneNumber}:`, error);
-      throw error;
+      throw new AppError(
+        "Error getting OTP statistics",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
     }
   }
 
@@ -253,26 +247,26 @@ export class OTPRepository extends BaseRepository<OTPCode> {
    */
   async isRateLimited(
     phoneNumber: NigerianPhoneNumber,
-    maxRequests: number = 3,
-    windowMinutes: number = 15
+    timeWindow: number = CONSTANTS.OTP_RATE_LIMIT_MINUTES, // minutes
+    maxRequests: number = 3
   ): Promise<{
     isLimited: boolean;
     requestCount: number;
     resetTime: Date;
   }> {
     try {
-      const windowStart = new Date(Date.now() - windowMinutes * 60 * 1000);
+      const startTime = new Date();
+      startTime.setMinutes(startTime.getMinutes() - timeWindow);
 
-      const requestCount = await this.model.count({
-        where: {
-          phoneNumber,
-          createdAt: {
-            gte: windowStart,
-          },
+      const requestCount = await this.count({
+        phoneNumber,
+        createdAt: {
+          gte: startTime,
         },
       });
 
-      const resetTime = new Date(Date.now() + windowMinutes * 60 * 1000);
+      const resetTime = new Date();
+      resetTime.setMinutes(resetTime.getMinutes() + timeWindow);
 
       return {
         isLimited: requestCount >= maxRequests,
@@ -280,118 +274,57 @@ export class OTPRepository extends BaseRepository<OTPCode> {
         resetTime,
       };
     } catch (error) {
-      console.error(`Error checking rate limit for ${phoneNumber}:`, error);
-      return {
-        isLimited: false,
-        requestCount: 0,
-        resetTime: new Date(),
-      };
+      throw new AppError(
+        "Error checking rate limit",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
     }
   }
 
   /**
-   * Get OTPs by purpose within time range
+   * Clean up expired OTPs (maintenance task)
    */
-  async getOTPsByPurpose(
-    purpose: OTPPurpose,
-    dateFrom: Date,
-    dateTo: Date
-  ): Promise<OTPCode[]> {
+  async cleanupExpiredOTPs(): Promise<{ deletedCount: number }> {
     try {
-      return await this.model.findMany({
-        where: {
-          purpose,
-          createdAt: {
-            gte: dateFrom,
-            lte: dateTo,
-          },
-        },
-        orderBy: {
-          createdAt: "desc",
+      const result = await this.deleteMany({
+        expiresAt: {
+          lt: new Date(),
         },
       });
+
+      return { deletedCount: result.count };
     } catch (error) {
-      console.error(`Error getting OTPs by purpose ${purpose}:`, error);
-      throw error;
+      throw new AppError(
+        "Error cleaning up expired OTPs",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
     }
   }
 
   /**
-   * Get failed OTP attempts (for security monitoring)
+   * Clean up old used OTPs (maintenance task)
    */
-  async getFailedAttempts(
-    phoneNumber?: NigerianPhoneNumber,
-    hoursBack: number = 24
-  ): Promise<OTPCode[]> {
+  async cleanupOldOTPs(daysOld: number = 7): Promise<{ deletedCount: number }> {
     try {
-      const cutoffTime = new Date(Date.now() - hoursBack * 60 * 60 * 1000);
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysOld);
 
-      const whereClause: any = {
-        attempts: {
-          gte: 1,
-        },
-        isUsed: false,
+      const result = await this.deleteMany({
+        isUsed: true,
         createdAt: {
-          gte: cutoffTime,
-        },
-      };
-
-      if (phoneNumber) {
-        whereClause.phoneNumber = phoneNumber;
-      }
-
-      return await this.model.findMany({
-        where: whereClause,
-        orderBy: {
-          attempts: "desc",
+          lt: cutoffDate,
         },
       });
+
+      return { deletedCount: result.count };
     } catch (error) {
-      console.error("Error getting failed OTP attempts:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Bulk cleanup old OTPs (for maintenance jobs)
-   */
-  async bulkCleanup(daysOld: number = 7): Promise<{
-    deletedCount: number;
-    oldestDeleted: Date | null;
-  }> {
-    try {
-      const cutoffDate = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
-
-      // Get oldest record before deletion for reporting
-      const oldestRecord = await this.model.findFirst({
-        where: {
-          createdAt: {
-            lt: cutoffDate,
-          },
-        },
-        orderBy: {
-          createdAt: "asc",
-        },
-        select: {
-          createdAt: true,
-        },
-      });
-
-      const result = await this.model.deleteMany({
-        where: {
-          createdAt: {
-            lt: cutoffDate,
-          },
-        },
-      });
-
-      return {
-        deletedCount: result.count,
-        oldestDeleted: oldestRecord?.createdAt || null,
-      };
-    } catch (error) {
-      console.error("Error in bulk cleanup:", error);
-      throw error;
+      throw new AppError(
+        "Error cleaning up old OTPs",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
     }
   }
 
@@ -402,175 +335,176 @@ export class OTPRepository extends BaseRepository<OTPCode> {
     dateFrom: Date,
     dateTo: Date
   ): Promise<{
-    totalOTPs: number;
-    successfulVerifications: number;
-    failedVerifications: number;
-    expiredOTPs: number;
-    averageAttemptsPerOTP: number;
-    otpsByPurpose: Record<OTPPurpose, number>;
-    hourlyDistribution: { hour: number; count: number }[];
+    totalGenerated: number;
+    totalVerified: number;
+    totalExpired: number;
+    verificationRate: number;
+    byPurpose: {
+      purpose: OTPPurpose;
+      generated: number;
+      verified: number;
+      rate: number;
+    }[];
+    byDay: {
+      date: string;
+      generated: number;
+      verified: number;
+    }[];
   }> {
     try {
-      const [
-        totalOTPs,
-        successfulVerifications,
-        expiredOTPs,
-        otpsByPurpose,
-        allOTPs,
-      ] = await Promise.all([
-        // Total OTPs created
-        this.model.count({
-          where: {
-            createdAt: { gte: dateFrom, lte: dateTo },
-          },
-        }),
+      const where = {
+        createdAt: {
+          gte: dateFrom,
+          lte: dateTo,
+        },
+      };
 
-        // Successful verifications
-        this.model.count({
-          where: {
-            createdAt: { gte: dateFrom, lte: dateTo },
-            isUsed: true,
-          },
-        }),
-
-        // Expired OTPs
-        this.model.count({
-          where: {
-            createdAt: { gte: dateFrom, lte: dateTo },
+      const [totalGenerated, totalVerified, totalExpired, byPurpose] =
+        await Promise.all([
+          this.count(where),
+          this.count({ ...where, isUsed: true }),
+          this.count({
+            ...where,
             isUsed: false,
             expiresAt: { lt: new Date() },
-          },
-        }),
+          }),
+          this.groupBy(["purpose"], where, undefined, {
+            _count: { id: true },
+          }),
+        ]);
 
-        // OTPs by purpose
-        this.model.groupBy({
-          by: ["purpose"],
-          where: {
-            createdAt: { gte: dateFrom, lte: dateTo },
-          },
-          _count: {
-            purpose: true,
-          },
-        }),
+      // Get verification counts by purpose
+      const verifiedByPurpose = await this.groupBy(
+        ["purpose"],
+        { ...where, isUsed: true },
+        undefined,
+        {
+          _count: { id: true },
+        }
+      );
 
-        // All OTPs for detailed analysis
-        this.model.findMany({
-          where: {
-            createdAt: { gte: dateFrom, lte: dateTo },
-          },
-          select: {
-            attempts: true,
-            createdAt: true,
-            isUsed: true,
-          },
-        }),
-      ]);
+      const verifiedMap = verifiedByPurpose.reduce((acc: any, item: any) => {
+        acc[item.purpose] = item._count.id;
+        return acc;
+      }, {});
 
-      // Calculate failed verifications and average attempts
-      const failedVerifications = allOTPs.filter(
-        (otp) => !otp.isUsed && otp.attempts > 0
-      ).length;
-      const totalAttempts = allOTPs.reduce((sum, otp) => sum + otp.attempts, 0);
-      const averageAttemptsPerOTP =
-        totalOTPs > 0 ? totalAttempts / totalOTPs : 0;
-
-      // Process OTPs by purpose
-      const purposeMap: Record<OTPPurpose, number> = {
-        login: 0,
-        signup: 0,
-        password_reset: 0,
-        phone_verification: 0,
-      };
-
-      otpsByPurpose.forEach((group) => {
-        purposeMap[group.purpose] = group._count.purpose;
+      const purposeAnalytics = byPurpose.map((item: any) => {
+        const verified = verifiedMap[item.purpose] || 0;
+        const generated = item._count.id;
+        return {
+          purpose: item.purpose,
+          generated,
+          verified,
+          rate: generated > 0 ? (verified / generated) * 100 : 0,
+        };
       });
 
-      // Generate hourly distribution
-      const hourlyMap = new Map<number, number>();
-      allOTPs.forEach((otp) => {
-        const hour = otp.createdAt.getHours();
-        hourlyMap.set(hour, (hourlyMap.get(hour) || 0) + 1);
-      });
+      // Calculate daily analytics
+      const dailyAnalytics = await this.prisma.$queryRaw`
+        SELECT 
+          DATE(created_at) as date,
+          COUNT(*) as generated,
+          COUNT(CASE WHEN is_used = true THEN 1 END) as verified
+        FROM otp_codes
+        WHERE created_at >= ${dateFrom} AND created_at <= ${dateTo}
+        GROUP BY DATE(created_at)
+        ORDER BY date ASC
+      `;
 
-      const hourlyDistribution = Array.from({ length: 24 }, (_, hour) => ({
-        hour,
-        count: hourlyMap.get(hour) || 0,
-      }));
+      const verificationRate =
+        totalGenerated > 0 ? (totalVerified / totalGenerated) * 100 : 0;
 
       return {
-        totalOTPs,
-        successfulVerifications,
-        failedVerifications,
-        expiredOTPs,
-        averageAttemptsPerOTP: Math.round(averageAttemptsPerOTP * 100) / 100,
-        otpsByPurpose: purposeMap,
-        hourlyDistribution,
+        totalGenerated,
+        totalVerified,
+        totalExpired,
+        verificationRate: Number(verificationRate.toFixed(2)),
+        byPurpose: purposeAnalytics,
+        byDay: (dailyAnalytics as any[]).map((item) => ({
+          date: item.date.toISOString().split("T")[0],
+          generated: Number(item.generated),
+          verified: Number(item.verified),
+        })),
       };
     } catch (error) {
-      console.error("Error getting OTP analytics:", error);
-      throw error;
+      throw new AppError(
+        "Error getting OTP analytics",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
     }
   }
 
   /**
-   * Get suspicious activity (potential abuse)
+   * Find recent OTPs for debugging (admin only)
    */
-  async getSuspiciousActivity(hoursBack: number = 24): Promise<
-    {
-      phoneNumber: string;
-      requestCount: number;
-      failedAttempts: number;
-      lastRequest: Date;
-    }[]
-  > {
+  async findRecentOTPs(
+    limit: number = 50,
+    phoneNumber?: NigerianPhoneNumber
+  ): Promise<OTPCode[]> {
     try {
-      const cutoffTime = new Date(Date.now() - hoursBack * 60 * 60 * 1000);
+      const where: any = {};
+      if (phoneNumber) {
+        where.phoneNumber = phoneNumber;
+      }
 
-      const suspiciousPhones = await this.model.groupBy({
-        by: ["phoneNumber"],
-        where: {
-          createdAt: { gte: cutoffTime },
-        },
-        _count: {
-          phoneNumber: true,
-        },
-        _max: {
-          createdAt: true,
-        },
-        having: {
-          phoneNumber: {
-            _count: {
-              gt: 10, // More than 10 requests in the time window
-            },
-          },
-        },
+      const result = await this.findMany(where, {
+        orderBy: { createdAt: "desc" },
+        pagination: { page: 1, limit },
       });
 
-      const results = await Promise.all(
-        suspiciousPhones.map(async (phone) => {
-          const failedAttempts = await this.model.count({
-            where: {
-              phoneNumber: phone.phoneNumber,
-              createdAt: { gte: cutoffTime },
-              attempts: { gt: 0 },
-              isUsed: false,
-            },
-          });
-
-          return {
-            phoneNumber: phone.phoneNumber,
-            requestCount: phone._count.phoneNumber,
-            failedAttempts,
-            lastRequest: phone._max.createdAt || new Date(),
-          };
-        })
-      );
-
-      return results.sort((a, b) => b.requestCount - a.requestCount);
+      return result.data;
     } catch (error) {
-      console.error("Error getting suspicious activity:", error);
-      throw error;
+      throw new AppError(
+        "Error fetching recent OTPs",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
+    }
+  }
+
+  /**
+   * Validate OTP code format
+   */
+  validateOTPFormat(code: string): { isValid: boolean; error?: string } {
+    if (!code || typeof code !== "string") {
+      return { isValid: false, error: "OTP code is required" };
+    }
+
+    if (code.length !== CONSTANTS.OTP_LENGTH) {
+      return {
+        isValid: false,
+        error: `OTP code must be ${CONSTANTS.OTP_LENGTH} digits`,
+      };
+    }
+
+    if (!/^\d+$/.test(code)) {
+      return { isValid: false, error: "OTP code must contain only digits" };
+    }
+
+    return { isValid: true };
+  }
+
+  /**
+   * Get next allowed OTP request time for phone number
+   */
+  async getNextAllowedRequestTime(
+    phoneNumber: NigerianPhoneNumber
+  ): Promise<Date | null> {
+    try {
+      const rateLimit = await this.isRateLimited(phoneNumber);
+
+      if (!rateLimit.isLimited) {
+        return null; // Can request immediately
+      }
+
+      return rateLimit.resetTime;
+    } catch (error) {
+      throw new AppError(
+        "Error checking next allowed request time",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
     }
   }
 }

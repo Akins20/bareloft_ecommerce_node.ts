@@ -1,75 +1,135 @@
-import { UserRole } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { BaseRepository } from "./BaseRepository";
-import { UserType } from "@/types";
-import { PaginationParams } from "../types/common.types";
-export declare class UserRepository extends BaseRepository<UserType> {
-    protected modelName: string;
+import { User, UpdateUserProfileRequest, UserQueryParams, UserStats, NigerianPhoneNumber, PaginationParams } from "../types";
+export interface CreateUserData {
+    phoneNumber: string;
+    firstName: string;
+    lastName: string;
+    email?: string;
+    role?: "CUSTOMER" | "ADMIN" | "SUPER_ADMIN";
+    status?: "ACTIVE" | "INACTIVE" | "SUSPENDED" | "PENDING_VERIFICATION";
+}
+export interface UpdateUserData {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    avatar?: string;
+    dateOfBirth?: Date;
+    gender?: string;
+    role?: "CUSTOMER" | "ADMIN" | "SUPER_ADMIN";
+    status?: "ACTIVE" | "INACTIVE" | "SUSPENDED" | "PENDING_VERIFICATION";
+    isVerified?: boolean;
+    lastLoginAt?: Date;
+}
+export declare class UserRepository extends BaseRepository<User, CreateUserData, UpdateUserData> {
+    constructor(prisma: PrismaClient);
     /**
-     * Find user by phone number (Nigerian format)
+     * Find user by phone number
      */
-    findByPhoneNumber(phoneNumber: string): Promise<UserType | null>;
+    findByPhoneNumber(phoneNumber: NigerianPhoneNumber): Promise<User | null>;
     /**
      * Find user by email
      */
-    findByEmail(email: string): Promise<UserType | null>;
+    findByEmail(email: string): Promise<User | null>;
     /**
-     * Create user with Nigerian phone validation
+     * Create new user with validation
      */
-    createUser(userData: {
-        phoneNumber: string;
-        firstName: string;
-        lastName: string;
-        email?: string;
-        role?: UserRole;
-    }): Promise<UserType>;
+    createUser(userData: CreateUserData): Promise<User>;
     /**
      * Update user profile
      */
-    updateProfile(userId: string, updates: {
-        firstName?: string;
-        lastName?: string;
-        email?: string;
-        avatar?: string;
-    }): Promise<UserType>;
-    /**
-     * Verify user phone number
-     */
-    verifyPhoneNumber(userId: string): Promise<UserType>;
+    updateProfile(userId: string, profileData: UpdateUserProfileRequest): Promise<User>;
     /**
      * Update last login timestamp
      */
-    updateLastLogin(userId: string): Promise<UserType>;
+    updateLastLogin(userId: string): Promise<void>;
     /**
-     * Find users by role with pagination
+     * Verify user account
      */
-    findByRole(role: UserRole, pagination: PaginationParams): Promise<{
-        items: UserType[];
+    verifyUser(userId: string): Promise<User>;
+    /**
+     * Suspend user account
+     */
+    suspendUser(userId: string, reason?: string): Promise<User>;
+    /**
+     * Activate user account
+     */
+    activateUser(userId: string): Promise<User>;
+    /**
+     * Find users with filters and pagination
+     */
+    findUsersWithFilters(queryParams: UserQueryParams): Promise<{
+        data: User[];
         pagination: any;
     }>;
     /**
-     * Search users by name or phone
+     * Get user statistics
      */
-    searchUsers(query: string, pagination: PaginationParams): Promise<{
-        items: UserType[];
+    getUserStats(): Promise<UserStats>;
+    /**
+     * Find customers with orders
+     */
+    findCustomersWithOrders(pagination?: PaginationParams): Promise<{
+        data: Array<User & {
+            _count: {
+                orders: number;
+            };
+            orders: any[];
+        }>;
         pagination: any;
     }>;
     /**
-     * Get user with full profile including orders and addresses
+     * Find users by location (state)
      */
-    findByIdWithFullProfile(userId: string): Promise<UserType | null>;
+    findUsersByLocation(state: string): Promise<User[]>;
     /**
-     * Deactivate user account
+     * Find top customers by order value
      */
-    deactivateUser(userId: string): Promise<UserType>;
+    findTopCustomers(limit?: number): Promise<Array<{
+        user: User;
+        totalSpent: number;
+        orderCount: number;
+        lastOrderDate: Date;
+    }>>;
     /**
-     * Get user statistics for admin dashboard
+     * Find inactive users (no login in X days)
      */
-    getUserStats(): Promise<{
-        totalUsers: number;
-        activeUsers: number;
-        verifiedUsers: number;
-        newUsersThisMonth: number;
-        usersByRole: Record<UserRole, number>;
+    findInactiveUsers(daysSinceLastLogin?: number, pagination?: PaginationParams): Promise<{
+        data: User[];
+        pagination: any;
+    }>;
+    /**
+     * Search users by multiple criteria
+     */
+    searchUsers(searchTerm: string, filters?: {
+        role?: string;
+        isVerified?: boolean;
+        state?: string;
+    }, pagination?: PaginationParams): Promise<{
+        data: User[];
+        pagination: any;
+        searchMeta: any;
+    }>;
+    /**
+     * Get user activity summary
+     */
+    getUserActivitySummary(userId: string): Promise<{
+        orderCount: number;
+        totalSpent: number;
+        reviewCount: number;
+        averageRating: number;
+        lastActivity: Date;
+        joinDate: Date;
+        favoriteCategories: Array<{
+            categoryName: string;
+            orderCount: number;
+        }>;
+    }>;
+    /**
+     * Bulk update user statuses
+     */
+    bulkUpdateStatus(userIds: string[], status: "ACTIVE" | "INACTIVE" | "SUSPENDED"): Promise<{
+        count: number;
     }>;
 }
 //# sourceMappingURL=UserRepository.d.ts.map

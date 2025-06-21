@@ -4,14 +4,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.redisClient = exports.RedisConnection = exports.redis = void 0;
-// src/config/redis.ts
 const ioredis_1 = __importDefault(require("ioredis"));
 const environment_1 = require("./environment");
-// Redis client configuration
+// Parse Redis URL
+const redisUrl = new URL(environment_1.config.redis.url);
+// Redis client configuration - conditionally build object
 const redisConfig = {
-    host: new URL(environment_1.config.redis.url).hostname,
-    port: parseInt(new URL(environment_1.config.redis.url).port) || 6379,
-    password: new URL(environment_1.config.redis.url).password || undefined,
+    host: redisUrl.hostname,
+    port: parseInt(redisUrl.port) || 6379,
     retryDelayOnFailover: 100,
     maxRetriesPerRequest: 3,
     lazyConnect: true,
@@ -19,6 +19,8 @@ const redisConfig = {
     family: 4,
     connectTimeout: 10000,
     commandTimeout: 5000,
+    // Only include password if it exists
+    ...(redisUrl.password && { password: redisUrl.password }),
 };
 // Create Redis client
 exports.redis = new ioredis_1.default(redisConfig);
@@ -38,20 +40,20 @@ class RedisConnection {
         return RedisConnection.instance;
     }
     setupEventHandlers() {
-        this.client.on('connect', () => {
-            console.log('✅ Redis connected successfully');
+        this.client.on("connect", () => {
+            console.log("✅ Redis connected successfully");
             this.isConnected = true;
         });
-        this.client.on('error', (error) => {
-            console.error('❌ Redis connection error:', error);
+        this.client.on("error", (error) => {
+            console.error("❌ Redis connection error:", error);
             this.isConnected = false;
         });
-        this.client.on('close', () => {
-            console.log('🔄 Redis connection closed');
+        this.client.on("close", () => {
+            console.log("🔄 Redis connection closed");
             this.isConnected = false;
         });
-        this.client.on('reconnecting', () => {
-            console.log('🔄 Redis reconnecting...');
+        this.client.on("reconnecting", () => {
+            console.log("🔄 Redis reconnecting...");
         });
     }
     async connect() {
@@ -62,7 +64,7 @@ class RedisConnection {
             await this.client.connect();
         }
         catch (error) {
-            console.error('❌ Redis connection failed:', error);
+            console.error("❌ Redis connection failed:", error);
             throw error;
         }
     }
@@ -72,10 +74,10 @@ class RedisConnection {
         }
         try {
             await this.client.disconnect();
-            console.log('✅ Redis disconnected successfully');
+            console.log("✅ Redis disconnected successfully");
         }
         catch (error) {
-            console.error('❌ Redis disconnection failed:', error);
+            console.error("❌ Redis disconnection failed:", error);
             throw error;
         }
     }
@@ -85,10 +87,10 @@ class RedisConnection {
     async healthCheck() {
         try {
             const result = await this.client.ping();
-            return result === 'PONG';
+            return result === "PONG";
         }
         catch (error) {
-            console.error('❌ Redis health check failed:', error);
+            console.error("❌ Redis health check failed:", error);
             return false;
         }
     }
@@ -164,7 +166,7 @@ class RedisConnection {
             return true;
         }
         catch (error) {
-            console.error('❌ Redis FLUSH error:', error);
+            console.error("❌ Redis FLUSH error:", error);
             return false;
         }
     }
@@ -186,11 +188,11 @@ class RedisConnection {
                 await this.expire(`ratelimit:${key}`, windowSeconds);
             }
             const ttl = await this.client.ttl(`ratelimit:${key}`);
-            const resetTime = Date.now() + (ttl * 1000);
+            const resetTime = Date.now() + ttl * 1000;
             return {
                 allowed: current <= limit,
                 remaining: Math.max(0, limit - current),
-                resetTime
+                resetTime,
             };
         }
         catch (error) {
@@ -198,7 +200,7 @@ class RedisConnection {
             return {
                 allowed: true,
                 remaining: limit,
-                resetTime: Date.now() + (windowSeconds * 1000)
+                resetTime: Date.now() + windowSeconds * 1000,
             };
         }
     }
@@ -207,10 +209,10 @@ exports.RedisConnection = RedisConnection;
 // Export Redis instance
 exports.redisClient = RedisConnection.getInstance();
 // Graceful shutdown handler
-process.on('SIGINT', async () => {
+process.on("SIGINT", async () => {
     await exports.redisClient.disconnect();
 });
-process.on('SIGTERM', async () => {
+process.on("SIGTERM", async () => {
     await exports.redisClient.disconnect();
 });
 //# sourceMappingURL=redis.js.map

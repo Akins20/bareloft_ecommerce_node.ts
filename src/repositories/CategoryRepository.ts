@@ -1,21 +1,314 @@
-import { BaseRepository } from "./BaseRepository";
-import { Category, CategoryQueryParams } from "@/types";
 import { PrismaClient } from "@prisma/client";
+import { BaseRepository } from "./BaseRepository";
+import {
+  Category,
+  CreateCategoryRequest,
+  UpdateCategoryRequest,
+  CategoryQueryParams,
+  PaginationParams,
+  AppError,
+  HTTP_STATUS,
+  ERROR_CODES,
+} from "../types";
 
-export class CategoryRepository extends BaseRepository<Category> {
-  protected modelName = "category";
+export interface CreateCategoryData {
+  name: string;
+  slug: string;
+  description?: string;
+  image?: string;
+  parentId?: string;
+  isActive?: boolean;
+  sortOrder?: number;
+  seoTitle?: string;
+  seoDescription?: string;
+}
 
-  constructor(database?: PrismaClient) {
-    super(database);
+export interface UpdateCategoryData {
+  name?: string;
+  slug?: string;
+  description?: string;
+  image?: string;
+  parentId?: string;
+  isActive?: boolean;
+  sortOrder?: number;
+  seoTitle?: string;
+  seoDescription?: string;
+}
+
+export interface CategoryWithProducts extends Category {
+  productCount: number;
+  hasChildren: boolean;
+  products?: any[];
+}
+
+export class CategoryRepository extends BaseRepository<
+  Category,
+  CreateCategoryData,
+  UpdateCategoryData
+> {
+  constructor(prisma: PrismaClient) {
+    super(prisma, "Category");
   }
 
   /**
    * Find category by slug
    */
-  async findBySlug(slug: string): Promise<Category | null> {
+  async findBySlug(slug: string): Promise<CategoryWithProducts | null> {
     try {
-      return await this.model.findUnique({
-        where: { slug },
+      const category = await this.findFirst(
+        { slug, isActive: true },
+        {
+          parent: true,
+          children: {
+            where: { isActive: true },
+            orderBy: { sortOrder: "asc" },
+          },
+          products: {
+            where: { isActive: true },
+            include: {
+              images: {
+                where: { isPrimary: true },
+                take: 1,
+              },
+              inventory: true,
+            },
+            take: 12,
+            orderBy: { createdAt: "desc" },
+          },
+          _count: {
+            select: {
+              products: {
+                where: { isActive: true },
+              },
+              children: {
+                where: { isActive: true },
+              },
+            },
+          },
+        }
+      );
+
+      if (!category) return null;
+
+      return {
+        ...category,
+        productCount: category._count.products,
+        hasChildren: category._count.children > 0,
+      };
+    } catch (error) {
+      this.handleError("Error finding category by slug", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create category with validation
+   */
+  async createCategory(categoryData: CreateCategoryData): Promise<Category> {
+    try {
+      // Check if slug already exists
+      const existingSlug = await this.findFirst({ slug: categoryData.slug });
+      if (existingSlug) {
+        throw new AppError(
+          "Slug already exists",
+          HTTP_STATUS.CONFLICT,
+          ERROR_CODES.RESOURCE_ALREADY_EXISTS
+        );
+      }
+
+      // Validate parent category exists if provided
+      if (categoryData.parentId) {
+        const parentCategory = await this.findById(categoryData.parentId);
+        if (!parentCategory) {
+          throw new AppError(
+            "Parent category not found",
+            HTTP_STATUS.BAD_REQUEST,
+            ERROR_CODES.RESOURCE_NOT_FOUND
+          );
+        }
+
+        // Prevent circular references
+        if (
+          await this.wouldCreateCircularReference(categoryData.parentId, null)
+        ) {
+          throw new AppError(
+            "Cannot create circular category reference",
+            HTTP_STATUS.BAD_REQUEST,
+            ERROR_CODES.VALIDATION_ERROR
+          );
+        }
+      }
+
+      return await this.create(categoryData, {
+        parent: true,
+        children: true,
+      });
+    } catch (error) {
+      this.handleError("Error creating category", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update category with validation
+   */
+  async updateCategory(
+    categoryId: string,
+    categoryData: UpdateCategoryData
+  ): Promise<Category> {
+    try {
+      // Check slug uniqueness if being updated
+      if (categoryData.slug) {
+        const existingSlug = await this.findFirst({
+          slug: categoryData.slug,
+          id: { not: categoryId },
+        });
+        if (existingSlug) {
+          throw new AppError(
+            "Slug already exists",
+            HTTP_STATUS.CONFLICT,
+            ERROR_CODES.RESOURCE_CONFLICT
+          );
+        }
+      }
+
+      // Validate parent category if being updated
+      if (categoryData.parentId) {
+        const parentCategory = await this.findById(categoryData.parentId);
+        if (!parentCategory) {
+          throw new AppError(
+            "Parent category not found",
+            HTTP_STATUS.BAD_REQUEST,
+            ERROR_CODES.RESOURCE_NOT_FOUND
+          );
+        }
+
+        // Prevent circular references
+        if (
+          await this.wouldCreateCircularReference(
+            categoryData.parentId,
+            categoryId
+          )
+        ) {
+          throw new AppError(
+            "Cannot create circular category reference",
+            HTTP_STATUS.BAD_REQUEST,
+            ERROR_CODES.VALIDATION_ERROR
+          );
+        }
+      }
+
+      return await this.update(categoryId, categoryData, {
+        parent: true,
+        children: {
+          where: { isActive: true },
+          orderBy: { sortOrder: "asc" },
+        },
+        _count: {
+          select: {
+            products: {
+              where: { isActive: true },
+            },
+          },
+        },
+      });
+    } catch (error) {
+      this.handleError("Error updating category", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get category hierarchy (all categories with nested structure)
+   */
+  async getCategoryHierarchy(): Promise<CategoryWithProducts[]> {
+    try {
+      // Get all root categories (no parent)
+      const rootCategories = await this.findMany(
+        { parentId: null, isActive: true },
+        {
+          include: {
+            children: {
+              where: { isActive: true },
+              include: {
+                children: {
+                  where: { isActive: true },
+                  include: {
+                    _count: {
+                      select: {
+                        products: {
+                          where: { isActive: true },
+                        },
+                      },
+                    },
+                  },
+                  orderBy: { sortOrder: "asc" },
+                },
+                _count: {
+                  select: {
+                    products: {
+                      where: { isActive: true },
+                    },
+                  },
+                },
+              },
+              orderBy: { sortOrder: "asc" },
+            },
+            _count: {
+              select: {
+                products: {
+                  where: { isActive: true },
+                },
+              },
+            },
+          },
+          orderBy: { sortOrder: "asc" },
+        }
+      );
+
+      return rootCategories.data.map(this.transformCategoryWithCounts);
+    } catch (error) {
+      this.handleError("Error getting category hierarchy", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get flat list of categories with filtering
+   */
+  async getCategoriesWithFilters(queryParams: CategoryQueryParams): Promise<{
+    data: CategoryWithProducts[];
+    pagination: any;
+  }> {
+    try {
+      const {
+        parentId,
+        isActive = true,
+        hasProducts,
+        sortBy = "sortOrder",
+        sortOrder = "asc",
+        page = 1,
+        limit = 50,
+      } = queryParams;
+
+      // Build where clause
+      const where: any = { isActive };
+
+      // Filter by parent
+      if (parentId !== undefined) {
+        where.parentId = parentId;
+      }
+
+      // Filter categories that have products
+      if (hasProducts) {
+        where.products = {
+          some: {
+            isActive: true,
+          },
+        };
+      }
+
+      const result = await this.findMany(where, {
         include: {
           parent: true,
           children: {
@@ -27,242 +320,39 @@ export class CategoryRepository extends BaseRepository<Category> {
               products: {
                 where: { isActive: true },
               },
-            },
-          },
-        },
-      });
-    } catch (error) {
-      console.error(`Error finding category by slug ${slug}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get all root categories (no parent)
-   */
-  async getRootCategories(): Promise<Category[]> {
-    try {
-      return await this.model.findMany({
-        where: {
-          parentId: null,
-          isActive: true,
-        },
-        include: {
-          children: {
-            where: { isActive: true },
-            orderBy: { sortOrder: "asc" },
-            include: {
-              _count: {
-                select: {
-                  products: {
-                    where: { isActive: true },
-                  },
-                },
-              },
-            },
-          },
-          _count: {
-            select: {
-              products: {
-                where: { isActive: true },
-              },
-            },
-          },
-        },
-        orderBy: { sortOrder: "asc" },
-      });
-    } catch (error) {
-      console.error("Error getting root categories:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get category hierarchy (nested structure)
-   */
-  async getCategoryHierarchy(): Promise<Category[]> {
-    try {
-      return await this.model.findMany({
-        where: {
-          parentId: null,
-          isActive: true,
-        },
-        include: {
-          children: {
-            where: { isActive: true },
-            include: {
               children: {
                 where: { isActive: true },
-                orderBy: { sortOrder: "asc" },
-                include: {
-                  _count: {
-                    select: {
-                      products: {
-                        where: { isActive: true },
-                      },
-                    },
-                  },
-                },
-              },
-              _count: {
-                select: {
-                  products: {
-                    where: { isActive: true },
-                  },
-                },
-              },
-            },
-            orderBy: { sortOrder: "asc" },
-          },
-          _count: {
-            select: {
-              products: {
-                where: { isActive: true },
               },
             },
           },
         },
-        orderBy: { sortOrder: "asc" },
+        orderBy: this.buildOrderBy(sortBy, sortOrder as "asc" | "desc"),
+        pagination: { page, limit },
       });
+
+      return {
+        data: result.data.map(this.transformCategoryWithCounts),
+        pagination: result.pagination,
+      };
     } catch (error) {
-      console.error("Error getting category hierarchy:", error);
+      this.handleError("Error getting categories with filters", error);
       throw error;
     }
   }
 
   /**
-   * Get subcategories of a parent category
+   * Get top-level categories only
    */
-  async getSubcategories(parentId: string): Promise<Category[]> {
+  async getRootCategories(): Promise<CategoryWithProducts[]> {
     try {
-      return await this.model.findMany({
-        where: {
-          parentId,
-          isActive: true,
-        },
-        include: {
-          _count: {
-            select: {
-              products: {
-                where: { isActive: true },
-              },
-            },
-          },
-        },
-        orderBy: { sortOrder: "asc" },
-      });
-    } catch (error) {
-      console.error(`Error getting subcategories for ${parentId}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get category breadcrumb path
-   */
-  async getCategoryPath(categoryId: string): Promise<Category[]> {
-    try {
-      const path: Category[] = [];
-      let currentCategoryId: string | null = categoryId;
-
-      while (currentCategoryId) {
-        const category = await this.model.findUnique({
-          where: { id: currentCategoryId },
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            parentId: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        });
-
-        if (!category) break;
-
-        path.unshift(category as Category);
-        currentCategoryId = category.parentId;
-      }
-
-      return path;
-    } catch (error) {
-      console.error(`Error getting category path for ${categoryId}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Find categories with filtering
-   */
-  async findWithFilters(params: CategoryQueryParams): Promise<{
-    categories: Category[];
-    total: number;
-  }> {
-    try {
-      const page = params.page || 1;
-      const limit = Math.min(params.limit || 50, 100);
-      const skip = (page - 1) * limit;
-
-      // Build where clause
-      const where: any = {};
-
-      if (params.parentId !== undefined) {
-        where.parentId = params.parentId;
-      }
-
-      if (params.isActive !== undefined) {
-        where.isActive = params.isActive;
-      }
-
-      if (params.hasProducts) {
-        where.products = {
-          some: {
-            isActive: true,
-          },
-        };
-      }
-
-      // Build orderBy clause
-      let orderBy: any = {};
-      switch (params.sortBy) {
-        case "name":
-          orderBy = { name: params.sortOrder || "asc" };
-          break;
-        case "sortOrder":
-          orderBy = { sortOrder: params.sortOrder || "asc" };
-          break;
-        case "productCount":
-          // This would need a more complex query
-          orderBy = { sortOrder: "asc" };
-          break;
-        case "created":
-          orderBy = { createdAt: params.sortOrder || "desc" };
-          break;
-        default:
-          orderBy = { sortOrder: "asc" };
-      }
-
-      const [categories, total] = await Promise.all([
-        this.model.findMany({
-          where,
-          take: limit,
-          skip,
-          orderBy,
+      const result = await this.findMany(
+        { parentId: null, isActive: true },
+        {
           include: {
-            parent: {
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-              },
-            },
             children: {
               where: { isActive: true },
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-              },
+              orderBy: { sortOrder: "asc" },
+              take: 10,
             },
             _count: {
               select: {
@@ -275,146 +365,98 @@ export class CategoryRepository extends BaseRepository<Category> {
               },
             },
           },
-        }),
-        this.model.count({ where }),
-      ]);
-
-      return { categories, total };
-    } catch (error) {
-      console.error("Error finding categories with filters:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Create category with unique slug
-   */
-  async createCategory(categoryData: {
-    name: string;
-    slug: string;
-    description?: string;
-    parentId?: string;
-    isActive?: boolean;
-    sortOrder?: number;
-    imageUrl?: string;
-  }): Promise<Category> {
-    try {
-      // Ensure slug is unique
-      let finalSlug = categoryData.slug;
-      let counter = 1;
-
-      while (await this.slugExists(finalSlug)) {
-        finalSlug = `${categoryData.slug}-${counter}`;
-        counter++;
-      }
-
-      return await this.model.create({
-        data: {
-          ...categoryData,
-          slug: finalSlug,
-          isActive: categoryData.isActive ?? true,
-          sortOrder: categoryData.sortOrder ?? 0,
-        },
-      });
-    } catch (error) {
-      console.error("Error creating category:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update category sort order
-   */
-  async updateSortOrder(
-    categoryId: string,
-    sortOrder: number
-  ): Promise<Category> {
-    try {
-      return await this.model.update({
-        where: { id: categoryId },
-        data: { sortOrder },
-      });
-    } catch (error) {
-      console.error(
-        `Error updating sort order for category ${categoryId}:`,
-        error
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Move category to different parent
-   */
-  async moveCategory(
-    categoryId: string,
-    newParentId?: string
-  ): Promise<Category> {
-    try {
-      // Validate that we're not creating a circular reference
-      if (newParentId) {
-        const wouldCreateCircle = await this.wouldCreateCircularReference(
-          categoryId,
-          newParentId
-        );
-        if (wouldCreateCircle) {
-          throw new Error(
-            "Cannot move category: would create circular reference"
-          );
+          orderBy: { sortOrder: "asc" },
         }
-      }
+      );
 
-      return await this.model.update({
-        where: { id: categoryId },
-        data: { parentId: newParentId },
-      });
+      return result.data.map(this.transformCategoryWithCounts);
     } catch (error) {
-      console.error(`Error moving category ${categoryId}:`, error);
+      this.handleError("Error getting root categories", error);
       throw error;
     }
   }
 
   /**
-   * Get categories with product count
+   * Get subcategories of a parent category
    */
-  async getCategoriesWithProductCount(): Promise<
-    Array<Category & { productCount: number }>
-  > {
+  async getSubcategories(
+    parentId: string,
+    pagination?: PaginationParams
+  ): Promise<{
+    data: CategoryWithProducts[];
+    pagination: any;
+  }> {
     try {
-      const categories = await this.model.findMany({
-        where: { isActive: true },
-        include: {
-          _count: {
-            select: {
-              products: {
-                where: { isActive: true },
+      const result = await this.findMany(
+        { parentId, isActive: true },
+        {
+          include: {
+            parent: true,
+            children: {
+              where: { isActive: true },
+              orderBy: { sortOrder: "asc" },
+            },
+            _count: {
+              select: {
+                products: {
+                  where: { isActive: true },
+                },
+                children: {
+                  where: { isActive: true },
+                },
               },
             },
           },
-        },
-        orderBy: { sortOrder: "asc" },
-      });
+          orderBy: { sortOrder: "asc" },
+          pagination,
+        }
+      );
 
-      return categories.map((category) => ({
-        ...category,
-        productCount: category._count.products,
-      }));
+      return {
+        data: result.data.map(this.transformCategoryWithCounts),
+        pagination: result.pagination,
+      };
     } catch (error) {
-      console.error("Error getting categories with product count:", error);
+      this.handleError("Error getting subcategories", error);
       throw error;
     }
   }
 
   /**
-   * Get top categories by product count
+   * Get category breadcrumb path
    */
-  async getTopCategories(
-    limit: number = 10
-  ): Promise<Array<Category & { productCount: number }>> {
+  async getCategoryBreadcrumb(categoryId: string): Promise<Category[]> {
     try {
-      const categories = await this.model.findMany({
+      const breadcrumb: Category[] = [];
+      let currentCategory = await this.findById(categoryId, { parent: true });
+
+      while (currentCategory) {
+        breadcrumb.unshift(currentCategory);
+        currentCategory = currentCategory.parent;
+      }
+
+      return breadcrumb;
+    } catch (error) {
+      this.handleError("Error getting category breadcrumb", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get categories with most products
+   */
+  async getPopularCategories(
+    limit: number = 10
+  ): Promise<CategoryWithProducts[]> {
+    try {
+      const categories = await this.prisma.category.findMany({
         where: { isActive: true },
         include: {
+          parent: true,
+          children: {
+            where: { isActive: true },
+            orderBy: { sortOrder: "asc" },
+          },
           _count: {
             select: {
               products: {
@@ -431,78 +473,159 @@ export class CategoryRepository extends BaseRepository<Category> {
         take: limit,
       });
 
-      return categories.map((category) => ({
-        ...category,
-        productCount: category._count.products,
-      }));
+      return categories.map(this.transformCategoryWithCounts);
     } catch (error) {
-      console.error("Error getting top categories:", error);
+      this.handleError("Error getting popular categories", error);
       throw error;
     }
   }
 
   /**
-   * Check if slug exists
+   * Search categories
    */
-  async slugExists(slug: string, excludeCategoryId?: string): Promise<boolean> {
+  async searchCategories(
+    searchTerm: string,
+    pagination?: PaginationParams
+  ): Promise<{
+    data: CategoryWithProducts[];
+    pagination: any;
+    searchMeta: any;
+  }> {
     try {
-      const where: any = { slug };
-      if (excludeCategoryId) {
-        where.id = { not: excludeCategoryId };
-      }
+      const searchFields = ["name", "description"];
+      const where = { isActive: true };
 
-      const category = await this.model.findUnique({
-        where,
-        select: { id: true },
+      const result = await this.search(searchTerm, searchFields, where, {
+        include: {
+          parent: true,
+          children: {
+            where: { isActive: true },
+            orderBy: { sortOrder: "asc" },
+          },
+          _count: {
+            select: {
+              products: {
+                where: { isActive: true },
+              },
+              children: {
+                where: { isActive: true },
+              },
+            },
+          },
+        },
+        pagination,
       });
 
-      return !!category;
+      return {
+        data: result.data.map(this.transformCategoryWithCounts),
+        pagination: result.pagination,
+        searchMeta: result.searchMeta,
+      };
     } catch (error) {
-      console.error(`Error checking slug existence ${slug}:`, error);
-      return false;
+      this.handleError("Error searching categories", error);
+      throw error;
     }
   }
 
   /**
-   * Get category depth (how many levels deep)
+   * Reorder categories within the same parent
    */
-  async getCategoryDepth(categoryId: string): Promise<number> {
+  async reorderCategories(
+    categoryOrders: Array<{ id: string; sortOrder: number }>
+  ): Promise<void> {
     try {
-      let depth = 0;
-      let currentCategoryId: string | null = categoryId;
+      await this.transaction(async (prisma) => {
+        for (const { id, sortOrder } of categoryOrders) {
+          await prisma.category.update({
+            where: { id },
+            data: { sortOrder },
+          });
+        }
+      });
+    } catch (error) {
+      this.handleError("Error reordering categories", error);
+      throw error;
+    }
+  }
 
-      while (currentCategoryId) {
-        const category = await this.model.findUnique({
-          where: { id: currentCategoryId },
-          select: { parentId: true },
-        });
+  /**
+   * Move category to different parent
+   */
+  async moveCategory(
+    categoryId: string,
+    newParentId: string | null
+  ): Promise<Category> {
+    try {
+      // Validate new parent exists if provided
+      if (newParentId) {
+        const newParent = await this.findById(newParentId);
+        if (!newParent) {
+          throw new AppError(
+            "New parent category not found",
+            HTTP_STATUS.BAD_REQUEST,
+            ERROR_CODES.RESOURCE_NOT_FOUND
+          );
+        }
 
-        if (!category) break;
-
-        depth++;
-        currentCategoryId = category.parentId;
+        // Prevent circular references
+        if (await this.wouldCreateCircularReference(newParentId, categoryId)) {
+          throw new AppError(
+            "Cannot create circular category reference",
+            HTTP_STATUS.BAD_REQUEST,
+            ERROR_CODES.VALIDATION_ERROR
+          );
+        }
       }
 
-      return depth;
+      return await this.update(
+        categoryId,
+        { parentId: newParentId },
+        {
+          parent: true,
+          children: {
+            where: { isActive: true },
+            orderBy: { sortOrder: "asc" },
+          },
+        }
+      );
     } catch (error) {
-      console.error(`Error getting category depth for ${categoryId}:`, error);
-      return 0;
+      this.handleError("Error moving category", error);
+      throw error;
     }
   }
 
   /**
-   * Get all descendant categories
+   * Get category statistics
    */
-  async getDescendants(categoryId: string): Promise<Category[]> {
+  async getCategoryStatistics(): Promise<{
+    totalCategories: number;
+    activeCategories: number;
+    rootCategories: number;
+    categoriesWithProducts: number;
+    averageProductsPerCategory: number;
+    maxDepth: number;
+  }> {
     try {
-      const descendants: Category[] = [];
-      const queue: string[] = [categoryId];
-
-      while (queue.length > 0) {
-        const currentId = queue.shift()!;
-
-        const children = await this.model.findMany({
-          where: { parentId: currentId },
+      const [
+        totalCategories,
+        activeCategories,
+        rootCategories,
+        categoriesWithProducts,
+        productCounts,
+      ] = await Promise.all([
+        this.count(),
+        this.count({ isActive: true }),
+        this.count({ parentId: null, isActive: true }),
+        this.count({
+          isActive: true,
+          products: {
+            some: {
+              isActive: true,
+            },
+          },
+        }),
+        this.prisma.category.findMany({
+          where: { isActive: true },
           include: {
             _count: {
               select: {
@@ -512,36 +635,57 @@ export class CategoryRepository extends BaseRepository<Category> {
               },
             },
           },
-        });
+        }),
+      ]);
 
-        for (const child of children) {
-          descendants.push(child);
-          queue.push(child.id);
-        }
-      }
+      const averageProductsPerCategory =
+        productCounts.length > 0
+          ? productCounts.reduce((sum, cat) => sum + cat._count.products, 0) /
+            productCounts.length
+          : 0;
 
-      return descendants;
+      // Calculate max depth (would need recursive query in real implementation)
+      const maxDepth = await this.calculateMaxDepth();
+
+      return {
+        totalCategories,
+        activeCategories,
+        rootCategories,
+        categoriesWithProducts,
+        averageProductsPerCategory:
+          Math.round(averageProductsPerCategory * 100) / 100,
+        maxDepth,
+      };
     } catch (error) {
-      console.error(
-        `Error getting descendants for category ${categoryId}:`,
-        error
-      );
+      this.handleError("Error getting category statistics", error);
       throw error;
     }
   }
 
   /**
-   * Delete category and handle children
+   * Bulk update category status
+   */
+  async bulkUpdateStatus(
+    categoryIds: string[],
+    isActive: boolean
+  ): Promise<{ count: number }> {
+    try {
+      return await this.updateMany({ id: { in: categoryIds } }, { isActive });
+    } catch (error) {
+      this.handleError("Error bulk updating category status", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete category (with children handling)
    */
   async deleteCategory(
     categoryId: string,
-    handleChildren:
-      | "delete"
-      | "move_to_parent"
-      | "move_to_root" = "move_to_parent"
-  ): Promise<void> {
+    strategy: "move_to_parent" | "delete_children" = "move_to_parent"
+  ): Promise<boolean> {
     try {
-      await this.db.$transaction(async (prisma) => {
+      return await this.transaction(async (prisma) => {
         const category = await prisma.category.findUnique({
           where: { id: categoryId },
           include: {
@@ -551,93 +695,121 @@ export class CategoryRepository extends BaseRepository<Category> {
         });
 
         if (!category) {
-          throw new Error("Category not found");
+          throw new AppError(
+            "Category not found",
+            HTTP_STATUS.NOT_FOUND,
+            ERROR_CODES.RESOURCE_NOT_FOUND
+          );
         }
 
         // Check if category has products
         if (category.products.length > 0) {
-          throw new Error(
-            "Cannot delete category with products. Move products first."
+          throw new AppError(
+            "Cannot delete category with products. Move products first.",
+            HTTP_STATUS.BAD_REQUEST,
+            ERROR_CODES.VALIDATION_ERROR
           );
         }
 
         // Handle children based on strategy
         if (category.children.length > 0) {
-          switch (handleChildren) {
-            case "delete":
-              // Recursively delete all children
-              for (const child of category.children) {
-                await this.deleteCategory(child.id, "delete");
-              }
-              break;
-
-            case "move_to_parent":
-              // Move children to this category's parent
-              await prisma.category.updateMany({
-                where: { parentId: categoryId },
-                data: { parentId: category.parentId },
-              });
-              break;
-
-            case "move_to_root":
-              // Move children to root level
-              await prisma.category.updateMany({
-                where: { parentId: categoryId },
-                data: { parentId: null },
-              });
-              break;
+          if (strategy === "move_to_parent") {
+            // Move children to this category's parent
+            await prisma.category.updateMany({
+              where: { parentId: categoryId },
+              data: { parentId: category.parentId },
+            });
+          } else {
+            // Delete all children (recursive)
+            for (const child of category.children) {
+              await this.deleteCategory(child.id, strategy);
+            }
           }
         }
 
-        // Delete the category
+        // Finally delete the category
         await prisma.category.delete({
           where: { id: categoryId },
         });
+
+        return true;
       });
     } catch (error) {
-      console.error(`Error deleting category ${categoryId}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Bulk update categories
-   */
-  async bulkUpdateSortOrder(
-    updates: { id: string; sortOrder: number }[]
-  ): Promise<number> {
-    try {
-      let updatedCount = 0;
-
-      await this.db.$transaction(async (prisma) => {
-        for (const update of updates) {
-          await prisma.category.update({
-            where: { id: update.id },
-            data: { sortOrder: update.sortOrder },
-          });
-          updatedCount++;
-        }
-      });
-
-      return updatedCount;
-    } catch (error) {
-      console.error("Error in bulk sort order update:", error);
+      this.handleError("Error deleting category", error);
       throw error;
     }
   }
 
   // Private helper methods
+
   private async wouldCreateCircularReference(
-    categoryId: string,
-    potentialParentId: string
+    parentId: string,
+    categoryId: string | null
   ): Promise<boolean> {
+    if (!categoryId || parentId === categoryId) {
+      return true;
+    }
+
     try {
-      // Check if potentialParentId is a descendant of categoryId
-      const descendants = await this.getDescendants(categoryId);
-      return descendants.some((desc) => desc.id === potentialParentId);
+      let currentParent = await this.findById(parentId, { parent: true });
+      const visited = new Set<string>([parentId]);
+
+      while (currentParent?.parent) {
+        if (currentParent.parent.id === categoryId) {
+          return true;
+        }
+
+        if (visited.has(currentParent.parent.id)) {
+          return true; // Already visited, circular reference exists
+        }
+
+        visited.add(currentParent.parent.id);
+        currentParent = currentParent.parent;
+      }
+
+      return false;
     } catch (error) {
-      console.error("Error checking circular reference:", error);
       return true; // Err on the side of caution
+    }
+  }
+
+  private transformCategoryWithCounts = (
+    category: any
+  ): CategoryWithProducts => {
+    return {
+      ...category,
+      productCount: category._count?.products || 0,
+      hasChildren: (category._count?.children || 0) > 0,
+    };
+  };
+
+  private async calculateMaxDepth(): Promise<number> {
+    try {
+      // Simplified depth calculation
+      // In a real implementation, you'd use a recursive CTE or similar
+      const categories = await this.prisma.category.findMany({
+        where: { isActive: true },
+        include: { parent: true },
+      });
+
+      let maxDepth = 0;
+
+      for (const category of categories) {
+        let depth = 1;
+        let current = category;
+
+        while (current.parent) {
+          depth++;
+          current = current.parent;
+          if (depth > 10) break; // Prevent infinite loops
+        }
+
+        maxDepth = Math.max(maxDepth, depth);
+      }
+
+      return maxDepth;
+    } catch (error) {
+      return 1; // Default depth
     }
   }
 }

@@ -1,6 +1,5 @@
-// src/config/database.ts
-import { PrismaClient } from '@prisma/client';
-import { config } from './environment';
+import { PrismaClient } from "@prisma/client";
+import { config } from "./environment";
 
 // Create Prisma client instance
 export const prisma = new PrismaClient({
@@ -9,7 +8,10 @@ export const prisma = new PrismaClient({
       url: config.database.url,
     },
   },
-  log: config.nodeEnv === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
+  log:
+    config.nodeEnv === "development"
+      ? ["query", "info", "warn", "error"]
+      : ["error"],
 });
 
 // Database connection management
@@ -37,9 +39,9 @@ export class DatabaseConnection {
     try {
       await this.client.$connect();
       this.isConnected = true;
-      console.log('✅ Database connected successfully');
+      console.log("✅ Database connected successfully");
     } catch (error) {
-      console.error('❌ Database connection failed:', error);
+      console.error("❌ Database connection failed:", error);
       throw error;
     }
   }
@@ -52,9 +54,9 @@ export class DatabaseConnection {
     try {
       await this.client.$disconnect();
       this.isConnected = false;
-      console.log('✅ Database disconnected successfully');
+      console.log("✅ Database disconnected successfully");
     } catch (error) {
-      console.error('❌ Database disconnection failed:', error);
+      console.error("❌ Database disconnection failed:", error);
       throw error;
     }
   }
@@ -68,7 +70,7 @@ export class DatabaseConnection {
       await this.client.$queryRaw`SELECT 1`;
       return true;
     } catch (error) {
-      console.error('❌ Database health check failed:', error);
+      console.error("❌ Database health check failed:", error);
       return false;
     }
   }
@@ -76,7 +78,7 @@ export class DatabaseConnection {
   public async executeInTransaction<T>(
     operations: (client: PrismaClient) => Promise<T>
   ): Promise<T> {
-    return await this.client.$transaction(async (transaction) => {
+    return await this.client.$transaction(async (transaction: any) => {
       return await operations(transaction);
     });
   }
@@ -86,14 +88,14 @@ export class DatabaseConnection {
 export const db = DatabaseConnection.getInstance();
 
 // Graceful shutdown handler
-process.on('SIGINT', async () => {
-  console.log('🔄 Graceful shutdown initiated...');
+process.on("SIGINT", async () => {
+  console.log("🔄 Graceful shutdown initiated...");
   await db.disconnect();
   process.exit(0);
 });
 
-process.on('SIGTERM', async () => {
-  console.log('🔄 Graceful shutdown initiated...');
+process.on("SIGTERM", async () => {
+  console.log("🔄 Graceful shutdown initiated...");
   await db.disconnect();
   process.exit(0);
 });
