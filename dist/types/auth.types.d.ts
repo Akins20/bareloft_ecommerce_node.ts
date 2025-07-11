@@ -11,19 +11,6 @@ export interface OTPCode extends BaseEntity {
     attempts: number;
     maxAttempts: number;
 }
-export interface Session extends BaseEntity {
-    userId: string;
-    sessionId: string;
-    accessToken: string;
-    refreshToken: string;
-    expiresAt: Date;
-    deviceInfo?: {
-        userAgent?: string;
-        ipAddress?: string;
-        deviceType?: 'mobile' | 'desktop' | 'tablet';
-    };
-    isActive: boolean;
-}
 export interface RequestOTPRequest {
     phoneNumber: NigerianPhoneNumber;
     purpose: OTPPurpose;

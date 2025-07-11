@@ -23,6 +23,7 @@ __exportStar(require("./auth.types"), exports);
 __exportStar(require("./user.types"), exports);
 // TODO: Add these as we create them
 __exportStar(require("./product.types"), exports);
+__exportStar(require("./session.types"), exports);
 // export * from './order.types';
 // export * from './cart.types';
 // export * from './payment.types';
