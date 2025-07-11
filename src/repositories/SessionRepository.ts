@@ -44,7 +44,7 @@ export class SessionRepository extends BaseRepository<
   /**
    * Create new session
    */
-  async create(data: CreateSessionData): Promise<Session> {
+  override async create(data: CreateSessionData): Promise<Session> {
     try {
       return await super.create({
         ...data,

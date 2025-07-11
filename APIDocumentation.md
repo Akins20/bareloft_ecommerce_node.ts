@@ -73,7 +73,7 @@ bareloft-api/
 │   │   ├── cart/(Done)
 │   │   │   └── CartController.ts      # 🛒 Shopping cart
 │   │   ├── orders/
-│   │   │   ├── OrderController.ts     # 📦 Order management
+│   │   │   ├── OrderController.ts(Done)     # 📦 Order management
 │   │   │   ├── CheckoutController.ts  # 💳 Checkout process
 │   │   │   └── TrackingController.ts  # 📍 Order tracking
 │   │   ├── users/
@@ -264,24 +264,6 @@ bareloft-api/
 │       │       ├── users.ts           # 👤 User seeds
 │       │       └── settings.ts        # ⚙️ Settings seeds
 │       └── connection.ts(Done)              # 🔗 Database connection
-│
-├── scripts/                           # 🤖 Automation Scripts
-│   ├── deploy/                        # 🚀 Deployment scripts
-│   │   ├── production.sh              # 🏭 Production deployment
-│   │   ├── staging.sh                 # 🎭 Staging deployment
-│   │   └── database.sh                # 🗄️ Database deployment
-│   ├── maintenance/                   # 🔧 Maintenance scripts
-│   │   ├── backup.sh                  # 💾 Database backup
-│   │   ├── cleanup.sh                 # 🧹 Cleanup tasks
-│   │   └── migration.sh               # 🔄 Database migrations
-│   ├── development/                   # 👨‍💻 Development scripts
-│   │   ├── seed.ts                    # 🌱 Database seeding
-│   │   ├── reset.ts                   # 🔄 Database reset
-│   │   └── start.sh                   # 🚀 Development startup
-│   └── monitoring/                    # 📊 Monitoring scripts
-│       ├── health-check.ts            # ❤️ Health monitoring
-│       ├── performance.ts             # ⚡ Performance monitoring
-│       └── alerts.ts                  # 🚨 Alert management
 │
 ├── docs/                              # 📚 Documentation
 │   ├── api/                           # 🌐 API Documentation

@@ -1,4 +1,3 @@
-// src/types/auth.types.ts
 import { BaseEntity, NigerianPhoneNumber } from './common.types';
 import { PublicUser } from './user.types';
 
@@ -19,19 +18,21 @@ export interface OTPCode extends BaseEntity {
   maxAttempts: number;
 }
 
-export interface Session extends BaseEntity {
-  userId: string;
-  sessionId: string;
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: Date;
-  deviceInfo?: {
-    userAgent?: string;
-    ipAddress?: string;
-    deviceType?: 'mobile' | 'desktop' | 'tablet';
-  };
-  isActive: boolean;
-}
+// export interface Session extends BaseEntity {
+//   ipAddress: any;
+//   lastUsedAt: boolean;
+//   userId: string;
+//   sessionId: string;
+//   accessToken: string;
+//   refreshToken: string;
+//   expiresAt: Date;
+//   deviceInfo?: {
+//     userAgent?: string;
+//     ipAddress?: string;
+//     deviceType?: 'mobile' | 'desktop' | 'tablet';
+//   };
+//   isActive: boolean;
+// }
 
 // Authentication request/response types
 export interface RequestOTPRequest {

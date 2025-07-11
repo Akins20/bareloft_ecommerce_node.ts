@@ -1,4 +1,3 @@
-// src/server.ts
 import App from './app';
 
 // Create and start the application
