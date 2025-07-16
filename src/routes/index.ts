@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { corsMiddleware } from "../middleware/security/cors";
 import { helmetMiddleware } from "../middleware/security/helmet";
 import { rateLimiter } from "../middleware/security/rateLimiter";
 import { requestLogger } from "../middleware/logging/requestLogger";

@@ -1,5 +1,6 @@
 import { BaseEntity, NigerianPhoneNumber } from './common.types';
 import { PublicUser } from './user.types';
+import { Request } from 'express';
 
 // User roles
 export type UserRole = 'customer' | 'admin' | 'super_admin';
@@ -72,7 +73,11 @@ export interface LoginRequest {
 export interface AuthResponse {
   success: boolean;
   message: string;
-  data: {
+  user: PublicUser;
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  data?: {
     user: PublicUser;
     accessToken: string;
     refreshToken: string;
@@ -85,8 +90,30 @@ export interface RefreshTokenRequest {
 }
 
 export interface RefreshTokenResponse {
+  success: boolean;
+  message: string;
   accessToken: string;
   expiresIn: number;
+  userId: string;
+}
+
+export interface OTPResponse {
+  success: boolean;
+  message: string;
+  data?: any;
+  expiresIn?: number;
+  canResendIn?: number;
+}
+
+export interface LogoutRequest {
+  refreshToken?: string;
+  logoutAllDevices?: boolean;
+}
+
+export interface AuthenticatedRequest extends Request {
+  user?: PublicUser;
+  userId?: string;
+  sessionId?: string;
 }
 
 // JWT payload interface

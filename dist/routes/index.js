@@ -4,7 +4,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const cors_1 = require("../middleware/security/cors");
 const helmet_1 = require("../middleware/security/helmet");
 const rateLimiter_1 = require("../middleware/security/rateLimiter");
 const requestLogger_1 = require("../middleware/logging/requestLogger");
@@ -29,7 +28,7 @@ const webhooks_1 = __importDefault(require("./webhooks"));
 const router = (0, express_1.Router)();
 // ==================== GLOBAL MIDDLEWARE ====================
 // Security middleware
-router.use(cors_1.corsMiddleware);
+router.use(corsMiddleware);
 router.use(helmet_1.helmetMiddleware);
 // Logging middleware
 router.use(requestLogger_1.requestLogger);

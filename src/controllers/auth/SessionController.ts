@@ -7,15 +7,8 @@ import {
   ERROR_CODES,
   ApiResponse,
   DeviceInfo,
+  AuthenticatedRequest,
 } from "../../types";
-
-interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    sessionId: string;
-    [key: string]: any;
-  };
-}
 
 interface RefreshTokenRequest {
   refreshToken: string;
@@ -119,7 +112,7 @@ export class SessionController extends BaseController {
       };
 
       this.logger.info("User logged out", {
-        userId: req.user?.id,
+        userId: req.user?.userId,
         sessionId,
         ip: req.ip,
       });
@@ -137,7 +130,7 @@ export class SessionController extends BaseController {
    */
   public logoutAllSessions = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      if (!req.user?.id) {
+      if (!req.user?.userId) {
         throw new AppError(
           "User not authenticated",
           HTTP_STATUS.UNAUTHORIZED,
@@ -145,19 +138,19 @@ export class SessionController extends BaseController {
         );
       }
 
-      const deactivatedCount = await this.sessionService.logoutAllSessions(req.user.id);
+      const deactivatedCount = await this.sessionService.logoutAllSessions(req.user.userId);
 
       const response: ApiResponse = {
         success: true,
         message: `Logged out from ${deactivatedCount} sessions`,
         data: {
           deactivatedSessions: deactivatedCount,
-          userId: req.user.id,
+          userId: req.user.userId,
         },
       };
 
       this.logger.info("User logged out from all sessions", {
-        userId: req.user.id,
+        userId: req.user.userId,
         deactivatedCount,
         ip: req.ip,
       });
@@ -175,7 +168,7 @@ export class SessionController extends BaseController {
    */
   public getActiveSessions = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      if (!req.user?.id) {
+      if (!req.user?.userId) {
         throw new AppError(
           "User not authenticated",
           HTTP_STATUS.UNAUTHORIZED,
@@ -183,7 +176,7 @@ export class SessionController extends BaseController {
         );
       }
 
-      const sessions = await this.sessionService.getUserActiveSessions(req.user.id);
+      const sessions = await this.sessionService.getUserActiveSessions(req.user.userId);
 
       // Don't expose sensitive information like tokens
       const safeSessions = sessions.map(session => ({
@@ -222,7 +215,7 @@ export class SessionController extends BaseController {
    */
   public getUserSessionAnalytics = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      if (!req.user?.id) {
+      if (!req.user?.userId) {
         throw new AppError(
           "User not authenticated",
           HTTP_STATUS.UNAUTHORIZED,
@@ -230,7 +223,7 @@ export class SessionController extends BaseController {
         );
       }
 
-      const analytics = await this.sessionService.getUserSessionAnalytics(req.user.id);
+      const analytics = await this.sessionService.getUserSessionAnalytics(req.user.userId);
 
       const response: ApiResponse = {
         success: true,
@@ -284,7 +277,7 @@ export class SessionController extends BaseController {
       };
 
       this.logger.info("Session extended", {
-        userId: req.user?.id,
+        userId: req.user?.userId,
         sessionId,
         additionalMinutes,
         ip: req.ip,
@@ -303,7 +296,7 @@ export class SessionController extends BaseController {
    */
   public getSessionStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      if (!req.user?.id || !req.user?.sessionId) {
+      if (!req.user?.userId || !req.user?.sessionId) {
         throw new AppError(
           "User not authenticated",
           HTTP_STATUS.UNAUTHORIZED,
@@ -312,14 +305,14 @@ export class SessionController extends BaseController {
       }
 
       // Get session limit info
-      const sessionLimit = await this.sessionService.checkSessionLimit(req.user.id);
+      const sessionLimit = await this.sessionService.checkSessionLimit(req.user.userId);
 
       const response: ApiResponse = {
         success: true,
         message: "Session status retrieved successfully",
         data: {
           sessionId: req.user.sessionId,
-          userId: req.user.id,
+          userId: req.user.userId,
           sessionLimit,
           currentTime: new Date(),
         },
@@ -357,7 +350,7 @@ export class SessionController extends BaseController {
       };
 
       this.logger.info("Specific session terminated", {
-        userId: req.user?.id,
+        userId: req.user?.userId,
         targetSessionId: sessionId,
         currentSessionId: req.user?.sessionId,
         ip: req.ip,

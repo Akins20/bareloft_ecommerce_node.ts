@@ -1,7 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
-import { ResponseData, PaginationMeta } from './common.types';
+import { ResponseData, PaginationMeta, PaginationParams } from './common.types';
 import { JWTPayload } from './auth.types';
 import { FileUpload } from './common.types';
+
+// Re-export for convenience
+export { PaginationParams };
+
+// Re-export auth types (explicit re-export to avoid conflicts)
+export { AuthenticatedRequest } from './auth.types';
 
 // HTTP Methods
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -146,6 +152,10 @@ export const ERROR_CODES = {
   INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
   TOKEN_EXPIRED: 'TOKEN_EXPIRED',
   TOKEN_INVALID: 'TOKEN_INVALID',
+  INVALID_TOKEN: 'INVALID_TOKEN',
+  SESSION_ERROR: 'SESSION_ERROR',
+  SESSION_EXPIRED: 'SESSION_EXPIRED',
+  NOT_AUTHENTICATED: 'NOT_AUTHENTICATED',
   UNAUTHORIZED: 'UNAUTHORIZED',
   FORBIDDEN: 'FORBIDDEN',
   

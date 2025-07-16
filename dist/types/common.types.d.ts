@@ -6,6 +6,11 @@ export interface BaseEntity {
 export declare const NIGERIAN_STATES: readonly ["Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno", "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "Gombe", "Imo", "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos", "Nasarawa", "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara", "FCT"];
 export type NigerianState = typeof NIGERIAN_STATES[number];
 export type Currency = 'NGN';
+export interface NairaCurrency {
+    amount: number;
+    currency: Currency;
+    formatted: string;
+}
 export type NigerianPhoneNumber = string;
 export interface PaginationParams {
     page?: number;

@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { ResponseData, PaginationMeta } from './common.types';
+import { ResponseData, PaginationMeta, PaginationParams } from './common.types';
 import { JWTPayload } from './auth.types';
 import { FileUpload } from './common.types';
+export { PaginationParams };
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export interface ApiResponse<T = any> extends ResponseData<T> {
 }
@@ -71,6 +72,10 @@ export declare const ERROR_CODES: {
     readonly INVALID_CREDENTIALS: "INVALID_CREDENTIALS";
     readonly TOKEN_EXPIRED: "TOKEN_EXPIRED";
     readonly TOKEN_INVALID: "TOKEN_INVALID";
+    readonly INVALID_TOKEN: "INVALID_TOKEN";
+    readonly SESSION_ERROR: "SESSION_ERROR";
+    readonly SESSION_EXPIRED: "SESSION_EXPIRED";
+    readonly NOT_AUTHENTICATED: "NOT_AUTHENTICATED";
     readonly UNAUTHORIZED: "UNAUTHORIZED";
     readonly FORBIDDEN: "FORBIDDEN";
     readonly VALIDATION_ERROR: "VALIDATION_ERROR";

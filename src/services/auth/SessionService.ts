@@ -412,4 +412,34 @@ export class SessionService extends BaseService {
       ERROR_CODES.SESSION_ERROR
     );
   }
+
+  /**
+   * Invalidate all user sessions
+   */
+  async invalidateAllUserSessions(userId: string): Promise<number> {
+    return await this.logoutAllSessions(userId);
+  }
+
+  /**
+   * Invalidate specific session
+   */
+  async invalidateSession(sessionId: string): Promise<boolean> {
+    return await this.logout(sessionId);
+  }
+
+  /**
+   * Invalidate session by access token
+   */
+  async invalidateSessionByAccessToken(accessToken: string): Promise<boolean> {
+    try {
+      const session = await this.sessionRepository.findByAccessToken(accessToken);
+      if (!session) {
+        return false;
+      }
+      return await this.logout(session.sessionId);
+    } catch (error) {
+      this.logger.error("Error invalidating session by access token", { error });
+      return false;
+    }
+  }
 }

@@ -78,8 +78,102 @@ export class CartRepository extends BaseRepository<
   CreateCartData,
   UpdateCartData
 > {
-  constructor(prisma: PrismaClient) {
-    super(prisma, "Cart");
+  constructor(prisma?: PrismaClient) {
+    super(prisma || new PrismaClient(), "Cart");
+  }
+
+  /**
+   * Find cart items by user ID
+   */
+  async findByUserId(userId: string): Promise<CartItem[]> {
+    try {
+      return await this.prisma.cartItem.findMany({
+        where: { userId },
+        include: {
+          product: {
+            include: {
+              images: true,
+              category: true,
+            },
+          },
+        },
+      });
+    } catch (error) {
+      this.handleError("Error finding cart items by user ID", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Find cart item by user and product
+   */
+  async findByUserAndProduct(userId: string, productId: string): Promise<CartItem | null> {
+    try {
+      return await this.prisma.cartItem.findFirst({
+        where: {
+          userId,
+          productId,
+        },
+        include: {
+          product: true,
+        },
+      });
+    } catch (error) {
+      this.handleError("Error finding cart item by user and product", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Find cart item by ID and user
+   */
+  async findByIdAndUser(itemId: string, userId: string): Promise<CartItem | null> {
+    try {
+      return await this.prisma.cartItem.findFirst({
+        where: {
+          id: itemId,
+          userId,
+        },
+        include: {
+          product: true,
+        },
+      });
+    } catch (error) {
+      this.handleError("Error finding cart item by ID and user", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update cart item quantity
+   */
+  async updateQuantity(itemId: string, quantity: number): Promise<CartItem> {
+    try {
+      return await this.prisma.cartItem.update({
+        where: { id: itemId },
+        data: { quantity },
+        include: {
+          product: true,
+        },
+      });
+    } catch (error) {
+      this.handleError("Error updating cart item quantity", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete cart items by user ID
+   */
+  async deleteByUserId(userId: string): Promise<void> {
+    try {
+      await this.prisma.cartItem.deleteMany({
+        where: { userId },
+      });
+    } catch (error) {
+      this.handleError("Error deleting cart items by user ID", error);
+      throw error;
+    }
   }
 
   /**

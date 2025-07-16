@@ -6,7 +6,7 @@ declare global {
  * Get or create Prisma client instance
  * Implements singleton pattern to prevent multiple connections
  */
-export declare const prisma: any;
+export declare const prisma: PrismaClient<import(".prisma/client").Prisma.PrismaClientOptions, never, import("@prisma/client/runtime/library").DefaultArgs>;
 /**
  * Database connection manager
  */

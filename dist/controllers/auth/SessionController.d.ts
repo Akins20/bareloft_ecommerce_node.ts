@@ -1,13 +1,7 @@
 import { Request, Response } from "express";
 import { BaseController } from "../BaseController";
 import { SessionService } from "../../services/auth/SessionService";
-interface AuthenticatedRequest extends Request {
-    user?: {
-        id: string;
-        sessionId: string;
-        [key: string]: any;
-    };
-}
+import { AuthenticatedRequest } from "../../types";
 export declare class SessionController extends BaseController {
     private sessionService;
     constructor(sessionService?: SessionService);
@@ -78,5 +72,4 @@ export declare class SessionController extends BaseController {
      */
     cleanupExpiredSessions: (req: Request, res: Response) => Promise<void>;
 }
-export {};
 //# sourceMappingURL=SessionController.d.ts.map

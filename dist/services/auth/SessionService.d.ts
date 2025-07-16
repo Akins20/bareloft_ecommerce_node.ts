@@ -128,6 +128,18 @@ export declare class SessionService extends BaseService {
      * Handle service errors
      */
     private handleError;
+    /**
+     * Invalidate all user sessions
+     */
+    invalidateAllUserSessions(userId: string): Promise<number>;
+    /**
+     * Invalidate specific session
+     */
+    invalidateSession(sessionId: string): Promise<boolean>;
+    /**
+     * Invalidate session by access token
+     */
+    invalidateSessionByAccessToken(accessToken: string): Promise<boolean>;
 }
 export {};
 //# sourceMappingURL=SessionService.d.ts.map

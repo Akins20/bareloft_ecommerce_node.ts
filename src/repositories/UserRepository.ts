@@ -40,8 +40,8 @@ export class UserRepository extends BaseRepository<
   CreateUserData,
   UpdateUserData
 > {
-  constructor(prisma: PrismaClient) {
-    super(prisma, "User");
+  constructor(prisma?: PrismaClient) {
+    super(prisma || new PrismaClient(), "User");
   }
 
   /**
@@ -84,6 +84,19 @@ export class UserRepository extends BaseRepository<
       );
     } catch (error) {
       this.handleError("Error finding user by email", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if email exists
+   */
+  async emailExists(email: string): Promise<boolean> {
+    try {
+      const user = await this.findFirst({ email });
+      return !!user;
+    } catch (error) {
+      this.handleError("Error checking email existence", error);
       throw error;
     }
   }

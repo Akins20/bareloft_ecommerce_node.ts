@@ -1,1 +1,1 @@
-{"version":3,"file":"WishlistItem.d.ts","sourceRoot":"","sources":["../../src/models/WishlistItem.ts"],"names":[],"mappings":"AAKA,eAAO,MAAM,iBAAiB,KAAsB,CAAC;AAGrD,eAAO,MAAM,kBAAkB,4dAc9B,CAAC;AAEF,eAAe,iBAAiB,CAAC"}
+{"version":3,"file":"WishlistItem.d.ts","sourceRoot":"","sources":["../../src/models/WishlistItem.ts"],"names":[],"mappings":"AAKA,eAAO,MAAM,iBAAiB,4GAAsB,CAAC;AAGrD,eAAO,MAAM,kBAAkB,4dAc9B,CAAC;AAEF,eAAe,iBAAiB,CAAC"}

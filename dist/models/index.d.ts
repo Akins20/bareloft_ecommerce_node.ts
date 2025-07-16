@@ -19,58 +19,58 @@ export { default as OrderTimelineEventModel, OrderTimelineEventSchema, } from ".
 export { default as CouponModel, CouponSchema } from "./Coupon";
 export { default as NotificationModel, NotificationSchema, } from "./Notification";
 export declare const ProductModels: {
-    Product: any;
-    Category: any;
-    ProductImage: any;
-    ProductReview: any;
-    WishlistItem: any;
+    Product: import(".prisma/client").Prisma.ProductDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    Category: import(".prisma/client").Prisma.CategoryDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    ProductImage: import(".prisma/client").Prisma.ProductImageDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    ProductReview: import(".prisma/client").Prisma.ProductReviewDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    WishlistItem: import(".prisma/client").Prisma.WishlistItemDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
 };
 export declare const ShoppingModels: {
     Cart: any;
-    CartItem: any;
-    Order: any;
-    OrderItem: any;
-    OrderTimelineEvent: any;
+    CartItem: import(".prisma/client").Prisma.CartItemDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    Order: import(".prisma/client").Prisma.OrderDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    OrderItem: import(".prisma/client").Prisma.OrderItemDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    OrderTimelineEvent: import(".prisma/client").Prisma.OrderTimelineEventDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
 };
 export declare const InventoryModels: {
     Inventory: any;
-    InventoryMovement: any;
-    StockReservation: any;
+    InventoryMovement: import(".prisma/client").Prisma.InventoryMovementDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    StockReservation: import(".prisma/client").Prisma.StockReservationDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
 };
 export declare const AuthModels: {
-    User: any;
-    Address: any;
-    OTPCode: any;
-    Session: any;
+    User: import(".prisma/client").Prisma.UserDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    Address: import(".prisma/client").Prisma.AddressDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    OTPCode: import(".prisma/client").Prisma.OTPCodeDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    Session: import(".prisma/client").Prisma.SessionDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
 };
 export declare const PaymentModels: {
-    PaymentTransaction: any;
-    Coupon: any;
+    PaymentTransaction: import(".prisma/client").Prisma.PaymentTransactionDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    Coupon: import(".prisma/client").Prisma.CouponDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
 };
 export declare const CommunicationModels: {
-    Notification: any;
+    Notification: import(".prisma/client").Prisma.NotificationDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
 };
 export declare const AllModels: {
-    User: any;
-    Address: any;
-    OTPCode: any;
-    Session: any;
-    Product: any;
-    Category: any;
-    ProductImage: any;
-    ProductReview: any;
-    WishlistItem: any;
+    User: import(".prisma/client").Prisma.UserDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    Address: import(".prisma/client").Prisma.AddressDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    OTPCode: import(".prisma/client").Prisma.OTPCodeDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    Session: import(".prisma/client").Prisma.SessionDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    Product: import(".prisma/client").Prisma.ProductDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    Category: import(".prisma/client").Prisma.CategoryDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    ProductImage: import(".prisma/client").Prisma.ProductImageDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    ProductReview: import(".prisma/client").Prisma.ProductReviewDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    WishlistItem: import(".prisma/client").Prisma.WishlistItemDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     Cart: any;
-    CartItem: any;
-    Order: any;
-    OrderItem: any;
-    OrderTimelineEvent: any;
+    CartItem: import(".prisma/client").Prisma.CartItemDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    Order: import(".prisma/client").Prisma.OrderDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    OrderItem: import(".prisma/client").Prisma.OrderItemDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    OrderTimelineEvent: import(".prisma/client").Prisma.OrderTimelineEventDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     Inventory: any;
-    InventoryMovement: any;
-    StockReservation: any;
-    PaymentTransaction: any;
-    Coupon: any;
-    Notification: any;
+    InventoryMovement: import(".prisma/client").Prisma.InventoryMovementDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    StockReservation: import(".prisma/client").Prisma.StockReservationDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    PaymentTransaction: import(".prisma/client").Prisma.PaymentTransactionDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    Coupon: import(".prisma/client").Prisma.CouponDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    Notification: import(".prisma/client").Prisma.NotificationDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
 };
 export declare const AllSchemas: {
     User: string;

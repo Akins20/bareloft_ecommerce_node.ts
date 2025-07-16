@@ -320,6 +320,34 @@ class SessionService extends BaseService_1.BaseService {
         }
         return new types_1.AppError(message, types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.SESSION_ERROR);
     }
+    /**
+     * Invalidate all user sessions
+     */
+    async invalidateAllUserSessions(userId) {
+        return await this.logoutAllSessions(userId);
+    }
+    /**
+     * Invalidate specific session
+     */
+    async invalidateSession(sessionId) {
+        return await this.logout(sessionId);
+    }
+    /**
+     * Invalidate session by access token
+     */
+    async invalidateSessionByAccessToken(accessToken) {
+        try {
+            const session = await this.sessionRepository.findByAccessToken(accessToken);
+            if (!session) {
+                return false;
+            }
+            return await this.logout(session.sessionId);
+        }
+        catch (error) {
+            this.logger.error("Error invalidating session by access token", { error });
+            return false;
+        }
+    }
 }
 exports.SessionService = SessionService;
 //# sourceMappingURL=SessionService.js.map

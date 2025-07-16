@@ -1,11 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UserRepository = void 0;
+const client_1 = require("@prisma/client");
 const BaseRepository_1 = require("./BaseRepository");
 const types_1 = require("../types");
 class UserRepository extends BaseRepository_1.BaseRepository {
     constructor(prisma) {
-        super(prisma, "User");
+        super(prisma || new client_1.PrismaClient(), "User");
     }
     /**
      * Find user by phone number
@@ -40,6 +41,19 @@ class UserRepository extends BaseRepository_1.BaseRepository {
         }
         catch (error) {
             this.handleError("Error finding user by email", error);
+            throw error;
+        }
+    }
+    /**
+     * Check if email exists
+     */
+    async emailExists(email) {
+        try {
+            const user = await this.findFirst({ email });
+            return !!user;
+        }
+        catch (error) {
+            this.handleError("Error checking email existence", error);
             throw error;
         }
     }

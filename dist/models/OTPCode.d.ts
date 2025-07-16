@@ -1,4 +1,4 @@
-export declare const OTPCodeModel: any;
+export declare const OTPCodeModel: import(".prisma/client").Prisma.OTPCodeDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
 export declare const OTPCodeSchema = "\nmodel OTPCode {\n  id          String   @id @default(cuid())\n  phoneNumber String   @map(\"phone_number\")\n  code        String\n  purpose     String   @default(\"login\") // login, signup, password_reset\n  expiresAt   DateTime @map(\"expires_at\")\n  isUsed      Boolean  @default(false) @map(\"is_used\")\n  attempts    Int      @default(0)\n  userId      String?  @map(\"user_id\")\n  createdAt   DateTime @default(now()) @map(\"created_at\")\n\n  // Relations\n  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@map(\"otp_codes\")\n}\n";
 export default OTPCodeModel;
 //# sourceMappingURL=OTPCode.d.ts.map

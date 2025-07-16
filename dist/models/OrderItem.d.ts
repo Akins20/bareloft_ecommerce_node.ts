@@ -1,4 +1,4 @@
-export declare const OrderItemModel: any;
+export declare const OrderItemModel: import(".prisma/client").Prisma.OrderItemDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
 export declare const OrderItemSchema = "\nmodel OrderItem {\n  id           String   @id @default(cuid())\n  orderId      String   @map(\"order_id\")\n  productId    String   @map(\"product_id\")\n  productName  String   @map(\"product_name\")\n  productSku   String   @map(\"product_sku\")\n  productImage String?  @map(\"product_image\")\n  quantity     Int\n  unitPrice    Decimal  @map(\"unit_price\") @db.Decimal(10, 2)\n  totalPrice   Decimal  @map(\"total_price\") @db.Decimal(10, 2)\n  createdAt    DateTime @default(now()) @map(\"created_at\")\n  updatedAt    DateTime @updatedAt @map(\"updated_at\")\n\n  // Relations\n  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)\n  product      Product  @relation(fields: [productId], references: [id])\n\n  @@map(\"order_items\")\n}\n";
 export default OrderItemModel;
 //# sourceMappingURL=OrderItem.d.ts.map

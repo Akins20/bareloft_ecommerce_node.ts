@@ -81,7 +81,7 @@ class OTPController extends BaseController_1.BaseController {
                     purpose,
                     reason: result.message,
                 });
-                this.sendError(res, result.message, 400, "OTP_VERIFICATION_FAILED");
+                this.sendError(res, result.message || "OTP verification failed", 400, "OTP_VERIFICATION_FAILED");
                 return;
             }
             // Log successful verification
@@ -118,7 +118,7 @@ class OTPController extends BaseController_1.BaseController {
             // Check if can resend
             const canResend = await this.otpService.canResendOTP(phoneNumber);
             if (!canResend.allowed) {
-                this.sendError(res, canResend.message, 429, "RESEND_NOT_ALLOWED");
+                this.sendError(res, canResend.message || "Resend not allowed", 429, "RESEND_NOT_ALLOWED");
                 return;
             }
             const result = await this.otpService.resendOTP(phoneNumber, purpose || "login");
@@ -184,11 +184,11 @@ class OTPController extends BaseController_1.BaseController {
                 this.sendError(res, "Valid Nigerian phone number is required", 400, "INVALID_PHONE");
                 return;
             }
-            const attempts = await this.otpService.getRemainingAttempts(phoneNumber);
+            const attempts = await this.otpService.getRemainingAttempts(phoneNumber, "login");
             const response = {
                 success: true,
                 message: "Attempts information retrieved successfully",
-                data: attempts,
+                data: { attemptsRemaining: attempts, maxAttempts: 3 },
             };
             res.json(response);
         }

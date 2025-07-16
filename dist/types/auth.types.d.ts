@@ -1,5 +1,6 @@
 import { BaseEntity, NigerianPhoneNumber } from './common.types';
 import { PublicUser } from './user.types';
+import { Request } from 'express';
 export type UserRole = 'customer' | 'admin' | 'super_admin';
 export type OTPPurpose = 'login' | 'signup' | 'password_reset' | 'phone_verification';
 export interface OTPCode extends BaseEntity {
@@ -43,7 +44,11 @@ export interface LoginRequest {
 export interface AuthResponse {
     success: boolean;
     message: string;
-    data: {
+    user: PublicUser;
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+    data?: {
         user: PublicUser;
         accessToken: string;
         refreshToken: string;
@@ -54,8 +59,27 @@ export interface RefreshTokenRequest {
     refreshToken: string;
 }
 export interface RefreshTokenResponse {
+    success: boolean;
+    message: string;
     accessToken: string;
     expiresIn: number;
+    userId: string;
+}
+export interface OTPResponse {
+    success: boolean;
+    message: string;
+    data?: any;
+    expiresIn?: number;
+    canResendIn?: number;
+}
+export interface LogoutRequest {
+    refreshToken?: string;
+    logoutAllDevices?: boolean;
+}
+export interface AuthenticatedRequest extends Request {
+    user?: PublicUser;
+    userId?: string;
+    sessionId?: string;
 }
 export interface JWTPayload {
     userId: string;

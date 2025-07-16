@@ -1,4 +1,4 @@
-export declare const ProductImageModel: any;
+export declare const ProductImageModel: import(".prisma/client").Prisma.ProductImageDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
 export declare const ProductImageSchema = "\nmodel ProductImage {\n  id        String   @id @default(cuid())\n  productId String   @map(\"product_id\")\n  imageUrl  String   @map(\"image_url\")\n  altText   String?  @map(\"alt_text\")\n  sortOrder Int      @default(0) @map(\"sort_order\")\n  isPrimary Boolean  @default(false) @map(\"is_primary\")\n  createdAt DateTime @default(now()) @map(\"created_at\")\n\n  // Relations\n  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)\n\n  @@map(\"product_images\")\n}\n";
 export default ProductImageModel;
 //# sourceMappingURL=ProductImage.d.ts.map

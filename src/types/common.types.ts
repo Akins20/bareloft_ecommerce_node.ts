@@ -22,6 +22,12 @@ export interface BaseEntity {
   // Currency types
   export type Currency = 'NGN';
   
+  export interface NairaCurrency {
+    amount: number;
+    currency: Currency;
+    formatted: string;
+  }
+  
   // Phone number validation type
   export type NigerianPhoneNumber = string; // Format: +234XXXXXXXXXX
   

@@ -64,7 +64,7 @@ class SessionController extends BaseController_1.BaseController {
                 data: { sessionId },
             };
             this.logger.info("User logged out", {
-                userId: req.user?.id,
+                userId: req.user?.userId,
                 sessionId,
                 ip: req.ip,
             });
@@ -81,20 +81,20 @@ class SessionController extends BaseController_1.BaseController {
      */
     logoutAllSessions = async (req, res) => {
         try {
-            if (!req.user?.id) {
+            if (!req.user?.userId) {
                 throw new types_1.AppError("User not authenticated", types_1.HTTP_STATUS.UNAUTHORIZED, types_1.ERROR_CODES.NOT_AUTHENTICATED);
             }
-            const deactivatedCount = await this.sessionService.logoutAllSessions(req.user.id);
+            const deactivatedCount = await this.sessionService.logoutAllSessions(req.user.userId);
             const response = {
                 success: true,
                 message: `Logged out from ${deactivatedCount} sessions`,
                 data: {
                     deactivatedSessions: deactivatedCount,
-                    userId: req.user.id,
+                    userId: req.user.userId,
                 },
             };
             this.logger.info("User logged out from all sessions", {
-                userId: req.user.id,
+                userId: req.user.userId,
                 deactivatedCount,
                 ip: req.ip,
             });
@@ -111,10 +111,10 @@ class SessionController extends BaseController_1.BaseController {
      */
     getActiveSessions = async (req, res) => {
         try {
-            if (!req.user?.id) {
+            if (!req.user?.userId) {
                 throw new types_1.AppError("User not authenticated", types_1.HTTP_STATUS.UNAUTHORIZED, types_1.ERROR_CODES.NOT_AUTHENTICATED);
             }
-            const sessions = await this.sessionService.getUserActiveSessions(req.user.id);
+            const sessions = await this.sessionService.getUserActiveSessions(req.user.userId);
             // Don't expose sensitive information like tokens
             const safeSessions = sessions.map(session => ({
                 id: session.id,
@@ -150,10 +150,10 @@ class SessionController extends BaseController_1.BaseController {
      */
     getUserSessionAnalytics = async (req, res) => {
         try {
-            if (!req.user?.id) {
+            if (!req.user?.userId) {
                 throw new types_1.AppError("User not authenticated", types_1.HTTP_STATUS.UNAUTHORIZED, types_1.ERROR_CODES.NOT_AUTHENTICATED);
             }
-            const analytics = await this.sessionService.getUserSessionAnalytics(req.user.id);
+            const analytics = await this.sessionService.getUserSessionAnalytics(req.user.userId);
             const response = {
                 success: true,
                 message: "Session analytics retrieved successfully",
@@ -192,7 +192,7 @@ class SessionController extends BaseController_1.BaseController {
                 },
             };
             this.logger.info("Session extended", {
-                userId: req.user?.id,
+                userId: req.user?.userId,
                 sessionId,
                 additionalMinutes,
                 ip: req.ip,
@@ -210,17 +210,17 @@ class SessionController extends BaseController_1.BaseController {
      */
     getSessionStatus = async (req, res) => {
         try {
-            if (!req.user?.id || !req.user?.sessionId) {
+            if (!req.user?.userId || !req.user?.sessionId) {
                 throw new types_1.AppError("User not authenticated", types_1.HTTP_STATUS.UNAUTHORIZED, types_1.ERROR_CODES.NOT_AUTHENTICATED);
             }
             // Get session limit info
-            const sessionLimit = await this.sessionService.checkSessionLimit(req.user.id);
+            const sessionLimit = await this.sessionService.checkSessionLimit(req.user.userId);
             const response = {
                 success: true,
                 message: "Session status retrieved successfully",
                 data: {
                     sessionId: req.user.sessionId,
-                    userId: req.user.id,
+                    userId: req.user.userId,
                     sessionLimit,
                     currentTime: new Date(),
                 },
@@ -249,7 +249,7 @@ class SessionController extends BaseController_1.BaseController {
                 data: { sessionId },
             };
             this.logger.info("Specific session terminated", {
-                userId: req.user?.id,
+                userId: req.user?.userId,
                 targetSessionId: sessionId,
                 currentSessionId: req.user?.sessionId,
                 ip: req.ip,

@@ -124,7 +124,7 @@ export class OTPController extends BaseController {
           reason: result.message,
         });
 
-        this.sendError(res, result.message, 400, "OTP_VERIFICATION_FAILED");
+        this.sendError(res, result.message || "OTP verification failed", 400, "OTP_VERIFICATION_FAILED");
         return;
       }
 
@@ -171,7 +171,7 @@ export class OTPController extends BaseController {
       // Check if can resend
       const canResend = await this.otpService.canResendOTP(phoneNumber);
       if (!canResend.allowed) {
-        this.sendError(res, canResend.message, 429, "RESEND_NOT_ALLOWED");
+        this.sendError(res, canResend.message || "Resend not allowed", 429, "RESEND_NOT_ALLOWED");
         return;
       }
 
@@ -267,7 +267,7 @@ export class OTPController extends BaseController {
         return;
       }
 
-      const attempts = await this.otpService.getRemainingAttempts(phoneNumber);
+      const attempts = await this.otpService.getRemainingAttempts(phoneNumber, "login");
 
       const response: ApiResponse<{
         attemptsRemaining: number;
@@ -275,7 +275,7 @@ export class OTPController extends BaseController {
       }> = {
         success: true,
         message: "Attempts information retrieved successfully",
-        data: attempts,
+        data: { attemptsRemaining: attempts, maxAttempts: 3 },
       };
 
       res.json(response);

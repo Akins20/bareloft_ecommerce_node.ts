@@ -1,4 +1,4 @@
-export declare const CartItemModel: any;
+export declare const CartItemModel: import(".prisma/client").Prisma.CartItemDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
 export declare const CartItemSchema = "\nmodel CartItem {\n  id         String   @id @default(cuid())\n  cartId     String   @map(\"cart_id\")\n  productId  String   @map(\"product_id\")\n  quantity   Int\n  unitPrice  Decimal  @map(\"unit_price\") @db.Decimal(10, 2)\n  totalPrice Decimal  @map(\"total_price\") @db.Decimal(10, 2)\n  createdAt  DateTime @default(now()) @map(\"created_at\")\n  updatedAt  DateTime @updatedAt @map(\"updated_at\")\n\n  // Relations\n  cart       Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)\n  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)\n\n  @@unique([cartId, productId])\n  @@map(\"cart_items\")\n}\n";
 export default CartItemModel;
 //# sourceMappingURL=CartItem.d.ts.map

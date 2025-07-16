@@ -209,7 +209,7 @@ export class AuthService {
       }
 
       // Verify code
-      const isValidCode = await this.otpService.verifyOTP(otpRecord.code, code);
+      const isValidCode = await this.otpService.verifyOTPCode(otpRecord.code, code);
 
       if (!isValidCode) {
         // Increment attempts
@@ -299,7 +299,7 @@ export class AuthService {
         firstName,
         lastName,
         email,
-        role: "customer",
+        role: "CUSTOMER",
       });
 
       // Mark user as verified (OTP was verified)
@@ -464,8 +464,11 @@ export class AuthService {
       );
 
       return {
+        success: true,
+        message: "Token refreshed successfully",
         accessToken: newAccessToken,
         expiresIn: this.jwtService.getAccessTokenExpiresIn(),
+        userId: user.id,
       };
     } catch (error) {
       if (error instanceof AppError) {
@@ -614,5 +617,48 @@ export class AuthService {
       isVerified: sanitized.isVerified,
       createdAt: sanitized.createdAt,
     };
+  }
+
+  /**
+   * Find user by phone number
+   */
+  async findUserByPhone(phoneNumber: NigerianPhoneNumber): Promise<User | null> {
+    return await this.userRepository.findByPhoneNumber(phoneNumber);
+  }
+
+  /**
+   * Find user by email
+   */
+  async findUserByEmail(email: string): Promise<User | null> {
+    return await this.userRepository.findByEmail(email);
+  }
+
+  /**
+   * Update user last login
+   */
+  async updateLastLogin(userId: string): Promise<void> {
+    await this.userRepository.updateLastLogin(userId);
+  }
+
+  /**
+   * Find user by ID
+   */
+  async findUserById(userId: string): Promise<User | null> {
+    return await this.userRepository.findById(userId);
+  }
+
+  /**
+   * Get current user (sanitized)
+   */
+  async getCurrentUser(userId: string): Promise<any> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new AppError(
+        "User not found",
+        HTTP_STATUS.NOT_FOUND,
+        ERROR_CODES.RESOURCE_NOT_FOUND
+      );
+    }
+    return this.sanitizeUser(user);
   }
 }

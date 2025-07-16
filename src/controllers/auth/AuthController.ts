@@ -116,6 +116,8 @@ export class AuthController extends BaseController {
         success: true,
         message: "Account created successfully",
         data: {
+          success: true,
+          message: "Account created successfully",
           user: result.user,
           accessToken: result.accessToken,
           refreshToken: result.refreshToken,
@@ -171,11 +173,7 @@ export class AuthController extends BaseController {
       }
 
       // Update last login
-      await this.authService.updateLastLogin(result.user.id, {
-        ipAddress: req.ip,
-        userAgent: req.get("User-Agent"),
-        timestamp: new Date(),
-      });
+      await this.authService.updateLastLogin(result.user.id);
 
       // Log successful login
       this.logAction("USER_LOGIN", result.user.id, "USER", result.user.id, {
@@ -188,6 +186,8 @@ export class AuthController extends BaseController {
         success: true,
         message: "Login successful",
         data: {
+          success: true,
+          message: "Login successful",
           user: result.user,
           accessToken: result.accessToken,
           refreshToken: result.refreshToken,
@@ -345,7 +345,7 @@ export class AuthController extends BaseController {
           reason: result.message,
         });
 
-        this.sendError(res, result.message, 400, "OTP_VERIFICATION_FAILED");
+        this.sendError(res, result.message || "OTP verification failed", 400, "OTP_VERIFICATION_FAILED");
         return;
       }
 
@@ -385,7 +385,7 @@ export class AuthController extends BaseController {
         return;
       }
 
-      const result = await this.authService.refreshToken(refreshToken);
+      const result = await this.authService.refreshToken({ refreshToken });
 
       if (!result.success) {
         this.sendError(res, result.message, 401, "INVALID_REFRESH_TOKEN");
@@ -462,7 +462,7 @@ export class AuthController extends BaseController {
         message: logoutAllDevices
           ? "Logged out from all devices"
           : "Logged out successfully",
-        data: { sessionsInvalidated: result.invalidatedCount || 1 },
+        data: { sessionsInvalidated: typeof result === 'number' ? result : 1 },
       };
 
       res.json(response);

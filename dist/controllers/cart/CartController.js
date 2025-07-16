@@ -14,8 +14,8 @@ class CartController extends BaseController_1.BaseController {
      */
     getCart = async (req, res) => {
         try {
-            const userId = req.user?.id;
-            const sessionId = req.sessionID || req.headers["x-session-id"];
+            const userId = req.user?.userId;
+            const sessionId = req.sessionId || req.headers["x-session-id"];
             if (!userId && !sessionId) {
                 res.status(400).json({
                     success: false,
@@ -23,7 +23,20 @@ class CartController extends BaseController_1.BaseController {
                 });
                 return;
             }
-            const cart = await this.cartService.getCart(userId, sessionId);
+            const cartSummary = await this.cartService.getCart(userId);
+            // Convert CartSummary to Cart type for compatibility
+            const cart = {
+                id: `cart_${userId}`,
+                userId,
+                items: cartSummary.items,
+                subtotal: cartSummary.subtotal,
+                estimatedTax: cartSummary.tax,
+                estimatedShipping: 0,
+                estimatedTotal: cartSummary.total,
+                currency: "NGN",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            };
             const response = {
                 success: true,
                 message: "Cart retrieved successfully",
@@ -41,8 +54,8 @@ class CartController extends BaseController_1.BaseController {
      */
     addToCart = async (req, res) => {
         try {
-            const userId = req.user?.id;
-            const sessionId = req.sessionID || req.headers["x-session-id"];
+            const userId = req.user?.userId;
+            const sessionId = req.sessionId || req.headers["x-session-id"];
             const { productId, quantity } = req.body;
             // Validate input
             const validationErrors = this.validateAddToCartRequest({
@@ -57,18 +70,33 @@ class CartController extends BaseController_1.BaseController {
                 });
                 return;
             }
-            const result = await this.cartService.addToCart(userId, sessionId, {
+            const cartItem = await this.cartService.addToCart(userId, {
                 productId,
                 quantity,
             });
+            // Create mock cart object for response
+            const cart = {
+                id: `cart_${userId}`,
+                userId,
+                items: [cartItem],
+                subtotal: cartItem.price * cartItem.quantity,
+                estimatedTax: 0,
+                estimatedShipping: 0,
+                estimatedTotal: cartItem.price * cartItem.quantity,
+                currency: "NGN",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            };
             const response = {
                 success: true,
-                message: result.success
-                    ? "Item added to cart successfully"
-                    : "Failed to add item to cart",
-                data: result,
+                message: "Item added to cart successfully",
+                data: {
+                    success: true,
+                    message: "Item added to cart successfully",
+                    cart,
+                },
             };
-            res.status(result.success ? 200 : 400).json(response);
+            res.status(200).json(response);
         }
         catch (error) {
             this.handleError(error, req, res);
@@ -80,12 +108,12 @@ class CartController extends BaseController_1.BaseController {
      */
     updateCartItem = async (req, res) => {
         try {
-            const userId = req.user?.id;
-            const sessionId = req.sessionID || req.headers["x-session-id"];
-            const { productId, quantity } = req.body;
+            const userId = req.user?.userId;
+            const sessionId = req.sessionId || req.headers["x-session-id"];
+            const { quantity } = req.body;
+            const { itemId } = req.params;
             // Validate input
             const validationErrors = this.validateUpdateCartRequest({
-                productId,
                 quantity,
             });
             if (validationErrors.length > 0) {
@@ -119,8 +147,8 @@ class CartController extends BaseController_1.BaseController {
      */
     removeFromCart = async (req, res) => {
         try {
-            const userId = req.user?.id;
-            const sessionId = req.sessionID || req.headers["x-session-id"];
+            const userId = req.user?.userId;
+            const sessionId = req.sessionId || req.headers["x-session-id"];
             const { productId } = req.params;
             if (!productId) {
                 res.status(400).json({
@@ -151,8 +179,8 @@ class CartController extends BaseController_1.BaseController {
      */
     clearCart = async (req, res) => {
         try {
-            const userId = req.user?.id;
-            const sessionId = req.sessionID || req.headers["x-session-id"];
+            const userId = req.user?.userId;
+            const sessionId = req.sessionId || req.headers["x-session-id"];
             const result = await this.cartService.clearCart(userId, sessionId);
             const response = {
                 success: true,
@@ -171,8 +199,8 @@ class CartController extends BaseController_1.BaseController {
      */
     applyCoupon = async (req, res) => {
         try {
-            const userId = req.user?.id;
-            const sessionId = req.sessionID || req.headers["x-session-id"];
+            const userId = req.user?.userId;
+            const sessionId = req.sessionId || req.headers["x-session-id"];
             const { couponCode } = req.body;
             if (!couponCode || couponCode.trim().length === 0) {
                 res.status(400).json({
@@ -203,8 +231,8 @@ class CartController extends BaseController_1.BaseController {
      */
     removeCoupon = async (req, res) => {
         try {
-            const userId = req.user?.id;
-            const sessionId = req.sessionID || req.headers["x-session-id"];
+            const userId = req.user?.userId;
+            const sessionId = req.sessionId || req.headers["x-session-id"];
             const result = await this.cartService.removeCoupon(userId, sessionId);
             const response = {
                 success: true,
@@ -223,8 +251,8 @@ class CartController extends BaseController_1.BaseController {
      */
     updateShipping = async (req, res) => {
         try {
-            const userId = req.user?.id;
-            const sessionId = req.sessionID || req.headers["x-session-id"];
+            const userId = req.user?.userId;
+            const sessionId = req.sessionId || req.headers["x-session-id"];
             const { state, city, postalCode } = req.body;
             // Validate Nigerian states
             const validationErrors = this.validateShippingAddress({
@@ -262,8 +290,8 @@ class CartController extends BaseController_1.BaseController {
      */
     validateCart = async (req, res) => {
         try {
-            const userId = req.user?.id;
-            const sessionId = req.sessionID || req.headers["x-session-id"];
+            const userId = req.user?.userId;
+            const sessionId = req.sessionId || req.headers["x-session-id"];
             const validation = await this.cartService.validateCart(userId, sessionId);
             const response = {
                 success: true,
@@ -282,8 +310,8 @@ class CartController extends BaseController_1.BaseController {
      */
     getCartItemCount = async (req, res) => {
         try {
-            const userId = req.user?.id;
-            const sessionId = req.sessionID || req.headers["x-session-id"];
+            const userId = req.user?.userId;
+            const sessionId = req.sessionId || req.headers["x-session-id"];
             const count = await this.cartService.getCartItemCount(userId, sessionId);
             const response = {
                 success: true,
@@ -302,7 +330,7 @@ class CartController extends BaseController_1.BaseController {
      */
     mergeCart = async (req, res) => {
         try {
-            const userId = req.user?.id;
+            const userId = req.user?.userId;
             const { guestSessionId, strategy } = req.body;
             if (!userId) {
                 res.status(401).json({
@@ -336,8 +364,8 @@ class CartController extends BaseController_1.BaseController {
      */
     calculateShipping = async (req, res) => {
         try {
-            const userId = req.user?.id;
-            const sessionId = req.sessionID || req.headers["x-session-id"];
+            const userId = req.user?.userId;
+            const sessionId = req.sessionId || req.headers["x-session-id"];
             const { state, city, postalCode } = req.body;
             if (!state || !city) {
                 res.status(400).json({
@@ -364,7 +392,7 @@ class CartController extends BaseController_1.BaseController {
      */
     saveForLater = async (req, res) => {
         try {
-            const userId = req.user?.id;
+            const userId = req.user?.userId;
             const { productId } = req.params;
             if (!userId) {
                 res.status(401).json({
@@ -393,7 +421,7 @@ class CartController extends BaseController_1.BaseController {
      */
     moveToCart = async (req, res) => {
         try {
-            const userId = req.user?.id;
+            const userId = req.user?.userId;
             const { productId } = req.params;
             const { quantity } = req.body;
             if (!userId) {

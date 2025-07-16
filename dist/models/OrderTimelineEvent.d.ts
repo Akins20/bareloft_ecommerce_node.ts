@@ -1,4 +1,4 @@
-export declare const OrderTimelineEventModel: any;
+export declare const OrderTimelineEventModel: import(".prisma/client").Prisma.OrderTimelineEventDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
 export declare const OrderTimelineEventSchema = "\nmodel OrderTimelineEvent {\n  id          String      @id @default(cuid())\n  orderId     String      @map(\"order_id\")\n  status      OrderStatus\n  description String\n  notes       String?\n  createdBy   String?     @map(\"created_by\")\n  createdAt   DateTime    @default(now()) @map(\"created_at\")\n\n  // Relations\n  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)\n\n  @@map(\"order_timeline_events\")\n}\n";
 export default OrderTimelineEventModel;
 //# sourceMappingURL=OrderTimelineEvent.d.ts.map

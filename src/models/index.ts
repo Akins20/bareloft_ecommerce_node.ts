@@ -14,7 +14,7 @@ import OrderModel, { OrderSchema } from "./Order";
 import OrderItemModel, { OrderItemSchema } from "./OrderItem";
 import OrderTimelineEventModel from "./OrderTimelineEvent";
 import OTPCodeModel from "./OTPCode";
-import PaymentTransactionModel from "./PaymentTransactio";
+import PaymentTransactionModel from "./PaymentTransaction";
 import ProductModel, { ProductSchema } from "./Product";
 import ProductImageModel from "./ProductImage";
 import ProductReviewModel from "./ProductReview";

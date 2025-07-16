@@ -8,7 +8,7 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { UserRepository } from "../../repositories/UserRepository";
 import { SessionRepository } from "../../repositories/SessionRepository";
-import { environment } from "../../config/environment";
+import { config } from "../../config/environment";
 import { logger } from "../../utils/logger/winston";
 import { UserRole } from "../../types/user.types";
 
@@ -75,7 +75,7 @@ export const authenticate = async (
     // Verify JWT token
     let decoded: JWTPayload;
     try {
-      decoded = jwt.verify(token, environment.JWT_SECRET) as JWTPayload;
+      decoded = jwt.verify(token, config.jwt.secret) as JWTPayload;
     } catch (jwtError) {
       logger.warn("Invalid JWT token", {
         ip: req.ip,

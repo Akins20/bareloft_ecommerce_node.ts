@@ -53,7 +53,27 @@ export interface CartWithDetails extends Cart {
     isValid: boolean;
 }
 export declare class CartRepository extends BaseRepository<Cart, CreateCartData, UpdateCartData> {
-    constructor(prisma: PrismaClient);
+    constructor(prisma?: PrismaClient);
+    /**
+     * Find cart items by user ID
+     */
+    findByUserId(userId: string): Promise<CartItem[]>;
+    /**
+     * Find cart item by user and product
+     */
+    findByUserAndProduct(userId: string, productId: string): Promise<CartItem | null>;
+    /**
+     * Find cart item by ID and user
+     */
+    findByIdAndUser(itemId: string, userId: string): Promise<CartItem | null>;
+    /**
+     * Update cart item quantity
+     */
+    updateQuantity(itemId: string, quantity: number): Promise<CartItem>;
+    /**
+     * Delete cart items by user ID
+     */
+    deleteByUserId(userId: string): Promise<void>;
     /**
      * Get or create cart for user
      */

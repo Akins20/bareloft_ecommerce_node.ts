@@ -42,7 +42,7 @@ const authenticate = async (req, res, next) => {
         // Verify JWT token
         let decoded;
         try {
-            decoded = jsonwebtoken_1.default.verify(token, environment_1.environment.JWT_SECRET);
+            decoded = jsonwebtoken_1.default.verify(token, environment_1.config.JWT_SECRET);
         }
         catch (jwtError) {
             winston_1.logger.warn("Invalid JWT token", {

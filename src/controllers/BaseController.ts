@@ -3,6 +3,8 @@ import { ApiResponse } from "../types/api.types";
 import { logger } from "../utils/logger/winston";
 
 export abstract class BaseController {
+  protected logger = logger;
+
   /**
    * Handle errors in a consistent way across all controllers
    */

@@ -52,5 +52,63 @@ export declare class OTPService {
      * Verify backup code
      */
     verifyBackupCode(hashedCode: string, providedCode: string): boolean;
+    /**
+     * Verify OTP - simple string comparison
+     */
+    verifyOTPCode(storedOTP: string, providedOTP: string): Promise<boolean>;
+    /**
+     * Check rate limiting for OTP requests
+     */
+    checkRateLimit(identifier: string): Promise<boolean>;
+    /**
+     * Generate OTP and send it
+     */
+    generateAndSendOTP(phoneNumber: string, purpose: string): Promise<{
+        success: boolean;
+        message: string;
+        expiresIn: number;
+        canResendIn: number;
+    }>;
+    /**
+     * Verify OTP with three parameters (for controller compatibility)
+     */
+    verifyOTP(phoneNumber: string, code: string, purpose: string): Promise<{
+        success: boolean;
+        message?: string;
+        userId?: string;
+        token?: string;
+    }>;
+    /**
+     * Generate alphanumeric OTP
+     */
+    private generateAlphanumericOTP;
+    /**
+     * Check if user can resend OTP
+     */
+    canResendOTP(phoneNumber: string): Promise<{
+        allowed: boolean;
+        message?: string;
+    }>;
+    /**
+     * Resend OTP
+     */
+    resendOTP(phoneNumber: string, purpose: string): Promise<{
+        success: boolean;
+        message: string;
+        expiresIn: number;
+        canResendIn: number;
+    }>;
+    /**
+     * Get OTP status
+     */
+    getOTPStatus(phoneNumber: string, purpose: string): Promise<{
+        exists: boolean;
+        expiresIn?: number;
+        attemptsLeft?: number;
+    }>;
+    /**
+     * Get remaining attempts
+     */
+    getRemainingAttempts(phoneNumber: string, purpose: string): Promise<number>;
 }
 //# sourceMappingURL=OTPService.d.ts.map

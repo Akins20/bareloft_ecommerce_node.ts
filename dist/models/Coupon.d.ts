@@ -1,4 +1,4 @@
-export declare const CouponModel: any;
+export declare const CouponModel: import(".prisma/client").Prisma.CouponDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
 export declare const CouponSchema = "\nmodel Coupon {\n  id                String    @id @default(cuid())\n  code              String    @unique\n  name              String\n  description       String?\n  discountType      String    // percentage, fixed\n  discountValue     Decimal   @map(\"discount_value\") @db.Decimal(10, 2)\n  minimumAmount     Decimal?  @map(\"minimum_amount\") @db.Decimal(10, 2)\n  usageLimit        Int?      @map(\"usage_limit\")\n  usageCount        Int       @default(0) @map(\"usage_count\")\n  userUsageLimit    Int?      @map(\"user_usage_limit\")\n  isActive          Boolean   @default(true) @map(\"is_active\")\n  startsAt          DateTime? @map(\"starts_at\")\n  expiresAt         DateTime? @map(\"expires_at\")\n  createdAt         DateTime  @default(now()) @map(\"created_at\")\n  updatedAt         DateTime  @updatedAt @map(\"updated_at\")\n\n  @@map(\"coupons\")\n}\n";
 export default CouponModel;
 //# sourceMappingURL=Coupon.d.ts.map

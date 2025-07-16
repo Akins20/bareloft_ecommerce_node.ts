@@ -126,7 +126,7 @@ class AuthService {
                 throw new api_types_1.AppError("Maximum OTP attempts exceeded. Request a new code.", api_types_1.HTTP_STATUS.BAD_REQUEST, api_types_1.ERROR_CODES.INVALID_INPUT);
             }
             // Verify code
-            const isValidCode = await this.otpService.verifyOTP(otpRecord.code, code);
+            const isValidCode = await this.otpService.verifyOTPCode(otpRecord.code, code);
             if (!isValidCode) {
                 // Increment attempts
                 await this.otpRepository.incrementAttempts(otpRecord.id);
@@ -184,7 +184,7 @@ class AuthService {
                 firstName,
                 lastName,
                 email,
-                role: "customer",
+                role: "CUSTOMER",
             });
             // Mark user as verified (OTP was verified)
             await this.userRepository.verifyUser(user.id);
@@ -292,8 +292,11 @@ class AuthService {
             // Update session with new access token
             await this.sessionRepository.updateTokens(session.id, newAccessToken, refreshToken);
             return {
+                success: true,
+                message: "Token refreshed successfully",
                 accessToken: newAccessToken,
                 expiresIn: this.jwtService.getAccessTokenExpiresIn(),
+                userId: user.id,
             };
         }
         catch (error) {
@@ -405,6 +408,40 @@ class AuthService {
             isVerified: sanitized.isVerified,
             createdAt: sanitized.createdAt,
         };
+    }
+    /**
+     * Find user by phone number
+     */
+    async findUserByPhone(phoneNumber) {
+        return await this.userRepository.findByPhoneNumber(phoneNumber);
+    }
+    /**
+     * Find user by email
+     */
+    async findUserByEmail(email) {
+        return await this.userRepository.findByEmail(email);
+    }
+    /**
+     * Update user last login
+     */
+    async updateLastLogin(userId) {
+        await this.userRepository.updateLastLogin(userId);
+    }
+    /**
+     * Find user by ID
+     */
+    async findUserById(userId) {
+        return await this.userRepository.findById(userId);
+    }
+    /**
+     * Get current user (sanitized)
+     */
+    async getCurrentUser(userId) {
+        const user = await this.userRepository.findById(userId);
+        if (!user) {
+            throw new api_types_1.AppError("User not found", api_types_1.HTTP_STATUS.NOT_FOUND, api_types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+        }
+        return this.sanitizeUser(user);
     }
 }
 exports.AuthService = AuthService;

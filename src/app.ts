@@ -139,7 +139,7 @@ class App {
         limit: "10mb",
         verify: (req, res, buf) => {
           // Store raw body for webhook verification
-          if (req.url.startsWith("/webhooks/")) {
+          if (req.url?.startsWith("/webhooks/")) {
             (req as any).rawBody = buf;
           }
         },
@@ -163,7 +163,7 @@ class App {
     this.app.use(requestLogger);
 
     // Global rate limiting
-    this.app.use(rateLimiter);
+    this.app.use(rateLimiter.general);
 
     // Health check endpoint (before auth middleware)
     this.app.get("/health", this.healthCheck.bind(this));

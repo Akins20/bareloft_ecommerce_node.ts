@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 export declare abstract class BaseController {
+    protected logger: import("winston").Logger;
     /**
      * Handle errors in a consistent way across all controllers
      */

@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.BaseController = void 0;
 const winston_1 = require("../utils/logger/winston");
 class BaseController {
+    logger = winston_1.logger;
     /**
      * Handle errors in a consistent way across all controllers
      */

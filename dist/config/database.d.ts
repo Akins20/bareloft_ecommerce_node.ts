@@ -1,5 +1,12 @@
 import { PrismaClient } from "@prisma/client";
-export declare const prisma: any;
+export declare const prisma: PrismaClient<{
+    datasources: {
+        db: {
+            url: string;
+        };
+    };
+    log: ("error" | "query" | "warn" | "info")[];
+}, never, import("@prisma/client/runtime/library").DefaultArgs>;
 export declare class DatabaseConnection {
     private static instance;
     private client;

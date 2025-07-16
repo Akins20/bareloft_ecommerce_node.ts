@@ -52,7 +52,7 @@ const Order_1 = __importStar(require("./Order"));
 const OrderItem_1 = __importStar(require("./OrderItem"));
 const OrderTimelineEvent_1 = __importDefault(require("./OrderTimelineEvent"));
 const OTPCode_1 = __importDefault(require("./OTPCode"));
-const PaymentTransactio_1 = __importDefault(require("./PaymentTransactio"));
+const PaymentTransaction_1 = __importDefault(require("./PaymentTransaction"));
 const Product_1 = __importStar(require("./Product"));
 const ProductImage_1 = __importDefault(require("./ProductImage"));
 const ProductReview_1 = __importDefault(require("./ProductReview"));
@@ -112,9 +112,9 @@ var Session_2 = require("./Session");
 Object.defineProperty(exports, "SessionModel", { enumerable: true, get: function () { return __importDefault(Session_2).default; } });
 Object.defineProperty(exports, "SessionSchema", { enumerable: true, get: function () { return Session_2.SessionSchema; } });
 // Payment & Transaction Models
-var PaymentTransaction_1 = require("./PaymentTransaction");
-Object.defineProperty(exports, "PaymentTransactionModel", { enumerable: true, get: function () { return __importDefault(PaymentTransaction_1).default; } });
-Object.defineProperty(exports, "PaymentTransactionSchema", { enumerable: true, get: function () { return PaymentTransaction_1.PaymentTransactionSchema; } });
+var PaymentTransaction_2 = require("./PaymentTransaction");
+Object.defineProperty(exports, "PaymentTransactionModel", { enumerable: true, get: function () { return __importDefault(PaymentTransaction_2).default; } });
+Object.defineProperty(exports, "PaymentTransactionSchema", { enumerable: true, get: function () { return PaymentTransaction_2.PaymentTransactionSchema; } });
 var StockReservation_2 = require("./StockReservation");
 Object.defineProperty(exports, "StockReservationModel", { enumerable: true, get: function () { return __importDefault(StockReservation_2).default; } });
 Object.defineProperty(exports, "StockReservationSchema", { enumerable: true, get: function () { return StockReservation_2.StockReservationSchema; } });
@@ -156,7 +156,7 @@ exports.AuthModels = {
     Session: Session_1.default,
 };
 exports.PaymentModels = {
-    PaymentTransaction: PaymentTransactio_1.default,
+    PaymentTransaction: PaymentTransaction_1.default,
     Coupon: Coupon_1.default,
 };
 exports.CommunicationModels = {
@@ -186,7 +186,7 @@ exports.AllModels = {
     InventoryMovement: InventoryMovement_1.default,
     StockReservation: StockReservation_1.default,
     // Payments & Marketing
-    PaymentTransaction: PaymentTransactio_1.default,
+    PaymentTransaction: PaymentTransaction_1.default,
     Coupon: Coupon_1.default,
     Notification: Notification_1.default,
 };

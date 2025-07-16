@@ -22,7 +22,7 @@ export interface UpdateUserData {
     lastLoginAt?: Date;
 }
 export declare class UserRepository extends BaseRepository<User, CreateUserData, UpdateUserData> {
-    constructor(prisma: PrismaClient);
+    constructor(prisma?: PrismaClient);
     /**
      * Find user by phone number
      */
@@ -31,6 +31,10 @@ export declare class UserRepository extends BaseRepository<User, CreateUserData,
      * Find user by email
      */
     findByEmail(email: string): Promise<User | null>;
+    /**
+     * Check if email exists
+     */
+    emailExists(email: string): Promise<boolean>;
     /**
      * Create new user with validation
      */

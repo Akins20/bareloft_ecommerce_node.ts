@@ -61,6 +61,8 @@ class AuthController extends BaseController_1.BaseController {
                 success: true,
                 message: "Account created successfully",
                 data: {
+                    success: true,
+                    message: "Account created successfully",
                     user: result.user,
                     accessToken: result.accessToken,
                     refreshToken: result.refreshToken,
@@ -99,11 +101,7 @@ class AuthController extends BaseController_1.BaseController {
                 return;
             }
             // Update last login
-            await this.authService.updateLastLogin(result.user.id, {
-                ipAddress: req.ip,
-                userAgent: req.get("User-Agent"),
-                timestamp: new Date(),
-            });
+            await this.authService.updateLastLogin(result.user.id);
             // Log successful login
             this.logAction("USER_LOGIN", result.user.id, "USER", result.user.id, {
                 phoneNumber: this.maskPhoneNumber(loginData.phoneNumber),
@@ -114,6 +112,8 @@ class AuthController extends BaseController_1.BaseController {
                 success: true,
                 message: "Login successful",
                 data: {
+                    success: true,
+                    message: "Login successful",
                     user: result.user,
                     accessToken: result.accessToken,
                     refreshToken: result.refreshToken,
@@ -216,7 +216,7 @@ class AuthController extends BaseController_1.BaseController {
                     purpose: purpose || "login",
                     reason: result.message,
                 });
-                this.sendError(res, result.message, 400, "OTP_VERIFICATION_FAILED");
+                this.sendError(res, result.message || "OTP verification failed", 400, "OTP_VERIFICATION_FAILED");
                 return;
             }
             // Log successful verification
@@ -246,7 +246,7 @@ class AuthController extends BaseController_1.BaseController {
                 this.sendError(res, "Refresh token is required", 400, "MISSING_REFRESH_TOKEN");
                 return;
             }
-            const result = await this.authService.refreshToken(refreshToken);
+            const result = await this.authService.refreshToken({ refreshToken });
             if (!result.success) {
                 this.sendError(res, result.message, 401, "INVALID_REFRESH_TOKEN");
                 return;
@@ -312,7 +312,7 @@ class AuthController extends BaseController_1.BaseController {
                 message: logoutAllDevices
                     ? "Logged out from all devices"
                     : "Logged out successfully",
-                data: { sessionsInvalidated: result.invalidatedCount || 1 },
+                data: { sessionsInvalidated: typeof result === 'number' ? result : 1 },
             };
             res.json(response);
         }
