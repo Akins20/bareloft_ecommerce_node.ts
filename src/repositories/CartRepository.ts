@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { BaseRepository } from "./BaseRepository";
+import { randomUUID } from "crypto";
 import {
   Cart,
   CartItem,
@@ -15,6 +16,7 @@ import {
   ERROR_CODES,
   CONSTANTS,
 } from "../types";
+import { ProductImage } from "@prisma/client";
 
 export interface CreateCartItemData {
   productId: string;
@@ -73,8 +75,16 @@ export class CartRepository extends BaseRepository<
         include: {
           product: {
             include: {
-              images: true,
-              category: true,
+              images: {
+                orderBy: { position: "asc" },
+                take: 1,
+              },
+              category: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
             },
           },
         },
@@ -213,7 +223,10 @@ export class CartRepository extends BaseRepository<
         include: {
           product: {
             include: {
-              images: true,
+              images: {
+                orderBy: { position: "asc" },
+                take: 1,
+              },
             },
           },
         },
@@ -323,12 +336,10 @@ export class CartRepository extends BaseRepository<
         }
 
         // Check if item already exists in cart
-        const existingItem = await prisma.cartItem.findUnique({
+        const existingItem = await prisma.cartItem.findFirst({
           where: {
-            productId_userId: {
-              productId,
-              userId,
-            },
+            productId,
+            userId,
           },
         });
 
@@ -391,12 +402,10 @@ export class CartRepository extends BaseRepository<
     try {
       return await this.transaction(async (prisma) => {
         // Find the cart item
-        const cartItem = await prisma.cartItem.findUnique({
+        const cartItem = await prisma.cartItem.findFirst({
           where: {
-            productId_userId: {
-              productId,
-              userId,
-            },
+            productId,
+            userId,
           },
           include: {
             product: true,
@@ -612,12 +621,10 @@ export class CartRepository extends BaseRepository<
           case "merge":
             // Merge guest items with existing user cart
             for (const guestItem of guestCartItems) {
-              const existingItem = await prisma.cartItem.findUnique({
+              const existingItem = await prisma.cartItem.findFirst({
                 where: {
-                  productId_userId: {
-                    productId: guestItem.productId,
-                    userId,
-                  },
+                  productId: guestItem.productId,
+                  userId,
                 },
               });
 
@@ -678,7 +685,15 @@ export class CartRepository extends BaseRepository<
     couponCode: string
   ): Promise<{ cart: CartWithDetails; discountAmount: number }> {
     try {
-      // Get coupon details
+      // Note: Coupon table doesn't exist in the schema, so this is a placeholder implementation
+      // In a real implementation, you would have a coupon table
+      throw new AppError(
+        "Coupon functionality not implemented",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.INTERNAL_ERROR
+      );
+      
+      /* Placeholder for when coupon table exists:
       const coupon = await this.prisma.coupon.findFirst({
         where: {
           code: couponCode,
@@ -723,6 +738,7 @@ export class CartRepository extends BaseRepository<
         cart: cartWithCoupon,
         discountAmount,
       };
+      */
     } catch (error) {
       this.handleError("Error applying coupon to cart", error);
       throw error;

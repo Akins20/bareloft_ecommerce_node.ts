@@ -1,4 +1,10 @@
 import { NigerianPhoneNumber } from "../../types";
+interface SMSData {
+    to: string;
+    message: string;
+    template?: string;
+    variables?: Record<string, any>;
+}
 export declare class SMSService {
     private apiKey;
     private senderId;
@@ -7,7 +13,7 @@ export declare class SMSService {
     /**
      * Send SMS to Nigerian phone number
      */
-    sendSMS(data: SMSNotificationData): Promise<boolean>;
+    sendSMS(data: SMSData): Promise<boolean>;
     /**
      * Send OTP SMS
      */
@@ -70,4 +76,5 @@ export declare class SMSService {
      */
     private formatPhoneNumber;
 }
+export {};
 //# sourceMappingURL=SMSService.d.ts.map

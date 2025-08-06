@@ -5,7 +5,7 @@ const BaseRepository_1 = require("./BaseRepository");
 const types_1 = require("../types");
 class ProductRepository extends BaseRepository_1.BaseRepository {
     constructor(prisma) {
-        super(prisma, "Product");
+        super(prisma, "product");
     }
     /**
      * Find product by slug
@@ -15,7 +15,7 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
             return await this.findFirst({ slug, isActive: true }, {
                 category: true,
                 images: {
-                    orderBy: { sortOrder: "asc" },
+                    orderBy: { position: "asc" },
                 },
                 reviews: {
                     include: { user: true },

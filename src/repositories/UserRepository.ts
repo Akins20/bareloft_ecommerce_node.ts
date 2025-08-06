@@ -42,7 +42,7 @@ export class UserRepository extends BaseRepository<
   UpdateUserData
 > {
   constructor(prisma?: PrismaClient) {
-    super(prisma || new PrismaClient(), "User");
+    super(prisma || new PrismaClient(), "user");
   }
 
   /**

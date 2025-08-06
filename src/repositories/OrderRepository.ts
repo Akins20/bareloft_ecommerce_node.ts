@@ -66,7 +66,7 @@ export class OrderRepository extends BaseRepository<
   UpdateOrderData
 > {
   constructor(prisma: PrismaClient) {
-    super(prisma, "Order");
+    super(prisma, "order");
   }
 
   /**
@@ -88,7 +88,11 @@ export class OrderRepository extends BaseRepository<
                   slug: true,
                   sku: true,
                   price: true,
-                  primaryImage: true,
+                  images: {
+                    orderBy: { position: "asc" },
+                    take: 1,
+                    select: { url: true },
+                  },
                 },
               },
             },
@@ -343,9 +347,9 @@ export class OrderRepository extends BaseRepository<
                 select: {
                   name: true,
                   images: {
-                    where: { isPrimary: true },
+                    orderBy: { position: "asc" },
                     take: 1,
-                    select: { imageUrl: true },
+                    select: { url: true },
                   },
                 },
               },
@@ -413,7 +417,11 @@ export class OrderRepository extends BaseRepository<
                 product: {
                   select: {
                     name: true,
-                    primaryImage: true,
+                    images: {
+                    orderBy: { position: "asc" },
+                    take: 1,
+                    select: { url: true },
+                  },
                   },
                 },
               },
@@ -525,10 +533,12 @@ export class OrderRepository extends BaseRepository<
             createdAt: { lt: threeDaysAgo },
           }),
           // Shipped orders without delivery confirmation after estimated delivery
-          this.getOrderSummaries({
-            status: PrismaOrderStatus.SHIPPED,
-            estimatedDelivery: { lt: now },
-          }),
+          // Note: estimatedDelivery field doesn't exist in schema
+          // this.getOrderSummaries({
+          //   status: PrismaOrderStatus.SHIPPED, 
+          //   estimatedDelivery: { lt: now },
+          // }),
+          [],
         ]);
 
       return {
@@ -750,7 +760,7 @@ export class OrderRepository extends BaseRepository<
 
       return {
         totalOrders: result._count.id,
-        totalSpent: Number(result._sum.totalAmount) || 0,
+        totalSpent: Number(result._sum.total) || 0,
       };
     } catch (error) {
       return { totalOrders: 0, totalSpent: 0 };

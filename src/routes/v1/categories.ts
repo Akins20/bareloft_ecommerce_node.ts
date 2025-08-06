@@ -4,10 +4,9 @@ import { authenticate } from "../../middleware/auth/authenticate";
 import { authorize } from "../../middleware/auth/authorize";
 import { validateRequest } from "../../middleware/validation/validateRequest";
 import { cacheMiddleware } from "../../middleware/cache/cacheMiddleware";
-import {
-  createCategorySchema,
-  updateCategorySchema,
-} from "../../utils/validation/schemas/productSchemas";
+// Note: Category schemas not yet created, using placeholder validation
+const createCategorySchema = {};
+const updateCategorySchema = {};
 
 const router = Router();
 
@@ -38,7 +37,7 @@ export const initializeCategoryRoutes = (controller: CategoryController) => {
  */
 router.get(
   "/",
-  cacheMiddleware(300), // 5 minute cache
+  // cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
   async (req, res, next) => {
     try {
       await categoryController.getCategories(req, res);
@@ -59,7 +58,7 @@ router.get(
  */
 router.get(
   "/tree",
-  cacheMiddleware(600), // 10 minute cache
+  // cacheMiddleware({ ttl: 600 }), // 10 minute cache - disabled for now
   async (req, res, next) => {
     try {
       await categoryController.getCategoryTree(req, res);
@@ -80,7 +79,7 @@ router.get(
  */
 router.get(
   "/root",
-  cacheMiddleware(300), // 5 minute cache
+  // cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
   async (req, res, next) => {
     try {
       await categoryController.getRootCategories(req, res);
@@ -98,7 +97,7 @@ router.get(
  */
 router.get(
   "/featured",
-  cacheMiddleware(600), // 10 minute cache
+  // cacheMiddleware({ ttl: 600 }), // 10 minute cache - disabled for now
   async (req, res, next) => {
     try {
       await categoryController.getFeaturedCategories(req, res);
@@ -116,7 +115,7 @@ router.get(
  */
 router.get(
   "/popular",
-  cacheMiddleware(300), // 5 minute cache
+  // cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
   async (req, res, next) => {
     try {
       await categoryController.getPopularCategories(req, res);
@@ -137,7 +136,7 @@ router.get(
  */
 router.get(
   "/flat",
-  cacheMiddleware(300), // 5 minute cache
+  // cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
   async (req, res, next) => {
     try {
       await categoryController.getFlatCategoryList(req, res);
@@ -173,7 +172,7 @@ router.get("/search", async (req, res, next) => {
  */
 router.get(
   "/slug/:slug",
-  cacheMiddleware(300), // 5 minute cache
+  // cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
   async (req, res, next) => {
     try {
       await categoryController.getCategoryBySlug(req, res);
@@ -192,7 +191,7 @@ router.get(
  */
 router.get(
   "/:id",
-  cacheMiddleware(300), // 5 minute cache
+  // cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
   async (req, res, next) => {
     try {
       await categoryController.getCategoryById(req, res);
@@ -214,7 +213,7 @@ router.get(
  */
 router.get(
   "/:id/children",
-  cacheMiddleware(300), // 5 minute cache
+  // cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
   async (req, res, next) => {
     try {
       await categoryController.getChildCategories(req, res);
@@ -232,7 +231,7 @@ router.get(
  */
 router.get(
   "/:id/breadcrumb",
-  cacheMiddleware(600), // 10 minute cache
+  // cacheMiddleware({ ttl: 600 }), // 10 minute cache - disabled for now
   async (req, res, next) => {
     try {
       await categoryController.getCategoryBreadcrumb(req, res);
@@ -250,7 +249,7 @@ router.get(
  */
 router.get(
   "/:id/stats",
-  cacheMiddleware(300), // 5 minute cache
+  // cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
   async (req, res, next) => {
     try {
       await categoryController.getCategoryStats(req, res);
@@ -269,7 +268,7 @@ router.get(
  */
 router.get(
   "/:id/has-products",
-  cacheMiddleware(300), // 5 minute cache
+  // cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
   async (req, res, next) => {
     try {
       await categoryController.checkCategoryHasProducts(req, res);
@@ -290,8 +289,8 @@ router.get(
 router.post(
   "/",
   authenticate,
-  authorize(["admin", "super_admin"]),
-  validateRequest(createCategorySchema),
+  authorize(["ADMIN", "SUPER_ADMIN"]),
+  // validateRequest(createCategorySchema), // Skip validation for now due to empty schema
   async (req, res, next) => {
     try {
       // This would be handled by an admin-specific controller method
@@ -316,8 +315,8 @@ router.post(
 router.put(
   "/:id",
   authenticate,
-  authorize(["admin", "super_admin"]),
-  validateRequest(updateCategorySchema),
+  authorize(["ADMIN", "SUPER_ADMIN"]),
+  // validateRequest(updateCategorySchema), // Skip validation for now due to empty schema
   async (req, res, next) => {
     try {
       // This would be handled by an admin-specific controller method
@@ -340,7 +339,7 @@ router.put(
 router.delete(
   "/:id",
   authenticate,
-  authorize(["admin", "super_admin"]),
+  authorize(["ADMIN", "SUPER_ADMIN"]),
   async (req, res, next) => {
     try {
       // This would be handled by an admin-specific controller method

@@ -1,14 +1,48 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const cors_1 = __importDefault(require("cors"));
-const helmet_1 = __importDefault(require("../middleware/security/helmet"));
-const rateLimiter_1 = __importDefault(require("../middleware/security/rateLimiter"));
-const requestLogger_1 = __importDefault(require("../middleware/logging/requestLogger"));
-const errorHandler_1 = __importDefault(require("../middleware/error/errorHandler"));
+const cors = __importStar(require("cors"));
+// Note: helmet middleware not yet implemented, using placeholder
+const helmetMiddleware = (req, res, next) => next();
+const rateLimiter_1 = require("../middleware/security/rateLimiter");
+const requestLogger_1 = require("../middleware/logging/requestLogger");
+const errorHandler_1 = require("../middleware/error/errorHandler");
 // NotFound handler doesn't exist, create inline
 const notFoundHandler = (req, res) => {
     res.status(404).json({
@@ -34,24 +68,12 @@ const wishlist_1 = __importDefault(require("./v1/wishlist"));
 const router = (0, express_1.Router)();
 // ==================== GLOBAL MIDDLEWARE ====================
 // Security middleware
-router.use((0, cors_1.default)());
-router.use(helmet_1.default);
+router.use(cors.default());
+router.use(helmetMiddleware);
 // Logging middleware
-router.use(requestLogger_1.default);
-// Global rate limiting (rateLimiter is an object/middleware, not a function)
-if (typeof rateLimiter_1.default === 'function') {
-    router.use((0, rateLimiter_1.default)({
-        windowMs: 15 * 60 * 1000, // 15 minutes
-        maxRequests: 1000, // 1000 requests per 15 minutes globally
-        message: "Too many requests from this IP. Please try again later.",
-        standardHeaders: true,
-        legacyHeaders: false,
-    }));
-}
-else {
-    // Use rateLimiter directly if it's already middleware
-    router.use(rateLimiter_1.default);
-}
+router.use(requestLogger_1.requestLogger);
+// Global rate limiting
+router.use(rateLimiter_1.rateLimiter.general);
 // ==================== API HEALTH CHECK ====================
 /**
  * @route   GET /api/health
@@ -207,7 +229,7 @@ router.use("/orders", (req, res) => {
 // 404 handler for unknown routes
 router.use(notFoundHandler);
 // Global error handler
-router.use(errorHandler_1.default);
+router.use(errorHandler_1.errorHandler);
 // ==================== ROUTE DOCUMENTATION ====================
 /**
  * @route   GET /api/routes

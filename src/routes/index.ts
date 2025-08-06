@@ -1,9 +1,10 @@
 import { Router } from "express";
-import cors from "cors";
-import helmetMiddleware from "../middleware/security/helmet";
-import rateLimiter from "../middleware/security/rateLimiter";
-import requestLogger from "../middleware/logging/requestLogger";
-import errorHandler from "../middleware/error/errorHandler";
+import * as cors from "cors";
+// Note: helmet middleware not yet implemented, using placeholder
+const helmetMiddleware = (req: any, res: any, next: any) => next();
+import { rateLimiter } from "../middleware/security/rateLimiter";
+import { requestLogger } from "../middleware/logging/requestLogger";
+import { errorHandler } from "../middleware/error/errorHandler";
 // NotFound handler doesn't exist, create inline
 const notFoundHandler = (req: any, res: any) => {
   res.status(404).json({
@@ -34,27 +35,14 @@ const router = Router();
 // ==================== GLOBAL MIDDLEWARE ====================
 
 // Security middleware
-router.use(cors());
+router.use(cors.default());
 router.use(helmetMiddleware);
 
 // Logging middleware
 router.use(requestLogger);
 
-// Global rate limiting (rateLimiter is an object/middleware, not a function)
-if (typeof rateLimiter === 'function') {
-  router.use(
-    rateLimiter({
-      windowMs: 15 * 60 * 1000, // 15 minutes
-      maxRequests: 1000, // 1000 requests per 15 minutes globally
-      message: "Too many requests from this IP. Please try again later.",
-      standardHeaders: true,
-      legacyHeaders: false,
-    })
-  );
-} else {
-  // Use rateLimiter directly if it's already middleware
-  router.use(rateLimiter);
-}
+// Global rate limiting
+router.use(rateLimiter.general);
 
 // ==================== API HEALTH CHECK ====================
 

@@ -3,6 +3,14 @@ import { config } from "../../config/environment";
 import { SMSNotification, NigerianPhoneNumber } from "../../types";
 import { AppError, HTTP_STATUS, ERROR_CODES } from "../../types/api.types";
 
+// Interface for SMS sending (different from SMSNotification model)
+interface SMSData {
+  to: string;
+  message: string;
+  template?: string;
+  variables?: Record<string, any>;
+}
+
 export class SMSService {
   private apiKey: string;
   private senderId: string;
@@ -18,7 +26,7 @@ export class SMSService {
   /**
    * Send SMS to Nigerian phone number
    */
-  async sendSMS(data: SMSNotificationData): Promise<boolean> {
+  async sendSMS(data: SMSData): Promise<boolean> {
     try {
       const { to, message, template, variables } = data;
 

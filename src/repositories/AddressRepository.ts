@@ -1,4 +1,5 @@
-import { PrismaClient, AddressType } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
+import type { AddressType } from "@prisma/client";
 import { BaseRepository } from "./BaseRepository";
 import { Address, NigerianPhoneNumber, NigerianState } from "../types/common.types";
 import { CreateAddressRequest, UpdateAddressRequest } from "../types/user.types";
@@ -40,7 +41,7 @@ export class AddressRepository extends BaseRepository<
   UpdateAddressData
 > {
   constructor(prisma?: PrismaClient) {
-    super(prisma || new PrismaClient(), "Address");
+    super(prisma || new PrismaClient(), "address");
   }
 
   /**

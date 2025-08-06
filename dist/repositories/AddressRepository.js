@@ -6,7 +6,7 @@ const BaseRepository_1 = require("./BaseRepository");
 const api_types_1 = require("../types/api.types");
 class AddressRepository extends BaseRepository_1.BaseRepository {
     constructor(prisma) {
-        super(prisma || new client_1.PrismaClient(), "Address");
+        super(prisma || new client_1.PrismaClient(), "address");
     }
     /**
      * Get all addresses for a user

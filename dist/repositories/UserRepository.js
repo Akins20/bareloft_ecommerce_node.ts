@@ -6,7 +6,7 @@ const BaseRepository_1 = require("./BaseRepository");
 const types_1 = require("../types");
 class UserRepository extends BaseRepository_1.BaseRepository {
     constructor(prisma) {
-        super(prisma || new client_1.PrismaClient(), "User");
+        super(prisma || new client_1.PrismaClient(), "user");
     }
     /**
      * Transform User to PublicUser

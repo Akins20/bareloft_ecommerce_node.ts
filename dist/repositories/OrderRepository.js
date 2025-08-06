@@ -6,7 +6,7 @@ const BaseRepository_1 = require("./BaseRepository");
 const types_1 = require("../types");
 class OrderRepository extends BaseRepository_1.BaseRepository {
     constructor(prisma) {
-        super(prisma, "Order");
+        super(prisma, "order");
     }
     /**
      * Find order by order number
@@ -23,7 +23,11 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
                                 slug: true,
                                 sku: true,
                                 price: true,
-                                primaryImage: true,
+                                images: {
+                                    orderBy: { position: "asc" },
+                                    take: 1,
+                                    select: { url: true },
+                                },
                             },
                         },
                     },
@@ -230,9 +234,9 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
                                 select: {
                                     name: true,
                                     images: {
-                                        where: { isPrimary: true },
+                                        orderBy: { position: "asc" },
                                         take: 1,
-                                        select: { imageUrl: true },
+                                        select: { url: true },
                                     },
                                 },
                             },
@@ -289,7 +293,11 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
                             product: {
                                 select: {
                                     name: true,
-                                    primaryImage: true,
+                                    images: {
+                                        orderBy: { position: "asc" },
+                                        take: 1,
+                                        select: { url: true },
+                                    },
                                 },
                             },
                         },
@@ -386,10 +394,12 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
                     createdAt: { lt: threeDaysAgo },
                 }),
                 // Shipped orders without delivery confirmation after estimated delivery
-                this.getOrderSummaries({
-                    status: client_1.OrderStatus.SHIPPED,
-                    estimatedDelivery: { lt: now },
-                }),
+                // Note: estimatedDelivery field doesn't exist in schema
+                // this.getOrderSummaries({
+                //   status: PrismaOrderStatus.SHIPPED, 
+                //   estimatedDelivery: { lt: now },
+                // }),
+                [],
             ]);
             return {
                 pendingPayment,
@@ -557,7 +567,7 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
             });
             return {
                 totalOrders: result._count.id,
-                totalSpent: Number(result._sum.totalAmount) || 0,
+                totalSpent: Number(result._sum.total) || 0,
             };
         }
         catch (error) {

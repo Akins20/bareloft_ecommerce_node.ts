@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.InventoryRepository = void 0;
 const BaseRepository_1 = require("./BaseRepository");
+const crypto_1 = require("crypto");
 const types_1 = require("../types");
 class InventoryRepository extends BaseRepository_1.BaseRepository {
     constructor(prisma) {
@@ -285,7 +286,7 @@ class InventoryRepository extends BaseRepository_1.BaseRepository {
                 orderBy: [{ stock: "asc" }, { updatedAt: "desc" }],
             });
             return lowStockProducts.data.map((product) => ({
-                id: crypto.randomUUID(),
+                id: (0, crypto_1.randomUUID)(),
                 type: product.stock <= 0 ? types_1.StockAlert.OUT_OF_STOCK : types_1.StockAlert.LOW_STOCK,
                 severity: product.stock <= 0 ? "critical" : "medium",
                 productId: product.id,
@@ -367,7 +368,7 @@ class InventoryRepository extends BaseRepository_1.BaseRepository {
                 processed: 0,
                 errors: [],
             };
-            const batchId = crypto.randomUUID();
+            const batchId = (0, crypto_1.randomUUID)();
             for (const update of request.updates) {
                 try {
                     await this.updateInventoryQuantity(update.productId, {
@@ -538,8 +539,12 @@ class InventoryRepository extends BaseRepository_1.BaseRepository {
                 this.count(where),
                 this.count({
                     ...where,
-                    stock: { lte: { path: ["lowStockThreshold"] } },
-                    stock_gt: 0
+                    AND: [
+                        { stock: { gt: 0 } },
+                        // Note: Comparing stock to lowStockThreshold would require a more complex query
+                        // For now, using a fixed threshold
+                        { stock: { lte: 10 } }
+                    ]
                 }),
                 this.count({ ...where, stock: { lte: 0 } }),
                 this.aggregate(where, {

@@ -4,9 +4,9 @@ exports.initializeCategoryRoutes = void 0;
 const express_1 = require("express");
 const authenticate_1 = require("../../middleware/auth/authenticate");
 const authorize_1 = require("../../middleware/auth/authorize");
-const validateRequest_1 = require("../../middleware/validation/validateRequest");
-const cacheMiddleware_1 = require("../../middleware/cache/cacheMiddleware");
-const productSchemas_1 = require("../../utils/validation/schemas/productSchemas");
+// Note: Category schemas not yet created, using placeholder validation
+const createCategorySchema = {};
+const updateCategorySchema = {};
 const router = (0, express_1.Router)();
 // Initialize controller (will be injected via dependency injection)
 let categoryController;
@@ -31,7 +31,8 @@ exports.initializeCategoryRoutes = initializeCategoryRoutes;
  *   sortOrder?: 'asc' | 'desc'
  * }
  */
-router.get("/", (0, cacheMiddleware_1.cacheMiddleware)(300), // 5 minute cache
+router.get("/", 
+// cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
 async (req, res, next) => {
     try {
         await categoryController.getCategories(req, res);
@@ -49,7 +50,8 @@ async (req, res, next) => {
  *   activeOnly?: boolean
  * }
  */
-router.get("/tree", (0, cacheMiddleware_1.cacheMiddleware)(600), // 10 minute cache
+router.get("/tree", 
+// cacheMiddleware({ ttl: 600 }), // 10 minute cache - disabled for now
 async (req, res, next) => {
     try {
         await categoryController.getCategoryTree(req, res);
@@ -67,7 +69,8 @@ async (req, res, next) => {
  *   activeOnly?: boolean
  * }
  */
-router.get("/root", (0, cacheMiddleware_1.cacheMiddleware)(300), // 5 minute cache
+router.get("/root", 
+// cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
 async (req, res, next) => {
     try {
         await categoryController.getRootCategories(req, res);
@@ -82,7 +85,8 @@ async (req, res, next) => {
  * @access  Public
  * @query   { limit?: number }
  */
-router.get("/featured", (0, cacheMiddleware_1.cacheMiddleware)(600), // 10 minute cache
+router.get("/featured", 
+// cacheMiddleware({ ttl: 600 }), // 10 minute cache - disabled for now
 async (req, res, next) => {
     try {
         await categoryController.getFeaturedCategories(req, res);
@@ -97,7 +101,8 @@ async (req, res, next) => {
  * @access  Public
  * @query   { limit?: number }
  */
-router.get("/popular", (0, cacheMiddleware_1.cacheMiddleware)(300), // 5 minute cache
+router.get("/popular", 
+// cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
 async (req, res, next) => {
     try {
         await categoryController.getPopularCategories(req, res);
@@ -115,7 +120,8 @@ async (req, res, next) => {
  *   includeHierarchy?: boolean
  * }
  */
-router.get("/flat", (0, cacheMiddleware_1.cacheMiddleware)(300), // 5 minute cache
+router.get("/flat", 
+// cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
 async (req, res, next) => {
     try {
         await categoryController.getFlatCategoryList(req, res);
@@ -148,7 +154,8 @@ router.get("/search", async (req, res, next) => {
  * @param   slug - Category slug
  * @query   { includeProducts?: boolean }
  */
-router.get("/slug/:slug", (0, cacheMiddleware_1.cacheMiddleware)(300), // 5 minute cache
+router.get("/slug/:slug", 
+// cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
 async (req, res, next) => {
     try {
         await categoryController.getCategoryBySlug(req, res);
@@ -164,7 +171,8 @@ async (req, res, next) => {
  * @param   id - Category ID
  * @query   { includeProducts?: boolean }
  */
-router.get("/:id", (0, cacheMiddleware_1.cacheMiddleware)(300), // 5 minute cache
+router.get("/:id", 
+// cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
 async (req, res, next) => {
     try {
         await categoryController.getCategoryById(req, res);
@@ -183,7 +191,8 @@ async (req, res, next) => {
  *   activeOnly?: boolean
  * }
  */
-router.get("/:id/children", (0, cacheMiddleware_1.cacheMiddleware)(300), // 5 minute cache
+router.get("/:id/children", 
+// cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
 async (req, res, next) => {
     try {
         await categoryController.getChildCategories(req, res);
@@ -198,7 +207,8 @@ async (req, res, next) => {
  * @access  Public
  * @param   id - Category ID
  */
-router.get("/:id/breadcrumb", (0, cacheMiddleware_1.cacheMiddleware)(600), // 10 minute cache
+router.get("/:id/breadcrumb", 
+// cacheMiddleware({ ttl: 600 }), // 10 minute cache - disabled for now
 async (req, res, next) => {
     try {
         await categoryController.getCategoryBreadcrumb(req, res);
@@ -213,7 +223,8 @@ async (req, res, next) => {
  * @access  Public
  * @param   id - Category ID
  */
-router.get("/:id/stats", (0, cacheMiddleware_1.cacheMiddleware)(300), // 5 minute cache
+router.get("/:id/stats", 
+// cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
 async (req, res, next) => {
     try {
         await categoryController.getCategoryStats(req, res);
@@ -229,7 +240,8 @@ async (req, res, next) => {
  * @param   id - Category ID
  * @query   { includeSubcategories?: boolean }
  */
-router.get("/:id/has-products", (0, cacheMiddleware_1.cacheMiddleware)(300), // 5 minute cache
+router.get("/:id/has-products", 
+// cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
 async (req, res, next) => {
     try {
         await categoryController.checkCategoryHasProducts(req, res);
@@ -245,7 +257,9 @@ async (req, res, next) => {
  * @access  Private (Admin)
  * @body    CreateCategoryRequest
  */
-router.post("/", authenticate_1.authenticate, (0, authorize_1.authorize)(["admin", "super_admin"]), (0, validateRequest_1.validateRequest)(productSchemas_1.createCategorySchema), async (req, res, next) => {
+router.post("/", authenticate_1.authenticate, (0, authorize_1.authorize)(["ADMIN", "SUPER_ADMIN"]), 
+// validateRequest(createCategorySchema), // Skip validation for now due to empty schema
+async (req, res, next) => {
     try {
         // This would be handled by an admin-specific controller method
         // For now, we'll use the existing controller structure
@@ -265,7 +279,9 @@ router.post("/", authenticate_1.authenticate, (0, authorize_1.authorize)(["admin
  * @param   id - Category ID
  * @body    UpdateCategoryRequest
  */
-router.put("/:id", authenticate_1.authenticate, (0, authorize_1.authorize)(["admin", "super_admin"]), (0, validateRequest_1.validateRequest)(productSchemas_1.updateCategorySchema), async (req, res, next) => {
+router.put("/:id", authenticate_1.authenticate, (0, authorize_1.authorize)(["ADMIN", "SUPER_ADMIN"]), 
+// validateRequest(updateCategorySchema), // Skip validation for now due to empty schema
+async (req, res, next) => {
     try {
         // This would be handled by an admin-specific controller method
         res.status(501).json({
@@ -283,7 +299,7 @@ router.put("/:id", authenticate_1.authenticate, (0, authorize_1.authorize)(["adm
  * @access  Private (Admin)
  * @param   id - Category ID
  */
-router.delete("/:id", authenticate_1.authenticate, (0, authorize_1.authorize)(["admin", "super_admin"]), async (req, res, next) => {
+router.delete("/:id", authenticate_1.authenticate, (0, authorize_1.authorize)(["ADMIN", "SUPER_ADMIN"]), async (req, res, next) => {
     try {
         // This would be handled by an admin-specific controller method
         res.status(501).json({

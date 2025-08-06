@@ -57,7 +57,7 @@ export class ProductRepository extends BaseRepository<
   UpdateProductData
 > {
   constructor(prisma: PrismaClient) {
-    super(prisma, "Product");
+    super(prisma, "product");
   }
 
   /**
@@ -70,7 +70,7 @@ export class ProductRepository extends BaseRepository<
         {
           category: true,
           images: {
-            orderBy: { sortOrder: "asc" },
+            orderBy: { position: "asc" },
           },
           reviews: {
             include: { user: true },

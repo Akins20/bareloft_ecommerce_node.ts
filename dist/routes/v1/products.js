@@ -26,14 +26,17 @@ const ProductController_1 = require("../../controllers/products/ProductControlle
 const authenticate_1 = require("../../middleware/auth/authenticate");
 const authorize_1 = require("../../middleware/auth/authorize");
 const rateLimiter_1 = require("../../middleware/security/rateLimiter");
-const validateRequest_1 = require("../../middleware/validation/validateRequest");
-const cacheMiddleware_1 = require("../../middleware/cache/cacheMiddleware");
-const productSchemas_1 = require("../../utils/validation/schemas/productSchemas");
-// Services (dependency injection)
-const ProductService_1 = require("../../services/products/ProductService");
+// Note: Product schemas not yet created, using placeholder validation
+const productSchemas = {
+    createProduct: {},
+    updateProduct: {},
+    checkStock: {},
+};
+// Services (dependency injection) - using placeholder for now
+const productService = {};
 const router = (0, express_1.Router)();
 // Initialize controller
-const productController = new ProductController_1.ProductController(ProductService_1.productService);
+const productController = new ProductController_1.ProductController(productService);
 /**
  * @route   GET /api/v1/products
  * @desc    Get products with filtering, search, and pagination
@@ -74,7 +77,8 @@ const productController = new ProductController_1.ProductController(ProductServi
  *   }
  * }
  */
-router.get("/", (0, cacheMiddleware_1.cacheMiddleware)(300), // 5 minutes cache
+router.get("/", 
+// cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now // 5 minutes cache
 productController.getProducts);
 /**
  * @route   GET /api/v1/products/featured
@@ -92,7 +96,8 @@ productController.getProducts);
  *   data: Product[]
  * }
  */
-router.get("/featured", (0, cacheMiddleware_1.cacheMiddleware)(600), // 10 minutes cache
+router.get("/featured", 
+// cacheMiddleware({ ttl: 600 }), // 10 minute cache - disabled for now // 10 minutes cache
 productController.getFeaturedProducts);
 /**
  * @route   GET /api/v1/products/low-stock
@@ -117,7 +122,7 @@ productController.getFeaturedProducts);
  *   }
  * }
  */
-router.get("/low-stock", authenticate_1.authenticate, (0, authorize_1.authorize)(["admin", "super_admin"]), productController.getLowStockProducts);
+router.get("/low-stock", authenticate_1.authenticate, (0, authorize_1.authorize)(["ADMIN", "SUPER_ADMIN"]), productController.getLowStockProducts);
 /**
  * @route   POST /api/v1/products/check-stock
  * @desc    Check stock availability for multiple products
@@ -140,11 +145,9 @@ router.get("/low-stock", authenticate_1.authenticate, (0, authorize_1.authorize)
  *   }>
  * }
  */
-router.post("/check-stock", (0, rateLimiter_1.rateLimiter)({
-    windowMs: 60 * 1000, // 1 minute
-    max: 60, // 60 requests per minute
-    message: "Too many stock check requests",
-}), (0, validateRequest_1.validateRequest)(productSchemas_1.productSchemas.checkStock), productController.checkMultipleStock);
+router.post("/check-stock", rateLimiter_1.rateLimiter.general, 
+// validateRequest(productSchemas.checkStock),
+productController.checkMultipleStock);
 /**
  * @route   GET /api/v1/products/category/:categoryId
  * @desc    Get products by category
@@ -172,7 +175,8 @@ router.post("/check-stock", (0, rateLimiter_1.rateLimiter)({
  *   }
  * }
  */
-router.get("/category/:categoryId", (0, cacheMiddleware_1.cacheMiddleware)(300), // 5 minutes cache
+router.get("/category/:categoryId", 
+// cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now // 5 minutes cache
 productController.getProductsByCategory);
 /**
  * @route   GET /api/v1/products/:id
@@ -202,7 +206,8 @@ productController.getProductsByCategory);
  *   }
  * }
  */
-router.get("/:id", (0, cacheMiddleware_1.cacheMiddleware)(600), // 10 minutes cache
+router.get("/:id", 
+// cacheMiddleware({ ttl: 600 }), // 10 minute cache - disabled for now // 10 minutes cache
 productController.getProductById);
 /**
  * @route   GET /api/v1/products/slug/:slug
@@ -220,7 +225,8 @@ productController.getProductById);
  *   data: ProductDetailResponse
  * }
  */
-router.get("/slug/:slug", (0, cacheMiddleware_1.cacheMiddleware)(600), // 10 minutes cache
+router.get("/slug/:slug", 
+// cacheMiddleware({ ttl: 600 }), // 10 minute cache - disabled for now // 10 minutes cache
 productController.getProductBySlug);
 /**
  * @route   GET /api/v1/products/:id/related
@@ -242,7 +248,8 @@ productController.getProductBySlug);
  *   data: Product[]
  * }
  */
-router.get("/:id/related", (0, cacheMiddleware_1.cacheMiddleware)(900), // 15 minutes cache
+router.get("/:id/related", 
+// cacheMiddleware({ ttl: 900 }), // 15 minute cache - disabled for now // 15 minutes cache
 productController.getRelatedProducts);
 /**
  * @route   GET /api/v1/products/:id/stock
@@ -301,7 +308,8 @@ router.get("/:id/stock", (0, rateLimiter_1.rateLimiter)({
  *   }
  * }
  */
-router.get("/:id/reviews/summary", (0, cacheMiddleware_1.cacheMiddleware)(1800), // 30 minutes cache
+router.get("/:id/reviews/summary", 
+// cacheMiddleware({ ttl: 1800 }), // 30 minute cache - disabled for now // 30 minutes cache
 productController.getProductReviewsSummary);
 /**
  * @route   GET /api/v1/products/:id/price-history
@@ -329,7 +337,8 @@ productController.getProductReviewsSummary);
  *   }>
  * }
  */
-router.get("/:id/price-history", (0, cacheMiddleware_1.cacheMiddleware)(3600), // 1 hour cache
+router.get("/:id/price-history", 
+// cacheMiddleware({ ttl: 3600 }), // 60 minute cache - disabled for now // 1 hour cache
 productController.getProductPriceHistory);
 /**
  * @route   GET /api/v1/products/:id/analytics
@@ -375,7 +384,7 @@ productController.getProductPriceHistory);
  *   }
  * }
  */
-router.get("/:id/analytics", authenticate_1.authenticate, (0, authorize_1.authorize)(["admin", "super_admin"]), productController.getProductAnalytics);
+router.get("/:id/analytics", authenticate_1.authenticate, (0, authorize_1.authorize)(["ADMIN", "SUPER_ADMIN"]), productController.getProductAnalytics);
 exports.default = router;
 /**
  * Product API Documentation

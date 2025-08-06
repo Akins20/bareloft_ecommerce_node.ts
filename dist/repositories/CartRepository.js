@@ -18,8 +18,16 @@ class CartRepository extends BaseRepository_1.BaseRepository {
                 include: {
                     product: {
                         include: {
-                            images: true,
-                            category: true,
+                            images: {
+                                orderBy: { position: "asc" },
+                                take: 1,
+                            },
+                            category: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                },
+                            },
                         },
                     },
                 },
@@ -154,7 +162,10 @@ class CartRepository extends BaseRepository_1.BaseRepository {
                 include: {
                     product: {
                         include: {
-                            images: true,
+                            images: {
+                                orderBy: { position: "asc" },
+                                take: 1,
+                            },
                         },
                     },
                 },
@@ -241,12 +252,10 @@ class CartRepository extends BaseRepository_1.BaseRepository {
                     throw new types_1.AppError(`Maximum quantity per item is ${types_1.CONSTANTS.CART_ITEM_MAX_QUANTITY || 99}`, types_1.HTTP_STATUS.BAD_REQUEST, types_1.ERROR_CODES.VALIDATION_ERROR);
                 }
                 // Check if item already exists in cart
-                const existingItem = await prisma.cartItem.findUnique({
+                const existingItem = await prisma.cartItem.findFirst({
                     where: {
-                        productId_userId: {
-                            productId,
-                            userId,
-                        },
+                        productId,
+                        userId,
                     },
                 });
                 if (existingItem) {
@@ -293,12 +302,10 @@ class CartRepository extends BaseRepository_1.BaseRepository {
         try {
             return await this.transaction(async (prisma) => {
                 // Find the cart item
-                const cartItem = await prisma.cartItem.findUnique({
+                const cartItem = await prisma.cartItem.findFirst({
                     where: {
-                        productId_userId: {
-                            productId,
-                            userId,
-                        },
+                        productId,
+                        userId,
                     },
                     include: {
                         product: true,
@@ -478,12 +485,10 @@ class CartRepository extends BaseRepository_1.BaseRepository {
                     case "merge":
                         // Merge guest items with existing user cart
                         for (const guestItem of guestCartItems) {
-                            const existingItem = await prisma.cartItem.findUnique({
+                            const existingItem = await prisma.cartItem.findFirst({
                                 where: {
-                                    productId_userId: {
-                                        productId: guestItem.productId,
-                                        userId,
-                                    },
+                                    productId: guestItem.productId,
+                                    userId,
                                 },
                             });
                             const product = await prisma.product.findUnique({
@@ -534,42 +539,55 @@ class CartRepository extends BaseRepository_1.BaseRepository {
      */
     async applyCoupon(userId, couponCode) {
         try {
-            // Get coupon details
+            // Note: Coupon table doesn't exist in the schema, so this is a placeholder implementation
+            // In a real implementation, you would have a coupon table
+            throw new types_1.AppError("Coupon functionality not implemented", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.INTERNAL_ERROR);
+            /* Placeholder for when coupon table exists:
             const coupon = await this.prisma.coupon.findFirst({
-                where: {
-                    code: couponCode,
-                    isActive: true,
-                    OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-                },
+              where: {
+                code: couponCode,
+                isActive: true,
+                OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+              },
             });
+      
             if (!coupon) {
-                throw new types_1.AppError("Invalid or expired coupon", types_1.HTTP_STATUS.BAD_REQUEST, types_1.ERROR_CODES.INVALID_COUPON);
+              throw new AppError(
+                "Invalid or expired coupon",
+                HTTP_STATUS.BAD_REQUEST,
+                ERROR_CODES.INVALID_COUPON
+              );
             }
+      
             // Get user cart
             const cart = await this.getOrCreateUserCart(userId);
+            
             // Calculate discount
             let discountAmount = 0;
             const subtotal = cart.subtotal;
+            
             if (coupon.type === "PERCENTAGE") {
-                discountAmount = subtotal * (Number(coupon.value) / 100);
+              discountAmount = subtotal * (Number(coupon.value) / 100);
+            } else if (coupon.type === "FIXED_AMOUNT") {
+              discountAmount = Math.min(Number(coupon.value), subtotal);
             }
-            else if (coupon.type === "FIXED_AMOUNT") {
-                discountAmount = Math.min(Number(coupon.value), subtotal);
-            }
+      
             // Apply coupon to virtual cart
             const cartWithCoupon = {
-                ...cart,
-                appliedCoupon: {
-                    code: coupon.code,
-                    discountAmount,
-                    discountType: coupon.type === "PERCENTAGE" ? "percentage" : "fixed",
-                },
-                estimatedTotal: Math.max(0, cart.estimatedTotal - discountAmount),
-            };
-            return {
-                cart: cartWithCoupon,
+              ...cart,
+              appliedCoupon: {
+                code: coupon.code,
                 discountAmount,
+                discountType: coupon.type === "PERCENTAGE" ? "percentage" as const : "fixed" as const,
+              },
+              estimatedTotal: Math.max(0, cart.estimatedTotal - discountAmount),
             };
+      
+            return {
+              cart: cartWithCoupon,
+              discountAmount,
+            };
+            */
         }
         catch (error) {
             this.handleError("Error applying coupon to cart", error);
