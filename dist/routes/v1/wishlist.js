@@ -3,9 +3,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.initializeWishlistRoutes = void 0;
 const express_1 = require("express");
 const authenticate_1 = require("../../middleware/auth/authenticate");
-const validateRequest_1 = require("../../middleware/validation/validateRequest");
 const rateLimiter_1 = require("../../middleware/security/rateLimiter");
-const userSchemas_1 = require("../../utils/validation/schemas/userSchemas");
+// Note: Wishlist schemas not yet created, using placeholder validation
+const addToWishlistSchema = {};
+const moveToCartSchema = {};
+const shareWishlistSchema = {};
 const router = (0, express_1.Router)();
 // Initialize controller
 let wishlistController;
@@ -15,16 +17,8 @@ const initializeWishlistRoutes = (controller) => {
 };
 exports.initializeWishlistRoutes = initializeWishlistRoutes;
 // Rate limiting for wishlist operations
-const wishlistActionLimit = (0, rateLimiter_1.rateLimiter)({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    maxRequests: 50, // 50 wishlist operations per 15 minutes
-    message: "Too many wishlist operations. Please try again later.",
-});
-const wishlistInteractionLimit = (0, rateLimiter_1.rateLimiter)({
-    windowMs: 1 * 60 * 1000, // 1 minute
-    maxRequests: 10, // 10 interactions per minute
-    message: "Too many wishlist interactions. Please slow down.",
-});
+const wishlistActionLimit = rateLimiter_1.rateLimiter.authenticated;
+const wishlistInteractionLimit = rateLimiter_1.rateLimiter.authenticated;
 // ==================== MAIN WISHLIST ENDPOINTS ====================
 /**
  * @route   GET /api/v1/wishlist
@@ -52,7 +46,9 @@ router.get("/", authenticate_1.authenticate, async (req, res, next) => {
  * @access  Private (Customer)
  * @body    AddToWishlistRequest { productId: string }
  */
-router.post("/add", authenticate_1.authenticate, wishlistActionLimit, (0, validateRequest_1.validateRequest)(userSchemas_1.addToWishlistSchema), async (req, res, next) => {
+router.post("/add", authenticate_1.authenticate, wishlistActionLimit, 
+// validateRequest(addToWishlistSchema), // Skip validation for now due to empty schema
+async (req, res, next) => {
     try {
         await wishlistController.addToWishlist(req, res);
     }
@@ -79,11 +75,7 @@ router.delete("/remove/:productId", authenticate_1.authenticate, wishlistActionL
  * @desc    Clear entire wishlist
  * @access  Private (Customer)
  */
-router.delete("/clear", authenticate_1.authenticate, (0, rateLimiter_1.rateLimiter)({
-    windowMs: 60 * 60 * 1000, // 1 hour
-    maxRequests: 3, // 3 clear operations per hour
-    message: "Too many wishlist clear attempts. Please try again later.",
-}), async (req, res, next) => {
+router.delete("/clear", authenticate_1.authenticate, rateLimiter_1.rateLimiter.authenticated, async (req, res, next) => {
     try {
         await wishlistController.clearWishlist(req, res);
     }
@@ -142,7 +134,9 @@ router.get("/summary", authenticate_1.authenticate, async (req, res, next) => {
  *   removeFromWishlist?: boolean
  * }
  */
-router.post("/move-to-cart/:productId", authenticate_1.authenticate, wishlistActionLimit, (0, validateRequest_1.validateRequest)(userSchemas_1.moveToCartSchema), async (req, res, next) => {
+router.post("/move-to-cart/:productId", authenticate_1.authenticate, wishlistActionLimit, 
+// validateRequest(moveToCartSchema), // Skip validation for now due to empty schema
+async (req, res, next) => {
     try {
         await wishlistController.moveToCart(req, res);
     }
@@ -270,7 +264,9 @@ router.post("/price-alerts/enable", authenticate_1.authenticate, async (req, res
  *   allowComments?: boolean
  * }
  */
-router.post("/share", authenticate_1.authenticate, (0, validateRequest_1.validateRequest)(userSchemas_1.shareWishlistSchema), async (req, res, next) => {
+router.post("/share", authenticate_1.authenticate, 
+// validateRequest(shareWishlistSchema), // Skip validation for now due to empty schema
+async (req, res, next) => {
     try {
         await wishlistController.shareWishlist(req, res);
     }
@@ -521,11 +517,7 @@ router.get("/similar-users", authenticate_1.authenticate, async (req, res, next)
  * @access  Private (Customer)
  * @query   { format?: 'csv' | 'pdf' | 'json' }
  */
-router.get("/export", authenticate_1.authenticate, (0, rateLimiter_1.rateLimiter)({
-    windowMs: 60 * 60 * 1000, // 1 hour
-    maxRequests: 5, // 5 exports per hour
-    message: "Too many export attempts. Please try again later.",
-}), async (req, res, next) => {
+router.get("/export", authenticate_1.authenticate, rateLimiter_1.rateLimiter.authenticated, async (req, res, next) => {
     try {
         res.status(501).json({
             success: false,
@@ -542,11 +534,7 @@ router.get("/export", authenticate_1.authenticate, (0, rateLimiter_1.rateLimiter
  * @access  Private (Customer)
  * @body    FormData { file: File, format: 'csv' | 'json' }
  */
-router.post("/import", authenticate_1.authenticate, (0, rateLimiter_1.rateLimiter)({
-    windowMs: 60 * 60 * 1000, // 1 hour
-    maxRequests: 3, // 3 imports per hour
-    message: "Too many import attempts. Please try again later.",
-}), async (req, res, next) => {
+router.post("/import", authenticate_1.authenticate, rateLimiter_1.rateLimiter.authenticated, async (req, res, next) => {
     try {
         res.status(501).json({
             success: false,

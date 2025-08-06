@@ -51,7 +51,7 @@ class JWTService {
     /**
      * Generate access token
      */
-    async generateAccessToken(payload) {
+    generateAccessToken(payload) {
         try {
             return jwt.sign(payload, this.accessTokenSecret, {
                 expiresIn: this.accessTokenExpiresIn,
@@ -67,7 +67,7 @@ class JWTService {
     /**
      * Generate refresh token
      */
-    async generateRefreshToken(payload) {
+    generateRefreshToken(payload) {
         try {
             return jwt.sign(payload, this.refreshTokenSecret, {
                 expiresIn: this.refreshTokenExpiresIn,

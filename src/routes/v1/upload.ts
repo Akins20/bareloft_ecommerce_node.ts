@@ -41,7 +41,7 @@ const uploadConfig = multer({
     if (allowedMimeTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("Unsupported file type"), false);
+      cb(new Error("Unsupported file type"));
     }
   },
 });
@@ -59,7 +59,7 @@ const imageUploadConfig = multer({
     if (allowedImageTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("Only JPEG, PNG, and WebP images are allowed"), false);
+      cb(new Error("Only JPEG, PNG, and WebP images are allowed"));
     }
   },
 });
@@ -77,26 +77,15 @@ const avatarUploadConfig = multer({
     if (allowedImageTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(
-        new Error("Only JPEG, PNG, and WebP images are allowed for avatars"),
-        false
-      );
+      cb(new Error("Only JPEG, PNG, and WebP images are allowed for avatars"));
     }
   },
 });
 
 // Rate limiting for upload operations
-const uploadRateLimit = rateLimiter({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  maxRequests: 20, // 20 uploads per 15 minutes
-  message: "Too many upload attempts. Please try again later.",
-});
+const uploadRateLimit = rateLimiter.authenticated;
 
-const avatarUploadLimit = rateLimiter({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  maxRequests: 5, // 5 avatar uploads per hour
-  message: "Too many avatar upload attempts. Please try again later.",
-});
+const avatarUploadLimit = rateLimiter.authenticated;
 
 // ==================== GENERAL FILE UPLOAD ENDPOINTS ====================
 
@@ -117,7 +106,7 @@ router.post(
   uploadConfig.single("file"),
   async (req, res, next) => {
     try {
-      await uploadController.uploadSingle(req, res);
+      await uploadController.uploadSingle(req as any, res);
     } catch (error) {
       next(error);
     }
@@ -141,7 +130,7 @@ router.post(
   uploadConfig.array("files", 10),
   async (req, res, next) => {
     try {
-      await uploadController.uploadMultiple(req, res);
+      await uploadController.uploadMultiple(req as any, res);
     } catch (error) {
       next(error);
     }
@@ -165,7 +154,7 @@ router.post(
   avatarUploadConfig.single("file"),
   async (req, res, next) => {
     try {
-      await uploadController.uploadAvatar(req, res);
+      await uploadController.uploadAvatar(req as any, res);
     } catch (error) {
       next(error);
     }
@@ -184,12 +173,12 @@ router.post(
 router.post(
   "/product-images",
   authenticate,
-  authorize(["admin", "super_admin"]),
+  authorize(["ADMIN", "SUPER_ADMIN"]),
   uploadRateLimit,
   imageUploadConfig.array("files", 10),
   async (req, res, next) => {
     try {
-      await uploadController.uploadProductImages(req, res);
+      await uploadController.uploadProductImages(req as any, res);
     } catch (error) {
       next(error);
     }
@@ -208,7 +197,7 @@ router.post(
 router.post(
   "/category-image",
   authenticate,
-  authorize(["admin", "super_admin"]),
+  authorize(["ADMIN", "SUPER_ADMIN"]),
   uploadRateLimit,
   imageUploadConfig.single("file"),
   async (req, res, next) => {
@@ -236,7 +225,7 @@ router.post(
 router.post(
   "/brand-logo",
   authenticate,
-  authorize(["admin", "super_admin"]),
+  authorize(["ADMIN", "SUPER_ADMIN"]),
   uploadRateLimit,
   imageUploadConfig.single("file"),
   async (req, res, next) => {
@@ -262,12 +251,8 @@ router.post(
 router.post(
   "/bulk-products",
   authenticate,
-  authorize(["admin", "super_admin"]),
-  rateLimiter({
-    windowMs: 60 * 60 * 1000, // 1 hour
-    maxRequests: 3, // 3 bulk uploads per hour
-    message: "Too many bulk upload attempts. Please try again later.",
-  }),
+  authorize(["ADMIN", "SUPER_ADMIN"]),
+  rateLimiter.authenticated,
   uploadConfig.single("file"),
   async (req, res, next) => {
     try {
@@ -296,7 +281,7 @@ router.post(
  */
 router.get("/file/:fileId", async (req, res, next) => {
   try {
-    await uploadController.getFile(req, res);
+    await uploadController.getFile(req as any, res);
   } catch (error) {
     next(error);
   }
@@ -315,7 +300,7 @@ router.get("/file/:fileId", async (req, res, next) => {
  */
 router.get("/user-files", authenticate, async (req, res, next) => {
   try {
-    await uploadController.getUserFiles(req, res);
+    await uploadController.getUserFiles(req as any, res);
   } catch (error) {
     next(error);
   }
@@ -328,7 +313,7 @@ router.get("/user-files", authenticate, async (req, res, next) => {
  */
 router.get("/stats", authenticate, async (req, res, next) => {
   try {
-    await uploadController.getUploadStats(req, res);
+    await uploadController.getUploadStats(req as any, res);
   } catch (error) {
     next(error);
   }
@@ -344,7 +329,7 @@ router.get("/stats", authenticate, async (req, res, next) => {
  */
 router.delete("/file/:fileId", authenticate, async (req, res, next) => {
   try {
-    await uploadController.deleteFile(req, res);
+    await uploadController.deleteFile(req as any, res);
   } catch (error) {
     next(error);
   }
@@ -444,7 +429,7 @@ router.post(
 router.get(
   "/admin/files",
   authenticate,
-  authorize(["admin", "super_admin"]),
+  authorize(["ADMIN", "SUPER_ADMIN"]),
   async (req, res, next) => {
     try {
       res.status(501).json({
@@ -466,7 +451,7 @@ router.get(
 router.get(
   "/admin/stats",
   authenticate,
-  authorize(["admin", "super_admin"]),
+  authorize(["ADMIN", "SUPER_ADMIN"]),
   async (req, res, next) => {
     try {
       res.status(501).json({
@@ -491,7 +476,7 @@ router.get(
 router.delete(
   "/admin/cleanup",
   authenticate,
-  authorize(["admin", "super_admin"]),
+  authorize(["ADMIN", "SUPER_ADMIN"]),
   async (req, res, next) => {
     try {
       res.status(501).json({

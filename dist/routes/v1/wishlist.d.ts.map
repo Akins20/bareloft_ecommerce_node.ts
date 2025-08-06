@@ -1,1 +1,1 @@
-{"version":3,"file":"wishlist.d.ts","sourceRoot":"","sources":["../../../src/routes/v1/wishlist.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,kBAAkB,EAAE,MAAM,4CAA4C,CAAC;AAUhF,QAAA,MAAM,MAAM,4CAAW,CAAC;AAKxB,eAAO,MAAM,wBAAwB,GAAI,YAAY,kBAAkB,+CAGtE,CAAC;AA0qBF,eAAe,MAAM,CAAC"}
+{"version":3,"file":"wishlist.d.ts","sourceRoot":"","sources":["../../../src/routes/v1/wishlist.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,kBAAkB,EAAE,MAAM,4CAA4C,CAAC;AAShF,QAAA,MAAM,MAAM,4CAAW,CAAC;AAKxB,eAAO,MAAM,wBAAwB,GAAI,YAAY,kBAAkB,+CAGtE,CAAC;AAspBF,eAAe,MAAM,CAAC"}

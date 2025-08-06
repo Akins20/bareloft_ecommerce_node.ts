@@ -8,11 +8,11 @@ export declare class JWTService {
     /**
      * Generate access token
      */
-    generateAccessToken(payload: Omit<JWTPayload, "iat" | "exp">): Promise<string>;
+    generateAccessToken(payload: Omit<JWTPayload, "iat" | "exp">): string;
     /**
      * Generate refresh token
      */
-    generateRefreshToken(payload: Omit<JWTPayload, "iat" | "exp">): Promise<string>;
+    generateRefreshToken(payload: Omit<JWTPayload, "iat" | "exp">): string;
     /**
      * Verify access token
      */

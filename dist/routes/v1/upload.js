@@ -42,7 +42,7 @@ const uploadConfig = (0, multer_1.default)({
             cb(null, true);
         }
         else {
-            cb(new Error("Unsupported file type"), false);
+            cb(new Error("Unsupported file type"));
         }
     },
 });
@@ -59,7 +59,7 @@ const imageUploadConfig = (0, multer_1.default)({
             cb(null, true);
         }
         else {
-            cb(new Error("Only JPEG, PNG, and WebP images are allowed"), false);
+            cb(new Error("Only JPEG, PNG, and WebP images are allowed"));
         }
     },
 });
@@ -76,21 +76,13 @@ const avatarUploadConfig = (0, multer_1.default)({
             cb(null, true);
         }
         else {
-            cb(new Error("Only JPEG, PNG, and WebP images are allowed for avatars"), false);
+            cb(new Error("Only JPEG, PNG, and WebP images are allowed for avatars"));
         }
     },
 });
 // Rate limiting for upload operations
-const uploadRateLimit = (0, rateLimiter_1.rateLimiter)({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    maxRequests: 20, // 20 uploads per 15 minutes
-    message: "Too many upload attempts. Please try again later.",
-});
-const avatarUploadLimit = (0, rateLimiter_1.rateLimiter)({
-    windowMs: 60 * 60 * 1000, // 1 hour
-    maxRequests: 5, // 5 avatar uploads per hour
-    message: "Too many avatar upload attempts. Please try again later.",
-});
+const uploadRateLimit = rateLimiter_1.rateLimiter.authenticated;
+const avatarUploadLimit = rateLimiter_1.rateLimiter.authenticated;
 // ==================== GENERAL FILE UPLOAD ENDPOINTS ====================
 /**
  * @route   POST /api/v1/upload/single
@@ -154,7 +146,7 @@ router.post("/avatar", authenticate_1.authenticate, avatarUploadLimit, avatarUpl
  *   productId: string (required)
  * }
  */
-router.post("/product-images", authenticate_1.authenticate, (0, authorize_1.authorize)(["admin", "super_admin"]), uploadRateLimit, imageUploadConfig.array("files", 10), async (req, res, next) => {
+router.post("/product-images", authenticate_1.authenticate, (0, authorize_1.authorize)(["ADMIN", "SUPER_ADMIN"]), uploadRateLimit, imageUploadConfig.array("files", 10), async (req, res, next) => {
     try {
         await uploadController.uploadProductImages(req, res);
     }
@@ -171,7 +163,7 @@ router.post("/product-images", authenticate_1.authenticate, (0, authorize_1.auth
  *   categoryId: string (required)
  * }
  */
-router.post("/category-image", authenticate_1.authenticate, (0, authorize_1.authorize)(["admin", "super_admin"]), uploadRateLimit, imageUploadConfig.single("file"), async (req, res, next) => {
+router.post("/category-image", authenticate_1.authenticate, (0, authorize_1.authorize)(["ADMIN", "SUPER_ADMIN"]), uploadRateLimit, imageUploadConfig.single("file"), async (req, res, next) => {
     try {
         // This would be handled by a category-specific upload method
         res.status(501).json({
@@ -192,7 +184,7 @@ router.post("/category-image", authenticate_1.authenticate, (0, authorize_1.auth
  *   brandId: string (required)
  * }
  */
-router.post("/brand-logo", authenticate_1.authenticate, (0, authorize_1.authorize)(["admin", "super_admin"]), uploadRateLimit, imageUploadConfig.single("file"), async (req, res, next) => {
+router.post("/brand-logo", authenticate_1.authenticate, (0, authorize_1.authorize)(["ADMIN", "SUPER_ADMIN"]), uploadRateLimit, imageUploadConfig.single("file"), async (req, res, next) => {
     try {
         res.status(501).json({
             success: false,
@@ -211,11 +203,7 @@ router.post("/brand-logo", authenticate_1.authenticate, (0, authorize_1.authoriz
  *   file: File (required, CSV/Excel)
  * }
  */
-router.post("/bulk-products", authenticate_1.authenticate, (0, authorize_1.authorize)(["admin", "super_admin"]), (0, rateLimiter_1.rateLimiter)({
-    windowMs: 60 * 60 * 1000, // 1 hour
-    maxRequests: 3, // 3 bulk uploads per hour
-    message: "Too many bulk upload attempts. Please try again later.",
-}), uploadConfig.single("file"), async (req, res, next) => {
+router.post("/bulk-products", authenticate_1.authenticate, (0, authorize_1.authorize)(["ADMIN", "SUPER_ADMIN"]), rateLimiter_1.rateLimiter.authenticated, uploadConfig.single("file"), async (req, res, next) => {
     try {
         res.status(501).json({
             success: false,
@@ -372,7 +360,7 @@ router.post("/optimize/:fileId", authenticate_1.authenticate, uploadRateLimit, a
  *   endDate?: string
  * }
  */
-router.get("/admin/files", authenticate_1.authenticate, (0, authorize_1.authorize)(["admin", "super_admin"]), async (req, res, next) => {
+router.get("/admin/files", authenticate_1.authenticate, (0, authorize_1.authorize)(["ADMIN", "SUPER_ADMIN"]), async (req, res, next) => {
     try {
         res.status(501).json({
             success: false,
@@ -389,7 +377,7 @@ router.get("/admin/files", authenticate_1.authenticate, (0, authorize_1.authoriz
  * @access  Private (Admin)
  * @query   { days?: number }
  */
-router.get("/admin/stats", authenticate_1.authenticate, (0, authorize_1.authorize)(["admin", "super_admin"]), async (req, res, next) => {
+router.get("/admin/stats", authenticate_1.authenticate, (0, authorize_1.authorize)(["ADMIN", "SUPER_ADMIN"]), async (req, res, next) => {
     try {
         res.status(501).json({
             success: false,
@@ -409,7 +397,7 @@ router.get("/admin/stats", authenticate_1.authenticate, (0, authorize_1.authoriz
  *   dryRun?: boolean
  * }
  */
-router.delete("/admin/cleanup", authenticate_1.authenticate, (0, authorize_1.authorize)(["admin", "super_admin"]), async (req, res, next) => {
+router.delete("/admin/cleanup", authenticate_1.authenticate, (0, authorize_1.authorize)(["ADMIN", "SUPER_ADMIN"]), async (req, res, next) => {
     try {
         res.status(501).json({
             success: false,

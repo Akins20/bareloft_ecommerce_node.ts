@@ -275,11 +275,7 @@ productController.getRelatedProducts);
  *   }
  * }
  */
-router.get("/:id/stock", (0, rateLimiter_1.rateLimiter)({
-    windowMs: 60 * 1000, // 1 minute
-    max: 120, // 120 requests per minute
-    message: "Too many stock check requests",
-}), productController.getProductStock);
+router.get("/:id/stock", rateLimiter_1.rateLimiter.general, productController.getProductStock);
 /**
  * @route   GET /api/v1/products/:id/reviews/summary
  * @desc    Get product review summary and statistics

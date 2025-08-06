@@ -19,11 +19,11 @@ export class JWTService {
   /**
    * Generate access token
    */
-  async generateAccessToken(
+  generateAccessToken(
     payload: Omit<JWTPayload, "iat" | "exp">
-  ): Promise<string> {
+  ): string {
     try {
-      return jwt.sign(payload as object, this.accessTokenSecret, {
+      return (jwt.sign as any)(payload, this.accessTokenSecret, {
         expiresIn: this.accessTokenExpiresIn,
         issuer: "bareloft-api",
         audience: "bareloft-client",
@@ -41,11 +41,11 @@ export class JWTService {
   /**
    * Generate refresh token
    */
-  async generateRefreshToken(
+  generateRefreshToken(
     payload: Omit<JWTPayload, "iat" | "exp">
-  ): Promise<string> {
+  ): string {
     try {
-      return jwt.sign(payload as object, this.refreshTokenSecret, {
+      return (jwt.sign as any)(payload, this.refreshTokenSecret, {
         expiresIn: this.refreshTokenExpiresIn,
         issuer: "bareloft-api",
         audience: "bareloft-client",

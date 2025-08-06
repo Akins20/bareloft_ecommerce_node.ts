@@ -5,7 +5,6 @@ const express_1 = require("express");
 const authenticate_1 = require("../../middleware/auth/authenticate");
 const authorize_1 = require("../../middleware/auth/authorize");
 const rateLimiter_1 = require("../../middleware/security/rateLimiter");
-const cacheMiddleware_1 = require("../../middleware/cache/cacheMiddleware");
 const router = (0, express_1.Router)();
 // Initialize controller
 let searchController;
@@ -15,16 +14,8 @@ const initializeSearchRoutes = (controller) => {
 };
 exports.initializeSearchRoutes = initializeSearchRoutes;
 // Rate limiting for search operations
-const searchRateLimit = (0, rateLimiter_1.rateLimiter)({
-    windowMs: 1 * 60 * 1000, // 1 minute
-    maxRequests: 30, // 30 searches per minute
-    message: "Too many search requests. Please slow down.",
-});
-const autocompleteRateLimit = (0, rateLimiter_1.rateLimiter)({
-    windowMs: 1 * 60 * 1000, // 1 minute
-    maxRequests: 60, // 60 autocomplete requests per minute
-    message: "Too many autocomplete requests. Please slow down.",
-});
+const searchRateLimit = rateLimiter_1.rateLimiter.general;
+const autocompleteRateLimit = rateLimiter_1.rateLimiter.general;
 // ==================== MAIN SEARCH ENDPOINTS ====================
 /**
  * @route   GET /api/v1/search
@@ -66,7 +57,8 @@ router.get("/", searchRateLimit, async (req, res, next) => {
  *   limit?: number (max 20)
  * }
  */
-router.get("/autocomplete", autocompleteRateLimit, (0, cacheMiddleware_1.cacheMiddleware)(300), // 5 minute cache
+router.get("/autocomplete", autocompleteRateLimit, 
+// cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
 async (req, res, next) => {
     try {
         await searchController.getAutocomplete(req, res);
@@ -81,7 +73,8 @@ async (req, res, next) => {
  * @access  Public (personalized if authenticated)
  * @query   { limit?: number }
  */
-router.get("/suggestions", (0, cacheMiddleware_1.cacheMiddleware)(600), // 10 minute cache
+router.get("/suggestions", 
+// cacheMiddleware({ ttl: 600 }), // 10 minute cache - disabled for now
 async (req, res, next) => {
     try {
         await searchController.getPersonalizedSuggestions(req, res);
@@ -99,7 +92,8 @@ async (req, res, next) => {
  *   timeframe?: '7d' | '30d' | '90d'
  * }
  */
-router.get("/popular", (0, cacheMiddleware_1.cacheMiddleware)(1800), // 30 minute cache
+router.get("/popular", 
+// cacheMiddleware({ ttl: 1800 }), // 30 minute cache - disabled for now
 async (req, res, next) => {
     try {
         await searchController.getPopularSearchTerms(req, res);
@@ -117,7 +111,8 @@ async (req, res, next) => {
  *   hours?: number (default 24)
  * }
  */
-router.get("/trending", (0, cacheMiddleware_1.cacheMiddleware)(900), // 15 minute cache
+router.get("/trending", 
+// cacheMiddleware({ ttl: 900 }), // 15 minute cache - disabled for now
 async (req, res, next) => {
     try {
         await searchController.getTrendingSearches(req, res);
@@ -132,7 +127,8 @@ async (req, res, next) => {
  * @access  Public
  * @query   { q: string }
  */
-router.get("/filters", (0, cacheMiddleware_1.cacheMiddleware)(300), // 5 minute cache
+router.get("/filters", 
+// cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
 async (req, res, next) => {
     try {
         await searchController.getSearchFilters(req, res);
@@ -385,7 +381,7 @@ router.delete("/alerts/:alertId", authenticate_1.authenticate, async (req, res, 
  * @access  Private (Admin)
  * @query   { days?: number }
  */
-router.get("/analytics", authenticate_1.authenticate, (0, authorize_1.authorize)(["admin", "super_admin"]), async (req, res, next) => {
+router.get("/analytics", authenticate_1.authenticate, (0, authorize_1.authorize)(["ADMIN", "SUPER_ADMIN"]), async (req, res, next) => {
     try {
         await searchController.getSearchAnalytics(req, res);
     }
@@ -399,7 +395,7 @@ router.get("/analytics", authenticate_1.authenticate, (0, authorize_1.authorize)
  * @access  Private (Admin)
  * @query   { page?: number, limit?: number, days?: number }
  */
-router.get("/analytics/no-results", authenticate_1.authenticate, (0, authorize_1.authorize)(["admin", "super_admin"]), async (req, res, next) => {
+router.get("/analytics/no-results", authenticate_1.authenticate, (0, authorize_1.authorize)(["ADMIN", "SUPER_ADMIN"]), async (req, res, next) => {
     try {
         res.status(501).json({
             success: false,
@@ -416,7 +412,7 @@ router.get("/analytics/no-results", authenticate_1.authenticate, (0, authorize_1
  * @access  Private (Admin)
  * @query   { page?: number, limit?: number, days?: number }
  */
-router.get("/analytics/low-results", authenticate_1.authenticate, (0, authorize_1.authorize)(["admin", "super_admin"]), async (req, res, next) => {
+router.get("/analytics/low-results", authenticate_1.authenticate, (0, authorize_1.authorize)(["ADMIN", "SUPER_ADMIN"]), async (req, res, next) => {
     try {
         res.status(501).json({
             success: false,

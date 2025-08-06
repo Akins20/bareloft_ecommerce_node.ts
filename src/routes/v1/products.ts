@@ -311,11 +311,7 @@ router.get(
  */
 router.get(
   "/:id/stock",
-  rateLimiter({
-    windowMs: 60 * 1000, // 1 minute
-    max: 120, // 120 requests per minute
-    message: "Too many stock check requests",
-  }),
+  rateLimiter.general,
   productController.getProductStock
 );
 

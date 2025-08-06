@@ -1,1 +1,1 @@
-{"version":3,"file":"reviews.d.ts","sourceRoot":"","sources":["../../../src/routes/v1/reviews.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,gBAAgB,EAAE,MAAM,6CAA6C,CAAC;AAY/E,QAAA,MAAM,MAAM,4CAAW,CAAC;AAKxB,eAAO,MAAM,sBAAsB,GAAI,YAAY,gBAAgB,+CAGlE,CAAC;AAkZF,eAAe,MAAM,CAAC"}
+{"version":3,"file":"reviews.d.ts","sourceRoot":"","sources":["../../../src/routes/v1/reviews.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,gBAAgB,EAAE,MAAM,6CAA6C,CAAC;AAW/E,QAAA,MAAM,MAAM,4CAAW,CAAC;AAKxB,eAAO,MAAM,sBAAsB,GAAI,YAAY,gBAAgB,+CAGlE,CAAC;AA0YF,eAAe,MAAM,CAAC"}

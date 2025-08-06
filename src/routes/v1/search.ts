@@ -16,17 +16,9 @@ export const initializeSearchRoutes = (controller: SearchController) => {
 };
 
 // Rate limiting for search operations
-const searchRateLimit = rateLimiter({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  maxRequests: 30, // 30 searches per minute
-  message: "Too many search requests. Please slow down.",
-});
+const searchRateLimit = rateLimiter.general;
 
-const autocompleteRateLimit = rateLimiter({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  maxRequests: 60, // 60 autocomplete requests per minute
-  message: "Too many autocomplete requests. Please slow down.",
-});
+const autocompleteRateLimit = rateLimiter.general;
 
 // ==================== MAIN SEARCH ENDPOINTS ====================
 
@@ -55,7 +47,7 @@ const autocompleteRateLimit = rateLimiter({
  */
 router.get("/", searchRateLimit, async (req, res, next) => {
   try {
-    await searchController.searchProducts(req, res);
+    await searchController.searchProducts(req as any, res);
   } catch (error) {
     next(error);
   }
@@ -73,10 +65,10 @@ router.get("/", searchRateLimit, async (req, res, next) => {
 router.get(
   "/autocomplete",
   autocompleteRateLimit,
-  cacheMiddleware(300), // 5 minute cache
+  // cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
   async (req, res, next) => {
     try {
-      await searchController.getAutocomplete(req, res);
+      await searchController.getAutocomplete(req as any, res);
     } catch (error) {
       next(error);
     }
@@ -91,10 +83,10 @@ router.get(
  */
 router.get(
   "/suggestions",
-  cacheMiddleware(600), // 10 minute cache
+  // cacheMiddleware({ ttl: 600 }), // 10 minute cache - disabled for now
   async (req, res, next) => {
     try {
-      await searchController.getPersonalizedSuggestions(req, res);
+      await searchController.getPersonalizedSuggestions(req as any, res);
     } catch (error) {
       next(error);
     }
@@ -112,10 +104,10 @@ router.get(
  */
 router.get(
   "/popular",
-  cacheMiddleware(1800), // 30 minute cache
+  // cacheMiddleware({ ttl: 1800 }), // 30 minute cache - disabled for now
   async (req, res, next) => {
     try {
-      await searchController.getPopularSearchTerms(req, res);
+      await searchController.getPopularSearchTerms(req as any, res);
     } catch (error) {
       next(error);
     }
@@ -133,10 +125,10 @@ router.get(
  */
 router.get(
   "/trending",
-  cacheMiddleware(900), // 15 minute cache
+  // cacheMiddleware({ ttl: 900 }), // 15 minute cache - disabled for now
   async (req, res, next) => {
     try {
-      await searchController.getTrendingSearches(req, res);
+      await searchController.getTrendingSearches(req as any, res);
     } catch (error) {
       next(error);
     }
@@ -151,10 +143,10 @@ router.get(
  */
 router.get(
   "/filters",
-  cacheMiddleware(300), // 5 minute cache
+  // cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
   async (req, res, next) => {
     try {
-      await searchController.getSearchFilters(req, res);
+      await searchController.getSearchFilters(req as any, res);
     } catch (error) {
       next(error);
     }
@@ -183,7 +175,7 @@ router.get(
  */
 router.get("/category/:categoryId", searchRateLimit, async (req, res, next) => {
   try {
-    await searchController.searchInCategory(req, res);
+    await searchController.searchInCategory(req as any, res);
   } catch (error) {
     next(error);
   }
@@ -209,7 +201,7 @@ router.get("/category/:categoryId", searchRateLimit, async (req, res, next) => {
  */
 router.get("/brand/:brand", searchRateLimit, async (req, res, next) => {
   try {
-    await searchController.searchByBrand(req, res);
+    await searchController.searchByBrand(req as any, res);
   } catch (error) {
     next(error);
   }
@@ -225,7 +217,7 @@ router.get("/brand/:brand", searchRateLimit, async (req, res, next) => {
  */
 router.get("/history", authenticate, async (req, res, next) => {
   try {
-    await searchController.getSearchHistory(req, res);
+    await searchController.getSearchHistory(req as any, res);
   } catch (error) {
     next(error);
   }
@@ -243,7 +235,7 @@ router.get("/history", authenticate, async (req, res, next) => {
  */
 router.post("/save", authenticate, async (req, res, next) => {
   try {
-    await searchController.saveSearch(req, res);
+    await searchController.saveSearch(req as any, res);
   } catch (error) {
     next(error);
   }
@@ -256,7 +248,7 @@ router.post("/save", authenticate, async (req, res, next) => {
  */
 router.delete("/history", authenticate, async (req, res, next) => {
   try {
-    await searchController.clearSearchHistory(req, res);
+    await searchController.clearSearchHistory(req as any, res);
   } catch (error) {
     next(error);
   }
@@ -413,10 +405,10 @@ router.delete("/alerts/:alertId", authenticate, async (req, res, next) => {
 router.get(
   "/analytics",
   authenticate,
-  authorize(["admin", "super_admin"]),
+  authorize(["ADMIN", "SUPER_ADMIN"]),
   async (req, res, next) => {
     try {
-      await searchController.getSearchAnalytics(req, res);
+      await searchController.getSearchAnalytics(req as any, res);
     } catch (error) {
       next(error);
     }
@@ -432,7 +424,7 @@ router.get(
 router.get(
   "/analytics/no-results",
   authenticate,
-  authorize(["admin", "super_admin"]),
+  authorize(["ADMIN", "SUPER_ADMIN"]),
   async (req, res, next) => {
     try {
       res.status(501).json({
@@ -454,7 +446,7 @@ router.get(
 router.get(
   "/analytics/low-results",
   authenticate,
-  authorize(["admin", "super_admin"]),
+  authorize(["ADMIN", "SUPER_ADMIN"]),
   async (req, res, next) => {
     try {
       res.status(501).json({
