@@ -46,7 +46,14 @@ export class WishlistController extends BaseController {
       this.sendPaginatedResponse(
         res,
         result.items,
-        result.pagination,
+        {
+          page: result.pagination.currentPage,
+          limit: result.pagination.itemsPerPage,
+          total: result.pagination.totalItems,
+          totalPages: result.pagination.totalPages,
+          hasNext: result.pagination.hasNextPage,
+          hasPrev: result.pagination.hasPreviousPage,
+        },
         "Wishlist retrieved successfully"
       );
     } catch (error) {
@@ -161,6 +168,11 @@ export class WishlistController extends BaseController {
         return;
       }
 
+      if (!productId) {
+        this.sendError(res, "Product ID is required", 400, "VALIDATION_ERROR");
+        return;
+      }
+
       const isInWishlist = await this.wishlistService.isProductInWishlist(
         userId,
         productId
@@ -259,6 +271,11 @@ export class WishlistController extends BaseController {
       const qty = quantity && quantity > 0 ? quantity : 1;
       const shouldRemove = removeFromWishlist !== false; // Default to true
 
+      if (!productId) {
+        this.sendError(res, "Product ID is required", 400, "VALIDATION_ERROR");
+        return;
+      }
+
       const result = await this.wishlistService.moveToCart(
         userId,
         productId,
@@ -351,12 +368,13 @@ export class WishlistController extends BaseController {
       );
 
       if (result.successCount === 0) {
+        const errorDetails = result.failures?.map(f => `${f.productId}: ${f.reason}`) || [];
         this.sendError(
           res,
           "No items could be moved to cart",
           400,
           "MOVE_TO_CART_FAILED",
-          result.failures
+          errorDetails
         );
         return;
       }
@@ -470,7 +488,14 @@ export class WishlistController extends BaseController {
       this.sendPaginatedResponse(
         res,
         result.items,
-        result.pagination,
+        {
+          page: result.pagination.currentPage,
+          limit: result.pagination.itemsPerPage,
+          total: result.pagination.totalItems,
+          totalPages: result.pagination.totalPages,
+          hasNext: result.pagination.hasNextPage,
+          hasPrev: result.pagination.hasPreviousPage,
+        },
         "Shared wishlist retrieved successfully"
       );
     } catch (error) {

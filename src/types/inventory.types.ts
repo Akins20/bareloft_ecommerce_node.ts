@@ -1,60 +1,64 @@
 export enum InventoryMovementType {
   // Inbound
-  INITIAL_STOCK = "initial_stock",
-  RESTOCK = "restock",
-  PURCHASE = "purchase",
-  RETURN = "return",
-  TRANSFER_IN = "transfer_in",
-  ADJUSTMENT_IN = "adjustment_in",
+  IN = "IN",
+  // Outbound  
+  OUT = "OUT",
+  // Adjustments
+  ADJUSTMENT = "ADJUSTMENT",
 
-  // Outbound
-  SALE = "sale",
-  TRANSFER_OUT = "transfer_out",
-  DAMAGE = "damage",
-  THEFT = "theft",
-  EXPIRED = "expired",
-  ADJUSTMENT_OUT = "adjustment_out",
-
-  // Reservations
-  RESERVE = "reserve",
-  RELEASE_RESERVE = "release_reserve",
+  // Backwards compatibility aliases
+  INITIAL_STOCK = "IN",
+  RESTOCK = "IN",
+  PURCHASE = "IN",
+  RETURN = "IN",
+  TRANSFER_IN = "IN",
+  ADJUSTMENT_IN = "ADJUSTMENT",
+  SALE = "OUT",
+  TRANSFER_OUT = "OUT",
+  DAMAGE = "OUT",
+  THEFT = "OUT",
+  EXPIRED = "OUT",
+  ADJUSTMENT_OUT = "ADJUSTMENT",
+  RESERVE = "OUT",
+  RELEASE_RESERVE = "IN",
 }
 
 export enum InventoryStatus {
-  ACTIVE = "active",
-  INACTIVE = "inactive",
-  DISCONTINUED = "discontinued",
-  OUT_OF_STOCK = "out_of_stock",
-  LOW_STOCK = "low_stock",
-  OVERSTOCKED = "overstocked",
+  ACTIVE = "ACTIVE",
+  INACTIVE = "INACTIVE",
+  DISCONTINUED = "DISCONTINUED",
+  OUT_OF_STOCK = "OUT_OF_STOCK",
+  LOW_STOCK = "LOW_STOCK",
+  OVERSTOCKED = "OVERSTOCKED",
 }
 
 export enum StockAlert {
-  LOW_STOCK = "low_stock",
-  OUT_OF_STOCK = "out_of_stock",
-  OVERSTOCK = "overstock",
-  NEGATIVE_STOCK = "negative_stock",
-  RESERVATION_EXPIRED = "reservation_expired",
+  LOW_STOCK = "LOW_STOCK",
+  OUT_OF_STOCK = "OUT_OF_STOCK",
+  OVERSTOCK = "OVERSTOCK",
+  NEGATIVE_STOCK = "NEGATIVE_STOCK",
+  RESERVATION_EXPIRED = "RESERVATION_EXPIRED",
 }
 
+// Inventory interface matches Product fields for stock management
 export interface Inventory {
   id: string;
   productId: string;
 
-  // Stock Levels
-  quantity: number;
-  reservedQuantity: number;
+  // Stock Levels (mapped from Product model)
+  quantity: number; // maps to Product.stock
+  reservedQuantity: number; // calculated from reservations
   availableQuantity: number; // quantity - reservedQuantity
 
   // Thresholds
-  lowStockThreshold: number;
+  lowStockThreshold: number; // maps to Product.lowStockThreshold
   maxStockLevel?: number;
   reorderPoint: number;
   reorderQuantity: number;
 
   // Status
   status: InventoryStatus;
-  trackInventory: boolean;
+  trackInventory: boolean; // maps to Product.trackQuantity
   allowBackorder: boolean;
   backorderLimit?: number;
 
@@ -64,8 +68,8 @@ export interface Inventory {
   bin?: string;
 
   // Cost Management
-  averageCost: number;
-  lastCost: number;
+  averageCost: number; // maps to Product.costPrice or calculated
+  lastCost: number; // maps to Product.costPrice
 
   // Timestamps
   lastRestockedAt?: Date;
@@ -75,56 +79,50 @@ export interface Inventory {
   updatedAt: Date;
 }
 
+// InventoryMovement interface matches actual Prisma schema
 export interface InventoryMovement {
   id: string;
-  inventoryId: string;
-  productId: string;
+  productId: string; // schema only has productId, not inventoryId
 
-  // Movement Details
+  // Movement Details (simplified based on schema)
   type: InventoryMovementType;
   quantity: number;
-  previousQuantity: number;
-  newQuantity: number;
+  reference?: string; // maps to schema reference field
+  reason?: string;
 
-  // Cost Information
+  // Extended fields for compatibility (not in schema)
+  inventoryId?: string; // for compatibility, derived from productId
+  previousQuantity?: number;
+  newQuantity?: number;
   unitCost?: number;
   totalCost?: number;
-
-  // Reference Information
   referenceType?: "order" | "purchase" | "adjustment" | "transfer";
   referenceId?: string;
-
-  // Notes and Metadata
-  reason?: string;
   notes?: string;
   metadata?: Record<string, any>;
-
-  // Audit Trail
-  createdBy: string;
-  batchId?: string; // For bulk operations
+  createdBy?: string;
+  batchId?: string;
 
   // Timestamps
   createdAt: Date;
 }
 
+// StockReservation interface matches actual Prisma schema
 export interface StockReservation {
   id: string;
-  inventoryId: string;
   productId: string;
   orderId?: string;
-  cartId?: string;
-
-  // Reservation Details
   quantity: number;
-  reason: string;
-
-  // Expiration
   expiresAt: Date;
-  isExpired: boolean;
-  isReleased: boolean;
-
-  // Timestamps
   createdAt: Date;
+  updatedAt: Date;
+
+  // Extended fields for compatibility (not in schema)
+  inventoryId?: string; // for compatibility, derived from productId
+  cartId?: string;
+  reason?: string;
+  isExpired?: boolean;
+  isReleased?: boolean;
   releasedAt?: Date;
 }
 
@@ -135,6 +133,7 @@ export interface UpdateInventoryRequest {
   lowStockThreshold?: number;
   reorderPoint?: number;
   reorderQuantity?: number;
+  trackInventory?: boolean;
   allowBackorder?: boolean;
   reason?: string;
   notes?: string;

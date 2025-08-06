@@ -218,10 +218,10 @@ export const allSchemas = {
 export const validateSchema = async (schemaPath: string, data: any) => {
   try {
     const schemaKeys = schemaPath.split(".");
-    let schema = allSchemas;
+    let schema: any = allSchemas;
 
     for (const key of schemaKeys) {
-      schema = schema[key as keyof typeof schema];
+      schema = schema[key];
       if (!schema) {
         throw new Error(`Schema not found: ${schemaPath}`);
       }

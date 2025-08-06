@@ -271,9 +271,11 @@ export class SearchController extends BaseController {
       const { brand } = req.params;
       const query = (req.query.q as string) || "";
 
+      const decodedBrand = decodeURIComponent(brand!);
+      
       const searchQuery: SearchQuery = {
         query: query.trim(),
-        brand: decodeURIComponent(brand),
+        brand: decodedBrand,
         page: parseInt(req.query.page as string) || 1,
         limit: Math.min(parseInt(req.query.limit as string) || 20, 100),
         categoryId: req.query.categoryId as string,
@@ -299,7 +301,7 @@ export class SearchController extends BaseController {
         "SEARCH",
         undefined,
         {
-          brand: decodeURIComponent(brand),
+          brand: decodedBrand,
           query: query.trim(),
           resultCount: result.products.length,
         }
@@ -307,7 +309,7 @@ export class SearchController extends BaseController {
 
       const response: ApiResponse<SearchResponse> = {
         success: true,
-        message: `Found ${result.pagination.total} product(s) from ${decodeURIComponent(brand)}`,
+        message: `Found ${result.pagination.total} product(s) from ${decodedBrand}`,
         data: result,
       };
 
@@ -500,7 +502,7 @@ export class SearchController extends BaseController {
 
       const days = parseInt(req.query.days as string) || 30;
 
-      const analytics = await this.searchService.getSearchAnalytics(days);
+      const analytics = await this.searchService.getSearchAnalyticsWithDays(days);
 
       this.sendSuccess(
         res,

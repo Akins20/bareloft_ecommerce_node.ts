@@ -3,7 +3,8 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 // Cart Model Schema
-export const CartModel = prisma.cart;
+// Note: Using CartItem model since Cart model doesn't exist in current Prisma schema
+export const CartModel = prisma.cartItem;
 
 // Cart Schema Definition for Prisma
 export const CartSchema = `

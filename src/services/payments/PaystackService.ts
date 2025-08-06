@@ -442,31 +442,31 @@ export class PaystackService extends BaseService {
   }> {
     return [
       {
-        channel: "card",
+        channel: "card" as any,
         name: "Debit/Credit Card",
         description: "Pay with Visa, Mastercard, or Verve",
         available: true,
       },
       {
-        channel: "bank",
+        channel: "bank" as any,
         name: "Bank",
         description: "Pay directly from your bank account",
         available: true,
       },
       {
-        channel: "ussd",
+        channel: "ussd" as any,
         name: "USSD",
         description: "Pay using USSD codes",
         available: true,
       },
       {
-        channel: "bank_transfer",
+        channel: "bank_transfer" as any,
         name: "Bank Transfer",
         description: "Transfer to our account",
         available: true,
       },
       {
-        channel: "qr",
+        channel: "qr" as any,
         name: "QR Code",
         description: "Scan QR code to pay",
         available: true,

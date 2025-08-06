@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
-import { config } from "@/config/environment";
-import { JWTPayload } from "@/types";
-import { AppError, HTTP_STATUS, ERROR_CODES } from "@/types/api.types";
+import { config } from "../../config/environment";
+import { JWTPayload } from "../../types";
+import { AppError, HTTP_STATUS, ERROR_CODES } from "../../types/api.types";
 
 export class JWTService {
   private accessTokenSecret: string;
@@ -23,7 +23,7 @@ export class JWTService {
     payload: Omit<JWTPayload, "iat" | "exp">
   ): Promise<string> {
     try {
-      return jwt.sign(payload, this.accessTokenSecret, {
+      return jwt.sign(payload as any, this.accessTokenSecret, {
         expiresIn: this.accessTokenExpiresIn,
         issuer: "bareloft-api",
         audience: "bareloft-client",
@@ -45,7 +45,7 @@ export class JWTService {
     payload: Omit<JWTPayload, "iat" | "exp">
   ): Promise<string> {
     try {
-      return jwt.sign(payload, this.refreshTokenSecret, {
+      return jwt.sign(payload as any, this.refreshTokenSecret, {
         expiresIn: this.refreshTokenExpiresIn,
         issuer: "bareloft-api",
         audience: "bareloft-client",

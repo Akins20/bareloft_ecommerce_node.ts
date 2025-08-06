@@ -43,7 +43,7 @@ export class CartController extends BaseController {
         return;
       }
 
-      const cartSummary = await this.cartService.getCart(userId);
+      const cartSummary = await this.cartService.getCart(userId!);
 
       // Convert CartSummary to Cart type for compatibility
       const cart: any = {
@@ -99,6 +99,14 @@ export class CartController extends BaseController {
         return;
       }
 
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: "Authentication required",
+        });
+        return;
+      }
+
       const cartItem = await this.cartService.addToCart(userId, {
         productId,
         quantity,
@@ -109,10 +117,10 @@ export class CartController extends BaseController {
         id: `cart_${userId}`,
         userId,
         items: [cartItem],
-        subtotal: cartItem.price * cartItem.quantity,
+        subtotal: cartItem.unitPrice * cartItem.quantity,
         estimatedTax: 0,
         estimatedShipping: 0,
-        estimatedTotal: cartItem.price * cartItem.quantity,
+        estimatedTotal: cartItem.unitPrice * cartItem.quantity,
         currency: "NGN",
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -146,11 +154,20 @@ export class CartController extends BaseController {
       const userId = req.user?.userId;
       const sessionId =
         req.sessionId || (req.headers["x-session-id"] as string);
-      const { quantity }: UpdateCartItemRequest = req.body;
+      const { productId, quantity }: UpdateCartItemRequest = req.body;
       const { itemId } = req.params;
+
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: "Authentication required",
+        });
+        return;
+      }
 
       // Validate input
       const validationErrors = this.validateUpdateCartRequest({
+        productId,
         quantity,
       });
       if (validationErrors.length > 0) {
@@ -203,6 +220,19 @@ export class CartController extends BaseController {
         return;
       }
 
+      if (!userId) {
+        const response: ApiResponse = {
+          success: false,
+          message: "Authentication required",
+          error: {
+            code: "AUTHENTICATION_REQUIRED",
+            details: "User must be authenticated to perform this action"
+          }
+        };
+        res.status(401).json(response);
+        return;
+      }
+
       const result = await this.cartService.removeFromCart(userId, sessionId, {
         productId,
       });
@@ -234,6 +264,19 @@ export class CartController extends BaseController {
       const sessionId =
         req.sessionId || (req.headers["x-session-id"] as string);
 
+      if (!userId) {
+        const response: ApiResponse = {
+          success: false,
+          message: "Authentication required",
+          error: {
+            code: "AUTHENTICATION_REQUIRED",
+            details: "User must be authenticated to perform this action"
+          }
+        };
+        res.status(401).json(response);
+        return;
+      }
+
       const result = await this.cartService.clearCart(userId, sessionId);
 
       const response: ApiResponse<CartActionResponse> = {
@@ -261,6 +304,19 @@ export class CartController extends BaseController {
       const sessionId =
         req.sessionId || (req.headers["x-session-id"] as string);
       const { couponCode }: ApplyCouponRequest = req.body;
+
+      if (!userId) {
+        const response: ApiResponse = {
+          success: false,
+          message: "Authentication required",
+          error: {
+            code: "AUTHENTICATION_REQUIRED",
+            details: "User must be authenticated to perform this action"
+          }
+        };
+        res.status(401).json(response);
+        return;
+      }
 
       if (!couponCode || couponCode.trim().length === 0) {
         res.status(400).json({
@@ -301,6 +357,19 @@ export class CartController extends BaseController {
       const sessionId =
         req.sessionId || (req.headers["x-session-id"] as string);
 
+      if (!userId) {
+        const response: ApiResponse = {
+          success: false,
+          message: "Authentication required",
+          error: {
+            code: "AUTHENTICATION_REQUIRED",
+            details: "User must be authenticated to perform this action"
+          }
+        };
+        res.status(401).json(response);
+        return;
+      }
+
       const result = await this.cartService.removeCoupon(userId, sessionId);
 
       const response: ApiResponse<CartActionResponse> = {
@@ -330,11 +399,16 @@ export class CartController extends BaseController {
       const { state, city, postalCode }: UpdateShippingRequest = req.body;
 
       // Validate Nigerian states
-      const validationErrors = this.validateShippingAddress({
+      const validationData: UpdateShippingRequest = {
         state,
         city,
-        postalCode,
-      });
+      };
+      
+      if (postalCode) {
+        validationData.postalCode = postalCode;
+      }
+      
+      const validationErrors = this.validateShippingAddress(validationData);
       if (validationErrors.length > 0) {
         res.status(400).json({
           success: false,
@@ -344,11 +418,29 @@ export class CartController extends BaseController {
         return;
       }
 
-      const result = await this.cartService.updateShipping(userId, sessionId, {
+      if (!userId) {
+        const response: ApiResponse = {
+          success: false,
+          message: "Authentication required",
+          error: {
+            code: "AUTHENTICATION_REQUIRED",
+            details: "User must be authenticated to perform this action"
+          }
+        };
+        res.status(401).json(response);
+        return;
+      }
+
+      const shippingData: UpdateShippingRequest = {
         state,
         city,
-        postalCode,
-      });
+      };
+      
+      if (postalCode) {
+        shippingData.postalCode = postalCode;
+      }
+
+      const result = await this.cartService.updateShipping(userId, sessionId, shippingData);
 
       const response: ApiResponse<CartActionResponse> = {
         success: true,
@@ -374,6 +466,19 @@ export class CartController extends BaseController {
       const userId = req.user?.userId;
       const sessionId =
         req.sessionId || (req.headers["x-session-id"] as string);
+
+      if (!userId) {
+        const response: ApiResponse = {
+          success: false,
+          message: "Authentication required",
+          error: {
+            code: "AUTHENTICATION_REQUIRED",
+            details: "User must be authenticated to perform this action"
+          }
+        };
+        res.status(401).json(response);
+        return;
+      }
 
       const validation = await this.cartService.validateCart(userId, sessionId);
 
@@ -402,12 +507,25 @@ export class CartController extends BaseController {
       const sessionId =
         req.sessionId || (req.headers["x-session-id"] as string);
 
-      const count = await this.cartService.getCartItemCount(userId, sessionId);
+      if (!userId) {
+        const response: ApiResponse = {
+          success: false,
+          message: "Authentication required",
+          error: {
+            code: "AUTHENTICATION_REQUIRED",
+            details: "User must be authenticated to perform this action"
+          }
+        };
+        res.status(401).json(response);
+        return;
+      }
+
+      const countResult = await this.cartService.getCartItemCount(userId, sessionId);
 
       const response: ApiResponse<{ count: number }> = {
         success: true,
         message: "Cart item count retrieved successfully",
-        data: { count },
+        data: countResult,
       };
 
       res.json(response);
@@ -446,8 +564,11 @@ export class CartController extends BaseController {
 
       const result = await this.cartService.mergeCart(
         userId,
-        guestSessionId,
-        strategy || "merge"
+        req.sessionId || "current",
+        {
+          guestSessionId,
+          strategy: strategy || "merge"
+        }
       );
 
       const response: ApiResponse<CartActionResponse> = {
@@ -484,9 +605,21 @@ export class CartController extends BaseController {
         return;
       }
 
+      if (!userId) {
+        const response: ApiResponse = {
+          success: false,
+          message: "Authentication required",
+          error: {
+            code: "AUTHENTICATION_REQUIRED",
+            details: "User must be authenticated to perform this action"
+          }
+        };
+        res.status(401).json(response);
+        return;
+      }
+
       const shippingOptions = await this.cartService.calculateShipping(
         userId,
-        sessionId,
         { state, city, postalCode }
       );
 
@@ -518,6 +651,14 @@ export class CartController extends BaseController {
         res.status(401).json({
           success: false,
           message: "User authentication required",
+        });
+        return;
+      }
+
+      if (!productId) {
+        res.status(400).json({
+          success: false,
+          message: "Product ID is required",
         });
         return;
       }
@@ -559,11 +700,15 @@ export class CartController extends BaseController {
         return;
       }
 
-      const result = await this.cartService.moveToCart(
-        userId,
-        productId,
-        quantity || 1
-      );
+      if (!productId) {
+        res.status(400).json({
+          success: false,
+          message: "Product ID is required",
+        });
+        return;
+      }
+
+      const result = await this.cartService.moveToCart(userId, productId);
 
       const response: ApiResponse<CartActionResponse> = {
         success: true,

@@ -1,19 +1,12 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, AddressType } from "@prisma/client";
 import { BaseRepository } from "./BaseRepository";
-import {
-  Address,
-  CreateAddressRequest,
-  UpdateAddressRequest,
-  NigerianPhoneNumber,
-  NigerianState,
-  AppError,
-  HTTP_STATUS,
-  ERROR_CODES,
-} from "../types";
+import { Address, NigerianPhoneNumber, NigerianState } from "../types/common.types";
+import { CreateAddressRequest, UpdateAddressRequest } from "../types/user.types";
+import { AppError, HTTP_STATUS, ERROR_CODES } from "../types/api.types";
 
 interface CreateAddressData {
   userId: string;
-  type: "shipping" | "billing";
+  type: AddressType;
   firstName: string;
   lastName: string;
   company?: string;
@@ -28,7 +21,7 @@ interface CreateAddressData {
 }
 
 interface UpdateAddressData {
-  type?: "shipping" | "billing";
+  type?: AddressType;
   firstName?: string;
   lastName?: string;
   company?: string;
@@ -76,7 +69,7 @@ export class AddressRepository extends BaseRepository<
    */
   async findDefaultAddress(
     userId: string,
-    type?: "shipping" | "billing"
+    type?: AddressType
   ): Promise<Address | null> {
     try {
       const where: any = {
@@ -106,7 +99,7 @@ export class AddressRepository extends BaseRepository<
     data: CreateAddressRequest
   ): Promise<Address> {
     try {
-      return await this.transaction(async (prisma) => {
+      const result = await this.transaction(async (prisma) => {
         // If setting as default, unset other default addresses of same type
         if (data.isDefault) {
           await prisma.address.updateMany({
@@ -131,12 +124,12 @@ export class AddressRepository extends BaseRepository<
           type: data.type,
           firstName: data.firstName,
           lastName: data.lastName,
-          company: data.company,
+          ...(data.company !== undefined && { company: data.company }),
           addressLine1: data.addressLine1,
-          addressLine2: data.addressLine2,
+          ...(data.addressLine2 !== undefined && { addressLine2: data.addressLine2 }),
           city: data.city,
           state: data.state,
-          postalCode: data.postalCode,
+          ...(data.postalCode !== undefined && { postalCode: data.postalCode }),
           country: "NG", // Always Nigeria
           phoneNumber: data.phoneNumber,
           isDefault: data.isDefault ?? existingAddresses === 0,
@@ -155,6 +148,23 @@ export class AddressRepository extends BaseRepository<
           },
         });
       });
+
+      // Transform the result to match our Address interface
+      return {
+        id: result.id,
+        firstName: result.firstName,
+        lastName: result.lastName,
+        ...(result.company && { company: result.company }),
+        addressLine1: result.addressLine1,
+        ...(result.addressLine2 && { addressLine2: result.addressLine2 }),
+        city: result.city,
+        state: result.state as NigerianState,
+        ...(result.postalCode && { postalCode: result.postalCode }),
+        country: result.country as 'NG',
+        phoneNumber: result.phoneNumber,
+        isDefault: result.isDefault,
+        type: result.type as 'SHIPPING' | 'BILLING',
+      };
     } catch (error) {
       throw new AppError(
         "Error creating address",
@@ -173,7 +183,7 @@ export class AddressRepository extends BaseRepository<
     data: UpdateAddressRequest
   ): Promise<Address> {
     try {
-      return await this.transaction(async (prisma) => {
+      const result = await this.transaction(async (prisma) => {
         // Verify address belongs to user
         const existingAddress = await prisma.address.findFirst({
           where: { id: addressId, userId },
@@ -202,11 +212,41 @@ export class AddressRepository extends BaseRepository<
           });
         }
 
+        const updateData: any = {};
+        if (data.type !== undefined) updateData.type = data.type;
+        if (data.firstName !== undefined) updateData.firstName = data.firstName;
+        if (data.lastName !== undefined) updateData.lastName = data.lastName;
+        if (data.company !== undefined) updateData.company = data.company;
+        if (data.addressLine1 !== undefined) updateData.addressLine1 = data.addressLine1;
+        if (data.addressLine2 !== undefined) updateData.addressLine2 = data.addressLine2;
+        if (data.city !== undefined) updateData.city = data.city;
+        if (data.state !== undefined) updateData.state = data.state;
+        if (data.postalCode !== undefined) updateData.postalCode = data.postalCode;
+        if (data.phoneNumber !== undefined) updateData.phoneNumber = data.phoneNumber;
+        if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
+
         return await prisma.address.update({
           where: { id: addressId },
-          data,
+          data: updateData,
         });
       });
+
+      // Transform the result to match our Address interface
+      return {
+        id: result.id,
+        firstName: result.firstName,
+        lastName: result.lastName,
+        ...(result.company && { company: result.company }),
+        addressLine1: result.addressLine1,
+        ...(result.addressLine2 && { addressLine2: result.addressLine2 }),
+        city: result.city,
+        state: result.state as NigerianState,
+        ...(result.postalCode && { postalCode: result.postalCode }),
+        country: result.country as 'NG',
+        phoneNumber: result.phoneNumber,
+        isDefault: result.isDefault,
+        type: result.type as 'SHIPPING' | 'BILLING',
+      };
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
@@ -280,7 +320,7 @@ export class AddressRepository extends BaseRepository<
    */
   async setAsDefault(addressId: string, userId: string): Promise<Address> {
     try {
-      return await this.transaction(async (prisma) => {
+      const result = await this.transaction(async (prisma) => {
         // Get the address to be set as default
         const address = await prisma.address.findFirst({
           where: { id: addressId, userId },
@@ -313,6 +353,23 @@ export class AddressRepository extends BaseRepository<
           data: { isDefault: true },
         });
       });
+
+      // Transform the result to match our Address interface
+      return {
+        id: result.id,
+        firstName: result.firstName,
+        lastName: result.lastName,
+        ...(result.company && { company: result.company }),
+        addressLine1: result.addressLine1,
+        ...(result.addressLine2 && { addressLine2: result.addressLine2 }),
+        city: result.city,
+        state: result.state as NigerianState,
+        ...(result.postalCode && { postalCode: result.postalCode }),
+        country: result.country as 'NG',
+        phoneNumber: result.phoneNumber,
+        isDefault: result.isDefault,
+        type: result.type as 'SHIPPING' | 'BILLING',
+      };
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
@@ -442,5 +499,12 @@ export class AddressRepository extends BaseRepository<
   private isValidNigerianPhone(phone: string): boolean {
     const nigerianPhoneRegex = /^(\+234)[789][01][0-9]{8}$/;
     return nigerianPhoneRegex.test(phone);
+  }
+
+  /**
+   * Alias for setAsDefault (for backward compatibility)
+   */
+  async setDefaultAddress(addressId: string, userId: string): Promise<Address> {
+    return this.setAsDefault(addressId, userId);
   }
 }

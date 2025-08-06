@@ -7,6 +7,7 @@ import {
   HTTP_STATUS,
   ERROR_CODES,
   UserRole,
+  PublicUser,
 } from "@/types";
 
 export class AuthMiddleware {
@@ -59,14 +60,23 @@ export class AuthMiddleware {
         const user = await this.authService.validateToken(token);
 
         // Attach user to request
-        (req as AuthenticatedRequest).user = {
+        const authenticatedUser: PublicUser = {
+          id: user.id,
           userId: user.id,
           phoneNumber: user.phoneNumber,
+          firstName: user.firstName,
+          lastName: user.lastName,
           role: user.role,
+          isVerified: user.isVerified,
           sessionId: this.jwtService.extractSessionId(token),
-          iat: 0, // Will be set by JWT service
-          exp: 0, // Will be set by JWT service
+          createdAt: user.createdAt,
         };
+        
+        // Add optional fields if they exist
+        if (user.email) authenticatedUser.email = user.email;
+        if (user.avatar) authenticatedUser.avatar = user.avatar;
+        
+        (req as AuthenticatedRequest).user = authenticatedUser;
 
         next();
       } catch (error) {
@@ -99,14 +109,23 @@ export class AuthMiddleware {
           if (token) {
             try {
               const user = await this.authService.validateToken(token);
-              (req as AuthenticatedRequest).user = {
+              const authenticatedUser: PublicUser = {
+                id: user.id,
                 userId: user.id,
                 phoneNumber: user.phoneNumber,
+                firstName: user.firstName,
+                lastName: user.lastName,
                 role: user.role,
+                isVerified: user.isVerified,
                 sessionId: this.jwtService.extractSessionId(token),
-                iat: 0,
-                exp: 0,
+                createdAt: user.createdAt,
               };
+              
+              // Add optional fields if they exist
+              if (user.email) authenticatedUser.email = user.email;
+              if (user.avatar) authenticatedUser.avatar = user.avatar;
+              
+              (req as AuthenticatedRequest).user = authenticatedUser;
             } catch (error) {
               // Ignore authentication errors in optional auth
             }
@@ -178,21 +197,21 @@ export class AuthMiddleware {
    * Admin only authorization
    */
   adminOnly() {
-    return this.authorize(["admin", "super_admin"]);
+    return this.authorize(["ADMIN", "SUPER_ADMIN"]);
   }
 
   /**
    * Super admin only authorization
    */
   superAdminOnly() {
-    return this.authorize("super_admin");
+    return this.authorize("SUPER_ADMIN");
   }
 
   /**
    * Customer only authorization
    */
   customerOnly() {
-    return this.authorize("customer");
+    return this.authorize("CUSTOMER");
   }
 
   /**
@@ -223,7 +242,7 @@ export class AuthMiddleware {
         // Allow if user owns the resource or is admin
         if (
           resourceUserId === currentUserId ||
-          ["admin", "super_admin"].includes(req.user.role)
+          ["ADMIN", "SUPER_ADMIN"].includes(req.user.role)
         ) {
           next();
           return;
@@ -390,9 +409,9 @@ export class AuthMiddleware {
         // Permission checking logic would go here
         // For now, we'll use role-based permissions
         const rolePermissions: Record<UserRole, string[]> = {
-          customer: ["read:own", "update:own", "delete:own"],
-          admin: ["read:any", "update:any", "delete:any", "create:any"],
-          super_admin: ["*"],
+          CUSTOMER: ["read:own", "update:own", "delete:own"],
+          ADMIN: ["read:any", "update:any", "delete:any", "create:any"],
+          SUPER_ADMIN: ["*"],
         };
 
         const userPermissions = rolePermissions[req.user.role] || [];
@@ -436,7 +455,7 @@ export class AuthMiddleware {
       return null;
     }
 
-    return parts[1];
+    return parts[1] || null;
   }
 
   /**
@@ -444,7 +463,7 @@ export class AuthMiddleware {
    */
   static getUserIdFromParams(paramName: string = "userId") {
     return (req: Request): string => {
-      return req.params[paramName];
+      return req.params[paramName] || "";
     };
   }
 
@@ -453,7 +472,7 @@ export class AuthMiddleware {
    */
   static getUserIdFromBody(fieldName: string = "userId") {
     return (req: Request): string => {
-      return req.body[fieldName];
+      return req.body[fieldName] || "";
     };
   }
 }

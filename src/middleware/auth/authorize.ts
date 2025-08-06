@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { UserRole } from "../../types/user.types";
 import { logger } from "../../utils/logger/winston";
+import { authenticate } from "./authenticate";
 
 /**
  * Creates authorization middleware for specific roles
@@ -17,12 +18,13 @@ export const authorize = (allowedRoles: UserRole[]) => {
         ip: req.ip,
       });
 
-      return res.status(401).json({
+      res.status(401).json({
         success: false,
         error: "AUTHENTICATION_REQUIRED",
         message: "Please log in to access this resource",
         code: "AUTHZ_001",
       });
+      return;
     }
 
     // Check if user role is allowed
@@ -36,12 +38,13 @@ export const authorize = (allowedRoles: UserRole[]) => {
         ip: req.ip,
       });
 
-      return res.status(403).json({
+      res.status(403).json({
         success: false,
         error: "INSUFFICIENT_PERMISSIONS",
         message: "You do not have permission to access this resource",
         code: "AUTHZ_002",
       });
+      return;
     }
 
     logger.debug("Authorization successful", {
@@ -62,17 +65,19 @@ export const authorize = (allowedRoles: UserRole[]) => {
 export const authorizeOwnership = (resourceUserIdField: string = "userId") => {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      return res.status(401).json({
+      res.status(401).json({
         success: false,
         error: "AUTHENTICATION_REQUIRED",
         message: "Please log in to access this resource",
         code: "AUTHZ_003",
       });
+      return;
     }
 
     // Admins can access any resource
-    if (["admin", "super_admin"].includes(req.user.role)) {
-      return next();
+    if (["ADMIN", "SUPER_ADMIN"].includes(req.user.role)) {
+      next();
+      return;
     }
 
     // Get resource user ID from request params, body, or query
@@ -89,12 +94,13 @@ export const authorizeOwnership = (resourceUserIdField: string = "userId") => {
         expectedField: resourceUserIdField,
       });
 
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: "INVALID_REQUEST",
         message: "Resource identification missing",
         code: "AUTHZ_004",
       });
+      return;
     }
 
     // Check if user owns the resource
@@ -107,12 +113,13 @@ export const authorizeOwnership = (resourceUserIdField: string = "userId") => {
         ip: req.ip,
       });
 
-      return res.status(403).json({
+      res.status(403).json({
         success: false,
         error: "RESOURCE_ACCESS_DENIED",
         message: "You can only access your own resources",
         code: "AUTHZ_005",
       });
+      return;
     }
 
     next();
@@ -130,7 +137,8 @@ export const authorizeIf = (
   return (req: Request, res: Response, next: NextFunction): void => {
     // If condition is not met, skip authorization
     if (!condition(req)) {
-      return next();
+      next();
+      return;
     }
 
     // Apply role-based authorization
@@ -143,20 +151,21 @@ export const authorizeIf = (
  */
 export const authPresets = {
   // Customer-only access
-  customer: authorize(["customer"]),
+  customer: authorize(["CUSTOMER"]),
 
   // Admin-only access
-  admin: authorize(["admin", "super_admin"]),
+  admin: authorize(["ADMIN", "SUPER_ADMIN"]),
 
   // Super admin only
-  superAdmin: authorize(["super_admin"]),
+  superAdmin: authorize(["SUPER_ADMIN"]),
 
   // Admin or resource owner
   adminOrOwner: (resourceField: string = "userId") => [
     authenticate,
     (req: Request, res: Response, next: NextFunction) => {
-      if (["admin", "super_admin"].includes(req.user?.role || "")) {
-        return next();
+      if (["ADMIN", "SUPER_ADMIN"].includes(req.user?.role || "")) {
+        next();
+        return;
       }
       authorizeOwnership(resourceField)(req, res, next);
     },

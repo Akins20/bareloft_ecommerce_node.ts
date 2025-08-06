@@ -1,8 +1,61 @@
 import { Request, Response, NextFunction } from "express";
 import { logger } from "../../utils/logger/winston";
-import { environment } from "../../config/environment";
-import { PhoneUtils, MarketUtils } from "../../utils/helpers/nigerian";
-import crypto from "crypto";
+import { config } from "../../config/environment";
+import { NigerianPhoneUtils, NigerianLocationUtils } from "../../utils/helpers/nigerian";
+import * as crypto from "crypto";
+
+// Type definitions for log data
+interface LogRequestData {
+  method: string;
+  url: string;
+  path: string;
+  query: any;
+  headers: any;
+  ip: string | undefined;
+  protocol: string;
+  httpVersion: string;
+  body?: any;
+}
+
+interface LogResponseData {
+  statusCode: number;
+  contentLength: number | undefined;
+  headers: any;
+  body?: string;
+}
+
+interface LogData {
+  requestId: string;
+  request: LogRequestData;
+  response: LogResponseData;
+  timing: {
+    duration: number;
+    timestamp: string;
+    startTime: number;
+    endTime: number;
+  };
+  user?: {
+    id: any;
+    role: any;
+    sessionId: any;
+  } | undefined;
+  context: {
+    isMobile: boolean;
+    networkType: string;
+    deviceType: string;
+    environment: string;
+    nodeVersion: string;
+  };
+  performance?: {
+    slow: boolean;
+    threshold: number;
+    warning: string;
+  };
+  insights?: {
+    mobileOptimization: string;
+    dataUsage: string;
+  };
+}
 
 // 🔧 Generate unique request ID
 const generateRequestId = (): string => {
@@ -97,7 +150,7 @@ export const requestLogger = (
 
   // Detect Nigerian context
   const userAgent = req.get("User-Agent") || "";
-  const nigerianContext = detectNigerianContext(userAgent, req.ip);
+  const nigerianContext = detectNigerianContext(userAgent, req.ip || "unknown");
 
   // Capture original end method to log response
   const originalEnd = res.end;
@@ -107,19 +160,21 @@ export const requestLogger = (
   let responseSent = false;
 
   // Override write method to capture response body (for errors)
-  res.write = function (chunk: any, ...args: any[]): boolean {
-    if (chunk && res.statusCode >= 400) {
+  const self = res;
+  res.write = function (chunk: any, encoding?: any, cb?: any): boolean {
+    if (chunk && self.statusCode >= 400) {
       responseBody += chunk.toString();
     }
-    return originalWrite.call(this, chunk, ...args);
-  };
+    return originalWrite.call(self, chunk, encoding, cb);
+  } as any;
 
   // Override end method to log response
-  res.end = function (chunk?: any, ...args: any[]): void {
+  const selfEnd = res;
+  res.end = function (chunk?: any, encoding?: any, cb?: any): any {
     if (!responseSent) {
       responseSent = true;
 
-      if (chunk && res.statusCode >= 400) {
+      if (chunk && selfEnd.statusCode >= 400) {
         responseBody += chunk.toString();
       }
 
@@ -129,11 +184,11 @@ export const requestLogger = (
 
       // Determine log level based on status code
       let logLevel: "info" | "warn" | "error" = "info";
-      if (res.statusCode >= 400 && res.statusCode < 500) logLevel = "warn";
-      if (res.statusCode >= 500) logLevel = "error";
+      if (selfEnd.statusCode >= 400 && selfEnd.statusCode < 500) logLevel = "warn";
+      if (selfEnd.statusCode >= 500) logLevel = "error";
 
       // Build log data
-      const logData = {
+      const logData: LogData = {
         requestId,
         request: {
           method: req.method,
@@ -153,12 +208,12 @@ export const requestLogger = (
           httpVersion: req.httpVersion,
         },
         response: {
-          statusCode: res.statusCode,
+          statusCode: selfEnd.statusCode,
           contentLength: contentLength ? parseInt(contentLength) : undefined,
           headers: sanitizeForLogging({
-            "content-type": res.get("Content-Type"),
-            "cache-control": res.get("Cache-Control"),
-            etag: res.get("ETag"),
+            "content-type": selfEnd.get("Content-Type"),
+            "cache-control": selfEnd.get("Cache-Control"),
+            etag: selfEnd.get("ETag"),
           }),
         },
         timing: {
@@ -167,22 +222,22 @@ export const requestLogger = (
           startTime,
           endTime,
         },
-        user: req.user
+        user: (req as any).user
           ? {
-              id: req.user.id,
-              role: req.user.role,
-              sessionId: req.user.sessionId,
+              id: (req as any).user.id,
+              role: (req as any).user.role,
+              sessionId: (req as any).user.sessionId,
             }
           : undefined,
         context: {
           ...nigerianContext,
-          environment: environment.NODE_ENV,
+          environment: config.nodeEnv,
           nodeVersion: process.version,
         },
       };
 
       // Add response body for errors (but limit size)
-      if (res.statusCode >= 400 && responseBody) {
+      if (selfEnd.statusCode >= 400 && responseBody) {
         logData.response.body = responseBody.substring(0, 1000); // Limit to 1KB
       }
 
@@ -217,8 +272,8 @@ export const requestLogger = (
       logger[logLevel]("HTTP Request", logData);
     }
 
-    originalEnd.call(this, chunk, ...args);
-  };
+    return originalEnd.call(selfEnd, chunk, encoding, cb);
+  } as any;
 
   // Log incoming request (minimal)
   logger.info("Incoming request", {
@@ -227,7 +282,7 @@ export const requestLogger = (
     path: req.path,
     ip: req.ip,
     userAgent: userAgent.substring(0, 100), // Truncate long user agents
-    userId: req.user?.id,
+    userId: (req as any).user?.id,
     timestamp: new Date().toISOString(),
   });
 

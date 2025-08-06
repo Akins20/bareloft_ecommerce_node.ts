@@ -1,5 +1,6 @@
-import { AppError, HTTP_STATUS, ERROR_CODES } from '@/types';
-import { logger } from '@/utils/logger/winston';
+import { AppError, HTTP_STATUS, ERROR_CODES } from '../types/api.types';
+import { PaginationMeta } from '../types/common.types';
+import { logger } from '../utils/logger/winston';
 
 /**
  * Base service class providing common functionality
@@ -70,5 +71,21 @@ export abstract class BaseService {
     }
     
     return data;
+  }
+
+  /**
+   * Create pagination metadata
+   */
+  protected createPagination(page: number, limit: number, total: number): PaginationMeta {
+    const totalPages = Math.ceil(total / limit);
+    
+    return {
+      currentPage: page,
+      totalPages,
+      totalItems: total,
+      itemsPerPage: limit,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+    };
   }
 }

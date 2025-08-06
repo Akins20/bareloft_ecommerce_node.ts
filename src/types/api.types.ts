@@ -1,13 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { ResponseData, PaginationMeta, PaginationParams } from './common.types';
-import { JWTPayload } from './auth.types';
+import { ResponseData, PaginationMeta, PaginationParams, PaginatedResponse } from './common.types';
+import { JWTPayload, AuthenticatedRequest } from './auth.types';
 import { FileUpload } from './common.types';
 
 // Re-export for convenience
-export { PaginationParams };
-
-// Re-export auth types (explicit re-export to avoid conflicts)
-export { AuthenticatedRequest } from './auth.types';
+export { PaginationParams, PaginatedResponse };
 
 // HTTP Methods
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -44,19 +41,9 @@ export interface EndpointMeta {
   };
 }
 
-// Extended Express Request types
-export interface AuthenticatedRequest extends Request {
-  user: JWTPayload;
-}
-
 export interface RequestWithFile extends Request {
-  file?: FileUpload;
-  files?: FileUpload[];
-}
-
-export interface AuthenticatedRequestWithFile extends AuthenticatedRequest {
-  file?: FileUpload;
-  files?: FileUpload[];
+  file?: any;
+  files?: any[];
 }
 
 // Custom error class
@@ -123,7 +110,7 @@ export const createErrorResponse = (
   message,
   error: {
     code,
-    details
+    ...(details && { details })
   },
   meta: {
     timestamp: new Date().toISOString()
@@ -172,6 +159,7 @@ export const ERROR_CODES = {
   // Business logic errors
   INSUFFICIENT_STOCK: 'INSUFFICIENT_STOCK',
   ORDER_CANNOT_BE_CANCELLED: 'ORDER_CANNOT_BE_CANCELLED',
+  INVALID_ORDER_STATUS: 'INVALID_ORDER_STATUS',
   PAYMENT_FAILED: 'PAYMENT_FAILED',
   INVALID_COUPON: 'INVALID_COUPON',
   

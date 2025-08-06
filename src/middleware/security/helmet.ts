@@ -1,5 +1,5 @@
 import helmet from "helmet";
-import { environment } from "../../config/environment";
+import { config } from "../../config/environment";
 
 export const helmetConfig = helmet({
   // Content Security Policy
@@ -14,7 +14,7 @@ export const helmetConfig = helmet({
         "https://js.paystack.co", // Paystack payment
         "https://www.googletagmanager.com", // Google Analytics
         "https://connect.facebook.net", // Facebook Pixel
-        ...(environment.NODE_ENV === "development" ? ["'unsafe-eval'"] : []),
+        ...(config.nodeEnv === "development" ? ["'unsafe-eval'"] : []),
       ],
 
       // Stylesheets
@@ -41,7 +41,7 @@ export const helmetConfig = helmet({
         "https://api.paystack.co", // Paystack API
         "https://standard.paystack.co", // Paystack Standard
         "https://www.google-analytics.com",
-        ...(environment.NODE_ENV === "development" ? ["ws:", "wss:"] : []),
+        ...(config.nodeEnv === "development" ? ["ws:", "wss:"] : []),
       ],
 
       // Frames - payment widgets

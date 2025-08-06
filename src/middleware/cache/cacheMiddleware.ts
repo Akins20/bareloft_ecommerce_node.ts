@@ -3,11 +3,12 @@
  * Intelligent caching system optimized for Nigerian e-commerce
  */
 
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import { RedisService } from "../../services/cache/RedisService";
 import { logger } from "../../utils/logger/winston";
-import { environment } from "../../config/environment";
-import crypto from "crypto";
+import { config } from "../../config/environment";
+import { AuthenticatedRequest } from "../../types/auth.types";
+import * as crypto from "crypto";
 
 interface CacheOptions {
   ttl?: number; // Time to live in seconds
@@ -18,7 +19,7 @@ interface CacheOptions {
   compress?: boolean; // Enable gzip compression
   staleWhileRevalidate?: number; // Serve stale content while updating
   maxSize?: number; // Maximum response size to cache (bytes)
-  conditionalCaching?: (req: Request) => boolean; // Conditional caching logic
+  conditionalCaching?: (req: AuthenticatedRequest) => boolean; // Conditional caching logic
 }
 
 interface CacheEntry {
@@ -33,7 +34,7 @@ interface CacheEntry {
 /**
  * 🔑 Generate cache key from request
  */
-const generateCacheKey = (req: Request, options: CacheOptions): string => {
+const generateCacheKey = (req: AuthenticatedRequest, options: CacheOptions): string => {
   const parts = [options.prefix || "cache", req.method, req.path];
 
   // Include query parameters
@@ -96,7 +97,7 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
   const redis = new RedisService();
 
   return async (
-    req: Request,
+    req: AuthenticatedRequest,
     res: Response,
     next: NextFunction
   ): Promise<void> => {
@@ -124,7 +125,7 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
       const cacheKey = generateCacheKey(req, { ...options, prefix });
 
       // Try to get from cache
-      const cachedEntry = await redis.get<CacheEntry>(cacheKey);
+      const cachedEntry = await redis.getJSON<CacheEntry>(cacheKey);
 
       if (cachedEntry) {
         const age = Math.floor((Date.now() - cachedEntry.timestamp) / 1000);
@@ -147,7 +148,9 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
 
           // Set original headers
           Object.entries(cachedEntry.headers).forEach(([key, value]) => {
-            res.set(key, value);
+            if (typeof value === 'string') {
+              res.set(key, value);
+            }
           });
 
           // Set ETag
@@ -162,7 +165,8 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
             res.set("Content-Encoding", "gzip");
           }
 
-          return res.status(cachedEntry.statusCode).send(responseData);
+          res.status(cachedEntry.statusCode).send(responseData);
+          return;
         }
 
         // If stale but within revalidation window, serve stale content
@@ -179,7 +183,9 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
 
           // Serve stale content
           Object.entries(cachedEntry.headers).forEach(([key, value]) => {
-            res.set(key, value);
+            if (typeof value === 'string') {
+              res.set(key, value);
+            }
           });
 
           let responseData = cachedEntry.data;
@@ -238,13 +244,14 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
       };
 
       // Override end method
-      res.end = function (chunk?: any, ...args: any[]): void {
+      const originalThis = res;
+      res.end = function (chunk?: any, encoding?: any, cb?: any): any {
         if (!responseSent && chunk) {
           responseBody = chunk;
           cacheResponse(typeof chunk === "string" ? chunk : chunk.toString());
         }
-        originalEnd.call(this, chunk, ...args);
-      };
+        return (originalEnd as any).call(originalThis, chunk, encoding, cb);
+      } as any;
 
       // Cache response function
       const cacheResponse = async (body: string): Promise<void> => {
@@ -300,7 +307,7 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
           };
 
           // Store in cache
-          await redis.setex(cacheKey, ttl, cacheEntry);
+          await redis.setexJSON(cacheKey, ttl, cacheEntry);
 
           logger.debug("Response cached", {
             cacheKey,
@@ -342,19 +349,20 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
  * Invalidates cache entries when data changes
  */
 export const invalidateCache = (
-  patterns: string[] | ((req: Request) => string[])
+  patterns: string[] | ((req: AuthenticatedRequest) => string[])
 ) => {
   const redis = new RedisService();
 
   return async (
-    req: Request,
+    req: AuthenticatedRequest,
     res: Response,
     next: NextFunction
   ): Promise<void> => {
     // Store original end method
     const originalEnd = res.end;
 
-    res.end = function (chunk?: any, ...args: any[]): void {
+    const originalThis = res;
+    res.end = function (chunk?: any, encoding?: any, cb?: any): any {
       // Only invalidate on successful operations
       if (res.statusCode >= 200 && res.statusCode < 300) {
         setImmediate(async () => {
@@ -384,8 +392,8 @@ export const invalidateCache = (
         });
       }
 
-      originalEnd.call(this, chunk, ...args);
-    };
+      return (originalEnd as any).call(originalThis, chunk, encoding, cb);
+    } as any;
 
     next();
   };

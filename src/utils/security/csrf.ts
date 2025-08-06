@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { Request, Response, NextFunction } from "express";
 import { redisClient } from "../../config/redis";
+import { AuthenticatedRequest } from "../../types/auth.types";
 
 /**
  * CSRF (Cross-Site Request Forgery) Protection Utility
@@ -147,7 +148,7 @@ export class CSRFProtection {
 
         // Get session ID from request
         const sessionId =
-          req.session?.id || (req.headers["x-session-id"] as string);
+          (req as AuthenticatedRequest).sessionId || (req.headers["x-session-id"] as string);
 
         if (!sessionId) {
           return res.status(403).json({
@@ -203,7 +204,7 @@ export class CSRFProtection {
   ): Promise<void> {
     try {
       const sessionId =
-        req.session?.id || (req.headers["x-session-id"] as string);
+        (req as AuthenticatedRequest).sessionId || (req.headers["x-session-id"] as string);
 
       if (!sessionId) {
         res.status(400).json({

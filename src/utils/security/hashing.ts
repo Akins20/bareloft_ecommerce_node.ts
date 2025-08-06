@@ -191,7 +191,7 @@ export class DataEncryption {
     const key = this.deriveKey(password, salt);
     const iv = crypto.randomBytes(this.IV_LENGTH);
 
-    const cipher = crypto.createCipherGCM(this.ALGORITHM, key, iv);
+    const cipher = crypto.createCipher(this.ALGORITHM, key);
 
     let encrypted = cipher.update(text, "utf8", "hex");
     encrypted += cipher.final("hex");
@@ -225,8 +225,7 @@ export class DataEncryption {
 
     const key = this.deriveKey(password, salt);
 
-    const decipher = crypto.createDecipherGCM(this.ALGORITHM, key, iv);
-    decipher.setAuthTag(tag);
+    const decipher = crypto.createDecipher(this.ALGORITHM, key);
 
     let decrypted = decipher.update(encrypted, undefined, "utf8");
     decrypted += decipher.final("utf8");

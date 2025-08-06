@@ -5,7 +5,16 @@
 
 import { Request, Response, NextFunction } from "express";
 import { logger } from "../../utils/logger/winston";
-import { environment } from "../../config/environment";
+import { config } from "../../config/environment";
+
+// Extend Express Request type to include additional properties
+declare global {
+  namespace Express {
+    interface Request {
+      id?: string;
+    }
+  }
+}
 
 // 🔧 Custom error types
 export class AppError extends Error {
@@ -89,7 +98,8 @@ const getNigerianFriendlyMessage = (error: any): string => {
     SERVER_ERROR: "Something went wrong on our end. Please try again later",
   };
 
-  return friendlyMessages[error.errorCode] || friendlyMessages["SERVER_ERROR"];
+  const errorCode: string = error.errorCode || "SERVER_ERROR";
+  return (friendlyMessages[errorCode] ?? friendlyMessages["SERVER_ERROR"]) as string;
 };
 
 /**
@@ -175,7 +185,7 @@ const trackErrorMetrics = (error: any, req: Request): void => {
 
   // Track error frequency for monitoring
   // This would integrate with your monitoring service (e.g., DataDog, New Relic)
-  if (classification.shouldNotify && environment.NODE_ENV === "production") {
+  if (classification.shouldNotify && config.nodeEnv === "production") {
     // Send to error tracking service
     // Sentry, Bugsnag, etc.
   }
@@ -264,7 +274,7 @@ export const errorHandler = (
     success: false,
     error: errorCode,
     message:
-      environment.NODE_ENV === "production"
+      config.nodeEnv === "production"
         ? getNigerianFriendlyMessage({ errorCode })
         : message,
     ...(details && { details }),
@@ -277,7 +287,7 @@ export const errorHandler = (
   }
 
   // Include stack trace in development
-  if (environment.NODE_ENV === "development") {
+  if (config.nodeEnv === "development") {
     errorResponse.stack = error.stack;
     errorResponse.originalMessage = message;
   }
@@ -312,9 +322,6 @@ export const errorHandler = (
  * 🔍 404 Not Found Handler
  * Handles requests to non-existent endpoints
  */
-
-import { Request, Response, NextFunction } from "express";
-import { logger } from "../../utils/logger/winston";
 
 /**
  * 🚫 404 Not Found middleware
@@ -414,9 +421,9 @@ const generateApiSuggestions = (requestedPath: string): string[] => {
     // Check for partial matches
     if (
       normalizedEndpoint.includes(
-        normalizedPath.replace("/api/", "").split("/")[0]
+        normalizedPath.replace("/api/", "").split("/")[0] || ""
       ) ||
-      normalizedPath.includes(normalizedEndpoint.split("/")[3] || "")
+      normalizedPath.includes(normalizedEndpoint.split("/")[3] ?? "")
     ) {
       suggestions.push(endpoint);
     }
@@ -433,8 +440,6 @@ const generateApiSuggestions = (requestedPath: string): string[] => {
  * 🔄 Async Error Handler
  * Wraps async functions to catch and forward errors
  */
-
-import { Request, Response, NextFunction } from "express";
 
 type AsyncFunction = (
   req: Request,

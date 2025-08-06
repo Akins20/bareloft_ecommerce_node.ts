@@ -27,8 +27,9 @@ export interface UpdateUserData {
   lastName?: string;
   email?: string;
   avatar?: string;
-  dateOfBirth?: Date;
-  gender?: string;
+  phoneNumber?: string;
+  dateOfBirth?: string;
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
   role?: "CUSTOMER" | "ADMIN" | "SUPER_ADMIN";
   status?: "ACTIVE" | "INACTIVE" | "SUSPENDED" | "PENDING_VERIFICATION";
   isVerified?: boolean;
@@ -42,6 +43,24 @@ export class UserRepository extends BaseRepository<
 > {
   constructor(prisma?: PrismaClient) {
     super(prisma || new PrismaClient(), "User");
+  }
+
+  /**
+   * Transform User to PublicUser
+   */
+  private transformToPublicUser(user: User): any {
+    return {
+      id: user.id,
+      userId: user.id,
+      phoneNumber: user.phoneNumber,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      avatar: user.avatar || '',
+      role: user.role,
+      isVerified: user.isVerified,
+      createdAt: user.createdAt,
+    };
   }
 
   /**
@@ -376,7 +395,7 @@ export class UserRepository extends BaseRepository<
         verifiedUsers,
         activeUsers,
         usersByRole: roleStats,
-        recentUsers: recentUsers.data,
+        recentUsers: recentUsers.data.map(user => this.transformToPublicUser(user)),
       };
     } catch (error) {
       this.handleError("Error getting user statistics", error);
@@ -397,28 +416,34 @@ export class UserRepository extends BaseRepository<
     pagination: any;
   }> {
     try {
-      return await this.findMany(
-        { role: "CUSTOMER" },
-        {
-          include: {
-            orders: {
-              orderBy: { createdAt: "desc" },
-              take: 3,
-              include: {
-                items: {
-                  include: { product: true },
-                  take: 2,
-                },
+      const findOptions: {
+        include?: any;
+        orderBy?: any;
+        pagination?: PaginationParams;
+      } = {
+        include: {
+          orders: {
+            orderBy: { createdAt: "desc" },
+            take: 3,
+            include: {
+              items: {
+                include: { product: true },
+                take: 2,
               },
             },
-            _count: {
-              select: { orders: true },
-            },
           },
-          orderBy: { createdAt: "desc" },
-          pagination,
-        }
-      );
+          _count: {
+            select: { orders: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      };
+      
+      if (pagination) {
+        findOptions.pagination = pagination;
+      }
+
+      return await this.findMany({ role: "CUSTOMER" }, findOptions) as any;
     } catch (error) {
       this.handleError("Error finding customers with orders", error);
       throw error;
@@ -466,7 +491,8 @@ export class UserRepository extends BaseRepository<
           orders: {
             where: { status: "DELIVERED" },
             select: {
-              totalAmount: true,
+              id: true,
+              total: true,
               createdAt: true,
             },
           },
@@ -477,19 +503,19 @@ export class UserRepository extends BaseRepository<
       const customerStats = customers
         .map((customer) => {
           const totalSpent = customer.orders.reduce(
-            (sum, order) => sum + Number(order.totalAmount),
+            (sum: number, order: any) => sum + Number(order.total),
             0
           );
           const orderCount = customer.orders.length;
           const lastOrderDate =
             customer.orders.length > 0
               ? new Date(
-                  Math.max(...customer.orders.map((o) => o.createdAt.getTime()))
+                  Math.max(...customer.orders.map((o: any) => o.createdAt.getTime()))
                 )
               : new Date(0);
 
           return {
-            user: customer,
+            user: customer as User,
             totalSpent,
             orderCount,
             lastOrderDate,
@@ -520,15 +546,24 @@ export class UserRepository extends BaseRepository<
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - daysSinceLastLogin);
 
+      const findOptions: {
+        include?: any;
+        orderBy?: any;
+        pagination?: PaginationParams;
+      } = {
+        orderBy: { lastLoginAt: "asc" },
+      };
+      
+      if (pagination) {
+        findOptions.pagination = pagination;
+      }
+
       return await this.findMany(
         {
           OR: [{ lastLoginAt: { lt: cutoffDate } }, { lastLoginAt: null }],
           status: "ACTIVE",
         },
-        {
-          orderBy: { lastLoginAt: "asc" },
-          pagination,
-        }
+        findOptions
       );
     } catch (error) {
       this.handleError("Error finding inactive users", error);
@@ -566,7 +601,11 @@ export class UserRepository extends BaseRepository<
         delete where.state; // Remove from top level
       }
 
-      return await this.search(searchTerm, searchFields, where, {
+      const searchOptions: {
+        include?: any;
+        orderBy?: any;
+        pagination?: PaginationParams;
+      } = {
         include: {
           addresses: true,
           _count: {
@@ -576,8 +615,13 @@ export class UserRepository extends BaseRepository<
             },
           },
         },
-        pagination,
-      });
+      };
+      
+      if (pagination) {
+        searchOptions.pagination = pagination;
+      }
+
+      return await this.search(searchTerm, searchFields, where, searchOptions);
     } catch (error) {
       this.handleError("Error searching users", error);
       throw error;
@@ -629,25 +673,25 @@ export class UserRepository extends BaseRepository<
 
       const orderCount = user.orders.length;
       const totalSpent = user.orders.reduce(
-        (sum, order) => sum + Number(order.totalAmount),
+        (sum: number, order: any) => sum + Number(order.total),
         0
       );
       const reviewCount = user.reviews.length;
       const averageRating =
         reviewCount > 0
-          ? user.reviews.reduce((sum, review) => sum + review.rating, 0) /
+          ? user.reviews.reduce((sum: number, review: any) => sum + review.rating, 0) /
             reviewCount
           : 0;
 
       // Get last activity (latest order or review)
       const lastOrderDate =
         user.orders.length > 0
-          ? new Date(Math.max(...user.orders.map((o) => o.createdAt.getTime())))
+          ? new Date(Math.max(...user.orders.map((o: any) => o.createdAt.getTime())))
           : new Date(0);
       const lastReviewDate =
         user.reviews.length > 0
           ? new Date(
-              Math.max(...user.reviews.map((r) => r.createdAt.getTime()))
+              Math.max(...user.reviews.map((r: any) => r.createdAt.getTime()))
             )
           : new Date(0);
       const lastActivity = new Date(

@@ -70,6 +70,14 @@ export class AddressController extends BaseController {
         return;
       }
 
+      if (!id) {
+        res.status(400).json({
+          success: false,
+          message: "Address ID is required",
+        });
+        return;
+      }
+
       const address = await this.addressService.getAddressById(id, userId);
 
       if (!address) {
@@ -126,7 +134,7 @@ export class AddressController extends BaseController {
 
       const address = await this.addressService.createAddress(
         userId,
-        addressData
+        { ...addressData, country: addressData.country || 'NG' }
       );
 
       const response: ApiResponse<AddressResponse> = {
@@ -174,6 +182,14 @@ export class AddressController extends BaseController {
         return;
       }
 
+      if (!id) {
+        res.status(400).json({
+          success: false,
+          message: "Address ID is required",
+        });
+        return;
+      }
+
       const address = await this.addressService.updateAddress(
         id,
         userId,
@@ -216,6 +232,14 @@ export class AddressController extends BaseController {
         res.status(401).json({
           success: false,
           message: "User authentication required",
+        });
+        return;
+      }
+
+      if (!id) {
+        res.status(400).json({
+          success: false,
+          message: "Address ID is required",
         });
         return;
       }
@@ -271,10 +295,18 @@ export class AddressController extends BaseController {
         return;
       }
 
+      if (!id) {
+        res.status(400).json({
+          success: false,
+          message: "Address ID is required",
+        });
+        return;
+      }
+
       const address = await this.addressService.setDefaultAddress(
         id,
         userId,
-        type
+        type.toUpperCase() as 'SHIPPING' | 'BILLING'
       );
 
       if (!address) {
@@ -408,6 +440,14 @@ export class AddressController extends BaseController {
         res.status(401).json({
           success: false,
           message: "User authentication required",
+        });
+        return;
+      }
+
+      if (!id) {
+        res.status(400).json({
+          success: false,
+          message: "Address ID is required",
         });
         return;
       }

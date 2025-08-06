@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import crypto from "crypto";
+import * as crypto from "crypto";
 import { logger } from "../../utils/logger/winston";
 
 interface ETagOptions {
@@ -103,7 +103,8 @@ export const etagHandler = (options: ETagOptions = {}) => {
             res.removeHeader("Content-Length");
             res.removeHeader("Content-Encoding");
 
-            return res.status(304).end();
+            res.status(304).end();
+            return;
           }
         }
 
@@ -144,15 +145,17 @@ export const etagHandler = (options: ETagOptions = {}) => {
     };
 
     // Override end method
-    res.end = function (chunk?: any, ...args: any[]): void {
+    res.end = function (chunk?: any, encoding?: any, cb?: any): Response {
       if (chunk && !etagGenerated) {
         responseBody = chunk;
         handleETag(chunk);
       }
 
       if (!res.headersSent) {
-        originalEnd.call(this, chunk, ...args);
+        // Call original end method with proper parameters
+        originalEnd.call(this, chunk, encoding, cb);
       }
+      return this;
     };
 
     next();

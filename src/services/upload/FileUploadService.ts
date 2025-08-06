@@ -75,7 +75,7 @@ export class FileUploadService extends BaseService {
         const processedImage = await this.imageProcessor.processImage(
           file.buffer,
           {
-            resize: options.resize,
+            ...(options.resize ? { resize: options.resize } : {}),
             format: "webp",
             quality: options.resize?.quality || 80,
           }
@@ -161,16 +161,21 @@ export class FileUploadService extends BaseService {
         folder: "products",
         resize: { width: 1200, height: 1200, quality: 85 },
         generateThumbnail: true,
-        allowedTypes: CONSTANTS.ALLOWED_IMAGE_FORMATS,
+        allowedTypes: [...CONSTANTS.ALLOWED_IMAGE_FORMATS],
         maxSize: CONSTANTS.MAX_FILE_SIZE,
       };
 
       const images = await this.uploadMultipleFiles(files, uploadOptions);
 
-      return {
+      const result: { images: UploadResult[]; primaryImage?: UploadResult } = {
         images,
-        primaryImage: images[0], // First image is primary
       };
+      
+      if (images[0]) {
+        result.primaryImage = images[0];
+      }
+      
+      return result;
     } catch (error) {
       this.handleError("Error uploading product images", error);
       throw error;
@@ -206,7 +211,7 @@ export class FileUploadService extends BaseService {
         folder: "categories",
         resize: { width: 800, height: 600, quality: 80 },
         generateThumbnail: true,
-        allowedTypes: CONSTANTS.ALLOWED_IMAGE_FORMATS,
+        allowedTypes: [...CONSTANTS.ALLOWED_IMAGE_FORMATS],
       };
 
       const result = await this.uploadFile(file, options);

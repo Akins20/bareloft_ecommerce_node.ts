@@ -20,7 +20,7 @@ const createPrismaClient = () => {
     errorFormat: "pretty",
     datasources: {
       db: {
-        url: process.env.DATABASE_URL,
+        url: process.env.DATABASE_URL!,
       },
     },
   });
@@ -28,8 +28,8 @@ const createPrismaClient = () => {
   // Log database queries in development
   if (process.env.NODE_ENV === "development") {
     client.$on(
-      "query",
-      (e: { query: any; params: any; duration: any; target: any }) => {
+      "query" as any,
+      (e: any) => {
         logger.debug("Database Query:", {
           query: e.query,
           params: e.params,
@@ -41,7 +41,7 @@ const createPrismaClient = () => {
   }
 
   // Log database errors
-  client.$on("error", (e: { message: any; target: any }) => {
+  client.$on("error" as any, (e: any) => {
     logger.error("Database Error:", {
       message: e.message,
       target: e.target,
@@ -49,7 +49,7 @@ const createPrismaClient = () => {
   });
 
   // Log database info
-  client.$on("info", (e: { message: any; target: any }) => {
+  client.$on("info" as any, (e: any) => {
     logger.info("Database Info:", {
       message: e.message,
       target: e.target,
@@ -57,7 +57,7 @@ const createPrismaClient = () => {
   });
 
   // Log database warnings
-  client.$on("warn", (e: { message: any; target: any }) => {
+  client.$on("warn" as any, (e: any) => {
     logger.warn("Database Warning:", {
       message: e.message,
       target: e.target,
@@ -258,7 +258,7 @@ export class DatabaseManager {
    * Begin transaction
    */
   public async transaction<T>(
-    callback: (prisma: PrismaClient) => Promise<T>
+    callback: (prisma: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>
   ): Promise<T> {
     return this.client.$transaction(callback);
   }

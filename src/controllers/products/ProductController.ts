@@ -3,6 +3,7 @@ import { BaseController } from "../BaseController";
 import { ProductService } from "../../services/products/ProductService";
 import {
   ProductListQuery,
+  ProductFilters,
   CreateProductRequest,
   UpdateProductRequest,
   ProductDetailResponse,
@@ -25,35 +26,38 @@ export class ProductController extends BaseController {
    */
   public getProducts = async (req: Request, res: Response): Promise<void> => {
     try {
-      const query: ProductListQuery = {
+      const filters: ProductFilters = {
         page: parseInt(req.query.page as string) || 1,
         limit: Math.min(parseInt(req.query.limit as string) || 20, 100),
-        categoryId: req.query.categoryId as string,
-        search: req.query.search as string,
-        minPrice: req.query.minPrice
-          ? parseFloat(req.query.minPrice as string)
-          : undefined,
-        maxPrice: req.query.maxPrice
-          ? parseFloat(req.query.maxPrice as string)
-          : undefined,
-        brand: req.query.brand as string,
-        isActive:
-          req.query.isActive !== undefined
-            ? req.query.isActive === "true"
-            : undefined,
-        isFeatured:
-          req.query.isFeatured !== undefined
-            ? req.query.isFeatured === "true"
-            : undefined,
-        sortBy: (req.query.sortBy as any) || "createdAt",
-        sortOrder: (req.query.sortOrder as "asc" | "desc") || "desc",
-        inStock:
-          req.query.inStock !== undefined
-            ? req.query.inStock === "true"
-            : undefined,
+        sortBy: (req.query.sortBy as string) || "createdAt",
+        sortOrder: (req.query.sortOrder as string) || "desc",
       };
 
-      const result = await this.productService.getProducts(query);
+      if (req.query.search) {
+        filters.search = req.query.search as string;
+      }
+
+      if (req.query.categoryId) {
+        filters.categoryId = req.query.categoryId as string;
+      }
+
+      if (req.query.priceMin) {
+        filters.priceMin = parseFloat(req.query.priceMin as string);
+      }
+
+      if (req.query.priceMax) {
+        filters.priceMax = parseFloat(req.query.priceMax as string);
+      }
+
+      if (req.query.featured !== undefined) {
+        filters.featured = req.query.featured === "true";
+      }
+
+      if (req.query.inStock !== undefined) {
+        filters.inStock = req.query.inStock === "true";
+      }
+
+      const result = await this.productService.getProducts(filters);
 
       const response: ApiResponse<ProductListResponse> = {
         success: true,
@@ -78,7 +82,12 @@ export class ProductController extends BaseController {
     try {
       const { id } = req.params;
 
-      const product = await this.productService.getProductById(id);
+      if (!id) {
+        this.sendError(res, "Product ID is required", 400, "INVALID_REQUEST");
+        return;
+      }
+
+      const product = await this.productService.getProduct(id);
 
       if (!product) {
         this.sendError(res, "Product not found", 404, "PRODUCT_NOT_FOUND");
@@ -88,7 +97,7 @@ export class ProductController extends BaseController {
       const response: ApiResponse<ProductDetailResponse> = {
         success: true,
         message: "Product retrieved successfully",
-        data: product,
+        data: { product },
       };
 
       res.json(response);
@@ -108,7 +117,12 @@ export class ProductController extends BaseController {
     try {
       const { slug } = req.params;
 
-      const product = await this.productService.getProductBySlug(slug);
+      if (!slug) {
+        this.sendError(res, "Product slug is required", 400, "INVALID_REQUEST");
+        return;
+      }
+
+      const product = await this.productService.getProduct(slug);
 
       if (!product) {
         this.sendError(res, "Product not found", 404, "PRODUCT_NOT_FOUND");
@@ -118,7 +132,7 @@ export class ProductController extends BaseController {
       const response: ApiResponse<ProductDetailResponse> = {
         success: true,
         message: "Product retrieved successfully",
-        data: product,
+        data: { product },
       };
 
       res.json(response);
@@ -167,14 +181,19 @@ export class ProductController extends BaseController {
         limit: Math.min(parseInt(req.query.limit as string) || 20, 100),
       };
 
-      const query: ProductListQuery = {
+      if (!categoryId) {
+        this.sendError(res, "Category ID is required", 400, "INVALID_REQUEST");
+        return;
+      }
+
+      const filters: ProductFilters = {
         ...pagination,
         categoryId,
-        sortBy: (req.query.sortBy as any) || "name",
-        sortOrder: (req.query.sortOrder as "asc" | "desc") || "asc",
+        sortBy: (req.query.sortBy as string) || "name",
+        sortOrder: (req.query.sortOrder as string) || "asc",
       };
 
-      const result = await this.productService.getProducts(query);
+      const result = await this.productService.getProducts(filters);
 
       const response: ApiResponse<ProductListResponse> = {
         success: true,
@@ -200,7 +219,19 @@ export class ProductController extends BaseController {
       const { id } = req.params;
       const limit = Math.min(parseInt(req.query.limit as string) || 8, 20);
 
-      const products = await this.productService.getRelatedProducts(id, limit);
+      if (!id) {
+        this.sendError(res, "Product ID is required", 400, "INVALID_REQUEST");
+        return;
+      }
+
+      // First get the product to get its categoryId
+      const product = await this.productService.getProduct(id);
+      if (!product) {
+        this.sendError(res, "Product not found", 404, "PRODUCT_NOT_FOUND");
+        return;
+      }
+
+      const products = await this.productService.getRelatedProducts(id, product.categoryId, limit);
 
       const response: ApiResponse<any[]> = {
         success: true,
@@ -223,25 +254,27 @@ export class ProductController extends BaseController {
     res: Response
   ): Promise<void> => {
     try {
+      const search = (req.query.q as string) || (req.query.search as string);
+      const categoryId = req.query.categoryId as string | undefined;
+      const brand = req.query.brand as string | undefined;
+      const minPrice = req.query.minPrice ? parseFloat(req.query.minPrice as string) : undefined;
+      const maxPrice = req.query.maxPrice ? parseFloat(req.query.maxPrice as string) : undefined;
+      const inStock = req.query.inStock !== undefined ? req.query.inStock === "true" : undefined;
+      
       const query: ProductListQuery = {
         page: parseInt(req.query.page as string) || 1,
         limit: Math.min(parseInt(req.query.limit as string) || 20, 100),
-        search: (req.query.q as string) || (req.query.search as string),
-        categoryId: req.query.categoryId as string,
-        minPrice: req.query.minPrice
-          ? parseFloat(req.query.minPrice as string)
-          : undefined,
-        maxPrice: req.query.maxPrice
-          ? parseFloat(req.query.maxPrice as string)
-          : undefined,
-        brand: req.query.brand as string,
+        search,
         sortBy: (req.query.sortBy as any) || "relevance",
         sortOrder: (req.query.sortOrder as "asc" | "desc") || "desc",
-        inStock:
-          req.query.inStock !== undefined
-            ? req.query.inStock === "true"
-            : undefined,
       };
+      
+      // Only add defined values to avoid undefined assignment issues
+      if (categoryId) query.categoryId = categoryId;
+      if (brand) query.brand = brand;
+      if (minPrice !== undefined) query.minPrice = minPrice;
+      if (maxPrice !== undefined) query.maxPrice = maxPrice;
+      if (inStock !== undefined) query.inStock = inStock;
 
       if (!query.search) {
         this.sendError(
@@ -253,7 +286,17 @@ export class ProductController extends BaseController {
         return;
       }
 
-      const result = await this.productService.searchProducts(query);
+      const searchFilters: Partial<ProductFilters> = {};
+      if (query.page !== undefined) searchFilters.page = query.page;
+      if (query.limit !== undefined) searchFilters.limit = query.limit;
+      if (query.categoryId !== undefined) searchFilters.categoryId = query.categoryId;
+      if (query.minPrice !== undefined) searchFilters.priceMin = query.minPrice;
+      if (query.maxPrice !== undefined) searchFilters.priceMax = query.maxPrice;
+      if (query.sortBy !== undefined) searchFilters.sortBy = query.sortBy;
+      if (query.sortOrder !== undefined) searchFilters.sortOrder = query.sortOrder;
+      if (query.inStock !== undefined) searchFilters.inStock = query.inStock;
+      
+      const result = await this.productService.searchProducts(query.search || "", searchFilters);
 
       const response: ApiResponse<ProductListResponse> = {
         success: true,
@@ -277,6 +320,11 @@ export class ProductController extends BaseController {
   ): Promise<void> => {
     try {
       const { id } = req.params;
+
+      if (!id) {
+        this.sendError(res, "Product ID is required", 400, "INVALID_REQUEST");
+        return;
+      }
 
       const stock = await this.productService.getProductStock(id);
 
@@ -355,6 +403,11 @@ export class ProductController extends BaseController {
     try {
       const { id } = req.params;
 
+      if (!id) {
+        this.sendError(res, "Product ID is required", 400, "INVALID_REQUEST");
+        return;
+      }
+
       const summary = await this.productService.getProductReviewsSummary(id);
 
       const response: ApiResponse<any> = {
@@ -380,6 +433,11 @@ export class ProductController extends BaseController {
     try {
       const { id } = req.params;
       const days = parseInt(req.query.days as string) || 30;
+
+      if (!id) {
+        this.sendError(res, "Product ID is required", 400, "INVALID_REQUEST");
+        return;
+      }
 
       const history = await this.productService.getProductPriceHistory(
         id,
@@ -407,7 +465,7 @@ export class ProductController extends BaseController {
     res: Response
   ): Promise<void> => {
     try {
-      const pagination: PaginationParams = {
+      const pagination = {
         page: parseInt(req.query.page as string) || 1,
         limit: Math.min(parseInt(req.query.limit as string) || 20, 100),
       };
@@ -437,6 +495,11 @@ export class ProductController extends BaseController {
     try {
       const { id } = req.params;
       const days = parseInt(req.query.days as string) || 30;
+
+      if (!id) {
+        this.sendError(res, "Product ID is required", 400, "INVALID_REQUEST");
+        return;
+      }
 
       const analytics = await this.productService.getProductAnalytics(id, days);
 
@@ -532,6 +595,11 @@ export class ProductController extends BaseController {
         return;
       }
 
+      if (!id) {
+        this.sendError(res, "Product ID is required", 400, "INVALID_REQUEST");
+        return;
+      }
+
       const product = await this.productService.updateProduct(
         id,
         updateData,
@@ -565,6 +633,11 @@ export class ProductController extends BaseController {
 
       if (!userId || !this.hasRole(req, "admin")) {
         this.sendError(res, "Admin access required", 403, "FORBIDDEN");
+        return;
+      }
+
+      if (!id) {
+        this.sendError(res, "Product ID is required", 400, "INVALID_REQUEST");
         return;
       }
 

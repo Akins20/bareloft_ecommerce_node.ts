@@ -75,13 +75,14 @@ export const validateSchema = (
           ip: req.ip,
         });
 
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: "SCHEMA_VALIDATION_ERROR",
           message: "Request data does not match required schema",
           details: validationErrors,
           code: "SCHEMA_001",
         });
+        return;
       }
 
       // Replace request body with validated/converted data
@@ -132,8 +133,8 @@ export const monitorValidation = (
   const startTime = Date.now();
 
   // Override the end method to capture timing
-  const originalEnd = res.end;
-  res.end = function (...args: any[]) {
+  const originalEnd = res.end.bind(res);
+  res.end = function (chunk?: any, encoding?: BufferEncoding, cb?: (() => void)): Response {
     const duration = Date.now() - startTime;
 
     if (duration > 100) {
@@ -146,8 +147,8 @@ export const monitorValidation = (
       });
     }
 
-    originalEnd.apply(this, args);
-  };
+    return originalEnd(chunk, encoding as BufferEncoding, cb);
+  } as any;
 
   next();
 };

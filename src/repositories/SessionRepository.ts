@@ -19,6 +19,7 @@ interface CreateSessionData {
   ipAddress?: string;
   userAgent?: string;
   isActive: boolean;
+  lastUsedAt?: Date;
 }
 
 interface UpdateSessionData {

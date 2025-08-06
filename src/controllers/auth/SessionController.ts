@@ -190,7 +190,7 @@ export class SessionController extends BaseController {
         timeUntilExpiry: session.timeUntilExpiry,
         lastUsedAt: session.lastUsedAt,
         createdAt: session.createdAt,
-        isCurrent: session.sessionId === req.user.sessionId,
+        isCurrent: session.sessionId === req.user?.sessionId,
       }));
 
       const response: ApiResponse = {

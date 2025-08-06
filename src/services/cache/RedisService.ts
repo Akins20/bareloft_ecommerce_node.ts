@@ -1,9 +1,9 @@
 import { BaseService } from "../BaseService";
-import Redis from "ioredis";
-import { redisConfig } from "../../config";
+import * as Redis from "ioredis";
+// import { redisConfig } from "../../config";
 
 export class RedisService extends BaseService {
-  private client: Redis;
+  private client: Redis.Redis;
   private isConnected: boolean = false;
 
   constructor() {
@@ -16,11 +16,11 @@ export class RedisService extends BaseService {
    */
   private initializeRedis(): void {
     try {
-      this.client = new Redis({
-        host: redisConfig.host,
-        port: redisConfig.port,
-        password: redisConfig.password,
-        db: redisConfig.database || 0,
+      this.client = new Redis.Redis({
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+        password: process.env.REDIS_PASSWORD,
+        db: parseInt(process.env.REDIS_DATABASE || '0'),
         retryDelayOnFailover: 100,
         maxRetriesPerRequest: 3,
         lazyConnect: true,
@@ -132,6 +132,18 @@ export class RedisService extends BaseService {
   }
 
   /**
+   * Set a JSON object with expiration
+   */
+  async setexJSON<T>(key: string, seconds: number, value: T): Promise<string> {
+    try {
+      return await this.client.setex(key, seconds, JSON.stringify(value));
+    } catch (error) {
+      this.handleError("Error setting Redis JSON key with expiration", error);
+      throw error;
+    }
+  }
+
+  /**
    * Get a value by key
    */
   async get(key: string): Promise<string | null> {
@@ -139,6 +151,20 @@ export class RedisService extends BaseService {
       return await this.client.get(key);
     } catch (error) {
       this.handleError("Error getting Redis key", error);
+      return null;
+    }
+  }
+
+  /**
+   * Get a parsed JSON value by key
+   */
+  async getJSON<T>(key: string): Promise<T | null> {
+    try {
+      const value = await this.client.get(key);
+      if (value === null) return null;
+      return JSON.parse(value) as T;
+    } catch (error) {
+      this.handleError("Error getting and parsing Redis JSON key", error);
       return null;
     }
   }
@@ -482,7 +508,7 @@ export class RedisService extends BaseService {
   /**
    * Create a pipeline for batch operations
    */
-  pipeline(): Redis.Pipeline {
+  pipeline(): any {
     return this.client.pipeline();
   }
 

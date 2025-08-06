@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { environment } from "../../config/environment";
+import { config } from "../../config/environment";
 import { SessionRepository } from "../../repositories/SessionRepository";
 import { logger } from "../../utils/logger/winston";
 
@@ -34,12 +34,13 @@ export const validateToken = (options: TokenValidationOptions = {}) => {
       // Handle missing token
       if (!authHeader || !authHeader.startsWith("Bearer ")) {
         if (required) {
-          return res.status(401).json({
+          res.status(401).json({
             success: false,
             error: "TOKEN_REQUIRED",
             message: "Authentication token is required",
             code: "TOKEN_001",
           });
+          return;
         }
         return next();
       }
@@ -49,7 +50,7 @@ export const validateToken = (options: TokenValidationOptions = {}) => {
       // Verify token structure and signature
       let decoded: any;
       try {
-        decoded = jwt.verify(token, environment.JWT_SECRET, {
+        decoded = jwt.verify(token, config.jwt.secret, {
           ignoreExpiration: skipExpiredCheck,
         });
       } catch (jwtError) {
@@ -62,7 +63,7 @@ export const validateToken = (options: TokenValidationOptions = {}) => {
           error: jwtError instanceof Error ? jwtError.message : "Unknown error",
         });
 
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           error: `TOKEN_${errorType}`,
           message:
@@ -71,16 +72,18 @@ export const validateToken = (options: TokenValidationOptions = {}) => {
               : "Invalid token format",
           code: errorType === "EXPIRED" ? "TOKEN_002" : "TOKEN_003",
         });
+        return;
       }
 
       // Validate token type
       if (!allowRefreshToken && decoded.type === "refresh") {
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           error: "INVALID_TOKEN_TYPE",
           message: "Refresh token cannot be used for API access",
           code: "TOKEN_004",
         });
+        return;
       }
 
       // Check session validity if required
@@ -89,12 +92,13 @@ export const validateToken = (options: TokenValidationOptions = {}) => {
         const session = await sessionRepo.findById(decoded.sessionId);
 
         if (!session || session.expiresAt < new Date()) {
-          return res.status(401).json({
+          res.status(401).json({
             success: false,
             error: "SESSION_INVALID",
             message: "Session is no longer valid",
             code: "TOKEN_005",
           });
+          return;
         }
       }
 
@@ -141,16 +145,17 @@ export const validateApiKey = (
   const apiKey = req.headers["x-api-key"] as string;
 
   if (!apiKey) {
-    return res.status(401).json({
+    res.status(401).json({
       success: false,
       error: "API_KEY_REQUIRED",
       message: "API key is required",
       code: "API_001",
     });
+    return;
   }
 
   // Validate API key format and existence
-  const validApiKeys = environment.VALID_API_KEYS?.split(",") || [];
+  const validApiKeys = process.env.VALID_API_KEYS?.split(",") || [];
 
   if (!validApiKeys.includes(apiKey)) {
     logger.warn("Invalid API key used", {
@@ -159,12 +164,13 @@ export const validateApiKey = (
       path: req.path,
     });
 
-    return res.status(401).json({
+    res.status(401).json({
       success: false,
       error: "INVALID_API_KEY",
       message: "Invalid API key",
       code: "API_002",
     });
+    return;
   }
 
   // Set API key info in request

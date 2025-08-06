@@ -2,7 +2,7 @@ import { BaseService } from "../BaseService";
 import { UploadedFile, AppError, HTTP_STATUS, ERROR_CODES } from "../../types";
 import { uploadConfig } from "../../config";
 import { v2 as cloudinary, UploadApiResponse } from "cloudinary";
-import AWS from "aws-sdk";
+// import AWS from "aws-sdk"; // Optional - only needed if using S3
 
 export interface StorageProvider {
   name: string;
@@ -21,6 +21,7 @@ export class CloudStorageService extends BaseService {
 
   constructor() {
     super();
+    this.provider = new CloudinaryProvider(); // Default initialization
     this.initializeProvider();
   }
 
@@ -33,7 +34,8 @@ export class CloudStorageService extends BaseService {
         this.provider = new CloudinaryProvider();
         break;
       case "aws-s3":
-        this.provider = new S3Provider();
+        // this.provider = new S3Provider(); // Requires AWS SDK
+        this.provider = new CloudinaryProvider(); // Fallback to Cloudinary
         break;
       case "local":
         this.provider = new LocalStorageProvider();
@@ -283,9 +285,9 @@ class CloudinaryProvider implements StorageProvider {
 }
 
 /**
- * AWS S3 Storage Provider
+ * AWS S3 Storage Provider (Commented out - requires AWS SDK)
  */
-class S3Provider implements StorageProvider {
+/* class S3Provider implements StorageProvider {
   name = "aws-s3";
   private s3: AWS.S3;
   private bucket: string;
@@ -392,7 +394,7 @@ class S3Provider implements StorageProvider {
   private extractFormat(mimetype: string): string {
     return mimetype.split("/")[1] || "unknown";
   }
-}
+} */
 
 /**
  * Local Storage Provider (for development)

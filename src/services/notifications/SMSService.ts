@@ -1,6 +1,6 @@
 import { BaseService } from "../BaseService";
 import { NigerianPhoneNumber } from "../../types";
-import { smsConfig } from "../../config";
+// import { smsConfig } from "../../config";
 import axios from "axios";
 
 export interface SendSMSRequest {
@@ -16,8 +16,8 @@ export class SMSService extends BaseService {
 
   constructor() {
     super();
-    this.apiKey = smsConfig.termii.apiKey;
-    this.senderId = smsConfig.termii.senderId;
+    this.apiKey = process.env.TERMII_API_KEY || '';
+    this.senderId = process.env.TERMII_SENDER_ID || 'Bareloft';
     this.baseUrl = "https://api.ng.termii.com/api";
   }
 

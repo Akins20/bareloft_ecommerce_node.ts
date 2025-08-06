@@ -32,7 +32,6 @@ export interface Product extends BaseEntity {
   // Relationships
   category: Category;
   images: ProductImage[];
-  inventory: Inventory;
   reviews: ProductReview[];
 
   // Computed fields
@@ -92,53 +91,10 @@ export interface ProductReview extends BaseEntity {
   // Relationships
   product: Product;
   user: PublicUser;
+  order?: any; // Optional order relationship
 }
 
-// Inventory interface
-export interface Inventory extends BaseEntity {
-  productId: string;
-  quantity: number;
-  reservedQuantity: number; // Items in pending orders
-  lowStockThreshold: number;
-  trackInventory: boolean;
-  lastRestockedAt?: Date;
-
-  // Relationships
-  product: Product;
-  movements: InventoryMovement[];
-
-  // Computed fields
-  availableQuantity: number; // quantity - reservedQuantity
-  isLowStock: boolean;
-  isOutOfStock: boolean;
-}
-
-// Inventory movement tracking
-export interface InventoryMovement extends BaseEntity {
-  productId: string;
-  type: InventoryMovementType;
-  quantity: number; // positive for increase, negative for decrease
-  previousQuantity: number;
-  newQuantity: number;
-  reason?: string;
-  reference?: string; // Order ID, adjustment ID, etc.
-  userId?: string; // Who made the change
-
-  // Relationships
-  product: Product;
-  user?: PublicUser;
-}
-
-export type InventoryMovementType =
-  | "restock" // Adding new inventory
-  | "sale" // Product sold
-  | "adjustment" // Manual adjustment
-  | "damaged" // Damaged goods
-  | "returned" // Customer return
-  | "reserved" // Reserved for order
-  | "unreserved" // Released from reservation
-  | "transfer" // Inventory transfer
-  | "loss"; // Inventory loss
+// Note: Inventory types moved to inventory.types.ts to avoid duplication
 
 // Product creation/update requests
 export interface CreateProductRequest {
@@ -245,9 +201,22 @@ export interface CategoryQueryParams extends PaginationParams {
   sortBy?: "name" | "sortOrder" | "productCount" | "created";
 }
 
+export interface CategoryListQuery extends PaginationParams {
+  parentId?: string;
+  isActive?: boolean;
+  hasProducts?: boolean;
+  sortBy?: "name" | "sortOrder" | "productCount" | "created";
+  includeProductCount?: boolean;
+}
+
+export interface CategoryWithProductCount extends Category {
+  productCount: number;
+}
+
 // Product review requests
 export interface CreateReviewRequest {
   productId: string;
+  userId: string;
   rating: number;
   title?: string;
   comment?: string;
@@ -267,29 +236,7 @@ export interface ReviewQueryParams extends PaginationParams {
 }
 
 // Inventory management requests
-export interface UpdateInventoryRequest {
-  productId: string;
-  quantity?: number;
-  lowStockThreshold?: number;
-  trackInventory?: boolean;
-  reason?: string;
-}
-
-export interface BulkInventoryUpdateRequest {
-  updates: {
-    productId: string;
-    quantity: number;
-    reason?: string;
-  }[];
-}
-
-export interface InventoryMovementRequest {
-  productId: string;
-  type: InventoryMovementType;
-  quantity: number;
-  reason?: string;
-  reference?: string;
-}
+// Note: Inventory request types moved to inventory.types.ts
 
 // Product search and filtering
 export interface ProductSearchRequest extends PaginationParams {
@@ -322,6 +269,31 @@ export interface ProductSearchResponse extends ProductListResponse {
   };
 }
 
+// Search analytics and reporting
+export interface SearchAnalytics {
+  totalSearches: number;
+  uniqueSearches: number;
+  avgSearchTime: number; // milliseconds
+  topQueries: PopularSearch[];
+  noResultsQueries: {
+    query: string;
+    count: number;
+  }[];
+  searchIntent: {
+    product: number;
+    category: number;
+    brand: number;
+    price: number;
+  };
+  conversionRate: number; // percentage of searches that led to purchases
+  avgResultsPerSearch: number;
+  mobileSearchPercentage: number; // High mobile usage in Nigeria
+  peakSearchHours: {
+    hour: number;
+    searches: number;
+  }[];
+}
+
 // Product analytics and reporting
 export interface ProductAnalytics {
   totalProducts: number;
@@ -352,19 +324,7 @@ export interface ProductAnalytics {
   bestRated: Product[];
 }
 
-// Wishlist types
-export interface WishlistItem extends BaseEntity {
-  userId: string;
-  productId: string;
-
-  // Relationships
-  user: PublicUser;
-  product: Product;
-}
-
-export interface WishlistRequest {
-  productId: string;
-}
+// Note: Wishlist types have been moved to user.types.ts to avoid circular dependencies
 
 // Product comparison
 export interface ProductComparison {
@@ -514,4 +474,261 @@ export interface ProductExportOptions {
     from: Date;
     to: Date;
   };
+}
+
+// Additional types for SearchService and ProductController
+export interface ProductListQuery extends PaginationParams {
+  categoryId?: string;
+  categorySlug?: string;
+  brand?: string;
+  priceMin?: number;
+  priceMax?: number;
+  minPrice?: number;
+  maxPrice?: number;
+  search?: string;
+  isActive?: boolean;
+  isFeatured?: boolean;
+  inStock?: boolean;
+  hasDiscount?: boolean;
+  rating?: number;
+  sortBy?: "name" | "price" | "rating" | "created" | "popularity" | "discount";
+  availability?: "all" | "in_stock" | "out_of_stock" | "low_stock";
+}
+
+export interface SearchQuery {
+  query: string;
+  categoryId?: string | undefined;
+  brand?: string | undefined;
+  minPrice?: number | undefined;
+  maxPrice?: number | undefined;
+  inStock?: boolean | undefined;
+  rating?: number | undefined;
+  sortBy?: "relevance" | "price" | "name" | "rating" | "created" | "popularity" | "discount" | string | undefined;
+  sortOrder?: "asc" | "desc" | undefined;
+  page?: number | undefined;
+  limit?: number | undefined;
+  filters?: SearchFilters | undefined;
+}
+
+export interface SearchResult {
+  products: Product[];
+  categories: Category[];
+  totalResults: number;
+  searchTime: number;
+  suggestions: SearchSuggestion[];
+  filters: SearchFilters;
+  facets: {
+    brands: { name: string; count: number }[];
+    categories: { id: string; name: string; count: number }[];
+    priceRanges: { min: number; max: number; count: number }[];
+  };
+}
+
+export interface SearchSuggestion {
+  text: string;
+  type: "product" | "category" | "brand" | "query" | "suggestion";
+  relevance?: number;
+  count?: number;
+  category?: string;
+  highlight?: string;
+}
+
+export interface SearchFilters {
+  categoryId?: string | undefined;
+  categoryIds?: string[] | undefined;
+  brand?: string | undefined;
+  brands?: string[] | undefined;
+  minPrice?: number | undefined;
+  maxPrice?: number | undefined;
+  priceRange?: { min: number; max: number } | undefined;
+  rating?: number | undefined;
+  inStock?: boolean | undefined;
+  availability?: "all" | "in_stock" | "out_of_stock" | undefined;
+  hasDiscount?: boolean | undefined;
+  onSale?: boolean | undefined;
+  discountPercentage?: number | undefined;
+  isFeatured?: boolean | undefined;
+  features?: string[] | undefined;
+  colors?: string[] | undefined;
+  sizes?: string[] | undefined;
+  location?: string | undefined;
+  urgency?: "low" | "medium" | "high" | undefined;
+  qualityFocus?: boolean | undefined;
+  preferredLocation?: string | undefined;
+}
+
+export interface PopularSearch {
+  query: string;
+  count: number;
+  category?: string;
+  trend: "rising" | "stable" | "falling" | "up" | "down";
+  lastSearched?: Date;
+}
+
+export interface SearchAnalytics {
+  topQueries: PopularSearch[];
+  noResultQueries: string[];
+  searchVolume: {
+    total: number;
+    unique: number;
+    period: string;
+  };
+  conversionRate: number;
+  averageResultsPerQuery: number;
+  popularFilters: {
+    filter: string;
+    usage: number;
+  }[];
+}
+
+// Product detail response type
+export interface ProductDetailResponse {
+  product: Product;
+  relatedProducts?: Product[];
+  additionalReviews?: ProductReview[];
+  variants?: ProductVariant[];
+  similarProducts?: Product[];
+}
+
+// Search response types
+export interface SearchResponse {
+  products: Product[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    total: number;
+    hasNext?: boolean;
+    hasPrev?: boolean;
+  };
+  suggestions?: SearchSuggestion[];
+  facets?: {
+    brands: { name: string; count: number }[];
+    categories: { id: string; name: string; count: number }[];
+    priceRanges: { min: number; max: number; count: number }[];
+  };
+  appliedFilters?: SearchFilters;
+  searchTime?: number;
+}
+
+export interface AutocompleteResponse {
+  suggestions: SearchSuggestion[];
+}
+
+export interface SearchHistoryItem {
+  query: string;
+  filters?: SearchFilters;
+  resultCount: number;
+  timestamp: Date;
+}
+
+export interface SearchHistoryResponse {
+  searches: SearchHistoryItem[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext?: boolean;
+    hasPrev?: boolean;
+  };
+}
+
+export interface ClearHistoryResult {
+  clearedCount: number;
+}
+
+export interface TrendingSearch {
+  query: string;
+  count: number;
+  trend: "rising" | "stable" | "falling";
+  category?: string;
+}
+
+// Additional missing types for ReviewController
+export interface ReviewListQuery extends PaginationParams {
+  productId?: string;
+  userId?: string;
+  rating?: number;
+  isVerified?: boolean;
+  isApproved?: boolean;
+  sortBy?: "rating" | "helpful" | "created";
+}
+
+export interface ReviewResponse extends ProductReview {
+  // Additional response fields if needed
+}
+
+export interface ReviewListResponse {
+  reviews: ReviewResponse[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    itemsPerPage: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+  summary: ReviewSummary;
+}
+
+export interface ReviewSummary {
+  totalReviews: number;
+  averageRating: number;
+  ratingDistribution: {
+    rating: number;
+    count: number;
+    percentage: number;
+  }[];
+  verifiedReviews: number;
+  mostHelpfulReview?: ProductReview;
+}
+
+// Product filters interface for ProductService
+export interface ProductFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+  categoryId?: string;
+  priceMin?: number;
+  priceMax?: number;
+  inStock?: boolean;
+  featured?: boolean;
+  sortBy?: string;
+  sortOrder?: string;
+}
+
+// Additional missing types
+export interface ProductCreateInput {
+  name: string;
+  description: string;
+  shortDescription?: string;
+  sku: string;
+  price: number;
+  comparePrice?: number;
+  categoryId: string;
+  brand?: string;
+  weight?: number;
+  dimensions?: {
+    length?: number;
+    width?: number;
+    height?: number;
+  };
+  isActive?: boolean;
+  isFeatured?: boolean;
+  seoTitle?: string;
+  seoDescription?: string;
+  inventory: {
+    quantity: number;
+    lowStockThreshold?: number;
+    trackInventory?: boolean;
+  };
+  images?: {
+    imageUrl: string;
+    altText?: string;
+    isPrimary?: boolean;
+  }[];
+}
+
+export interface ProductUpdateInput extends Partial<ProductCreateInput> {
+  id: string;
 }

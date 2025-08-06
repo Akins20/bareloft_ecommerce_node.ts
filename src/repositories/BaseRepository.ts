@@ -317,7 +317,7 @@ export abstract class BaseRepository<T, CreateData, UpdateData> {
    * Execute raw transaction
    */
   async transaction<R>(
-    callback: (prisma: PrismaClient) => Promise<R>
+    callback: (prisma: Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">) => Promise<R>
   ): Promise<R> {
     try {
       return await this.prisma.$transaction(callback);

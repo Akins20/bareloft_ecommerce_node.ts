@@ -2,8 +2,8 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// Inventory Model Schema
-export const InventoryModel = prisma.inventory;
+// Inventory Model Schema (maps to Product table since no separate inventory table exists)
+export const InventoryModel = prisma.product;
 
 // Inventory Schema Definition for Prisma
 export const InventorySchema = `

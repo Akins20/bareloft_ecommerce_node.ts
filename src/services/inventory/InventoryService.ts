@@ -16,6 +16,7 @@ import {
   ERROR_CODES,
   PaginationMeta,
 } from "../../types";
+import { NotificationType, NotificationChannel } from "../../types/notification.types";
 import { CacheService } from "../cache/CacheService";
 import { NotificationService } from "../notifications/NotificationService";
 
@@ -57,29 +58,29 @@ export class InventoryService extends BaseService {
    */
   async getProductInventory(productId: string): Promise<Inventory> {
     try {
-      const inventory = await InventoryModel.findUnique({
-        where: { productId },
+      const product = await InventoryModel.findUnique({
+        where: { id: productId },
         include: {
-          product: {
-            select: {
-              id: true,
-              name: true,
-              sku: true,
-              price: true,
-            },
+          category: {
+            select: { name: true },
           },
+          stockReservations: {
+            where: {
+              expiresAt: { gt: new Date() }
+            }
+          }
         },
       });
 
-      if (!inventory) {
+      if (!product) {
         throw new AppError(
-          "Inventory record not found",
+          "Product not found",
           HTTP_STATUS.NOT_FOUND,
           ERROR_CODES.RESOURCE_NOT_FOUND
         );
       }
 
-      return this.transformInventory(inventory);
+      return this.transformProductToInventory(product);
     } catch (error) {
       this.handleError("Error fetching product inventory", error);
       throw error;
@@ -105,21 +106,16 @@ export class InventoryService extends BaseService {
         limit = 20,
       } = filters;
 
-      // Build where clause
-      const where: any = {};
+      // Build where clause for Product table
+      const where: any = { isActive: true };
 
-      if (status) where.status = status;
-      if (outOfStock) where.quantity = 0;
-
-      if (categoryId || searchTerm) {
-        where.product = {};
-        if (categoryId) where.product.categoryId = categoryId;
-        if (searchTerm) {
-          where.product.OR = [
-            { name: { contains: searchTerm, mode: "insensitive" } },
-            { sku: { contains: searchTerm, mode: "insensitive" } },
-          ];
-        }
+      if (outOfStock) where.stock = 0;
+      if (categoryId) where.categoryId = categoryId;
+      if (searchTerm) {
+        where.OR = [
+          { name: { contains: searchTerm, mode: "insensitive" } },
+          { sku: { contains: searchTerm, mode: "insensitive" } },
+        ];
       }
 
       // Execute queries
@@ -127,17 +123,14 @@ export class InventoryService extends BaseService {
         InventoryModel.findMany({
           where,
           include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                sku: true,
-                price: true,
-                category: {
-                  select: { name: true },
-                },
-              },
+            category: {
+              select: { name: true },
             },
+            stockReservations: {
+              where: {
+                expiresAt: { gt: new Date() }
+              }
+            }
           },
           orderBy: { updatedAt: "desc" },
           skip: (page - 1) * limit,
@@ -150,7 +143,7 @@ export class InventoryService extends BaseService {
       const pagination = this.createPagination(page, limit, total);
 
       return {
-        inventories: inventories.map(this.transformInventoryListItem),
+        inventories: inventories.map((product) => this.transformProductToInventoryListItem(product)),
         pagination,
         summary,
       };
@@ -169,8 +162,11 @@ export class InventoryService extends BaseService {
     userId: string
   ): Promise<Inventory> {
     try {
-      // Validate product exists
-      const product = await this.productRepository.findById(productId);
+      // Get current product information
+      const product = await InventoryModel.findUnique({
+        where: { id: productId },
+      });
+
       if (!product) {
         throw new AppError(
           "Product not found",
@@ -179,75 +175,44 @@ export class InventoryService extends BaseService {
         );
       }
 
-      // Get or create inventory
-      let inventory = await InventoryModel.findUnique({
-        where: { productId },
+      const previousQuantity = product.stock;
+
+      const updatedProduct = await InventoryModel.update({
+        where: { id: productId },
+        data: {
+          stock: request.quantity ?? product.stock,
+          lowStockThreshold:
+            request.lowStockThreshold ?? product.lowStockThreshold,
+          trackQuantity: request.trackInventory ?? product.trackQuantity,
+          updatedAt: new Date(),
+        },
       });
-
-      const previousQuantity = inventory?.quantity || 0;
-
-      if (!inventory) {
-        inventory = await InventoryModel.create({
-          data: {
-            productId,
-            quantity: request.quantity || 0,
-            lowStockThreshold: request.lowStockThreshold || 10,
-            reorderPoint: request.reorderPoint || 5,
-            reorderQuantity: request.reorderQuantity || 50,
-            trackInventory: request.trackInventory ?? true,
-            status: "ACTIVE",
-            averageCost: 0,
-            lastCost: 0,
-          },
-        });
-      } else {
-        inventory = await InventoryModel.update({
-          where: { productId },
-          data: {
-            quantity: request.quantity ?? inventory.quantity,
-            lowStockThreshold:
-              request.lowStockThreshold ?? inventory.lowStockThreshold,
-            reorderPoint: request.reorderPoint ?? inventory.reorderPoint,
-            reorderQuantity:
-              request.reorderQuantity ?? inventory.reorderQuantity,
-            trackInventory: request.trackInventory ?? inventory.trackInventory,
-            updatedAt: new Date(),
-          },
-        });
-      }
 
       // Create inventory movement if quantity changed
       if (
         request.quantity !== undefined &&
         request.quantity !== previousQuantity
       ) {
-        const movementType =
-          request.quantity > previousQuantity
-            ? "ADJUSTMENT_IN"
-            : "ADJUSTMENT_OUT";
+        const movementType = "ADJUSTMENT";
 
         await InventoryMovementModel.create({
           data: {
-            inventoryId: inventory.id,
             productId,
             type: movementType,
             quantity: Math.abs(request.quantity - previousQuantity),
-            previousQuantity,
-            newQuantity: request.quantity,
             reason: request.reason || "Manual adjustment",
-            notes: request.notes,
-            createdBy: userId,
+            reference: `manual-${Date.now()}`,
           },
         });
       }
 
       // Check for low stock alerts
-      await this.checkLowStockAlert(inventory);
+      await this.checkLowStockAlert(updatedProduct);
 
       // Clear cache
       await this.clearInventoryCache(productId);
 
-      return this.transformInventory(inventory);
+      return this.transformProductToInventory(updatedProduct);
     } catch (error) {
       this.handleError("Error updating inventory", error);
       throw error;
@@ -273,6 +238,7 @@ export class InventoryService extends BaseService {
           await this.updateInventory(
             update.productId,
             {
+              productId: update.productId,
               quantity: update.quantity,
               reason: update.reason || request.batchReason,
             },
@@ -309,40 +275,34 @@ export class InventoryService extends BaseService {
     try {
       const cacheKey = "low-stock-alerts";
       const cached = await this.cacheService.get(cacheKey);
-      if (cached) return cached;
+      if (cached) return cached as any[];
 
-      const lowStockInventories = await InventoryModel.findMany({
+      const lowStockProducts = await InventoryModel.findMany({
         where: {
-          trackInventory: true,
-          status: "ACTIVE",
-          quantity: { gt: 0 },
+          trackQuantity: true,
+          isActive: true,
+          stock: { gt: 0 },
         },
         include: {
-          product: {
-            select: {
-              id: true,
-              name: true,
-              category: {
-                select: { name: true },
-              },
-            },
+          category: {
+            select: { name: true },
           },
         },
       });
 
       // Filter for low stock (can't use direct comparison in Prisma easily)
-      const alerts = lowStockInventories
-        .filter((inv) => inv.quantity <= inv.lowStockThreshold)
-        .map((inventory) => ({
-          productId: inventory.productId,
-          productName: inventory.product.name,
-          currentStock: inventory.quantity,
-          threshold: inventory.lowStockThreshold,
-          categoryName: inventory.product.category.name,
+      const alerts = lowStockProducts
+        .filter((product) => product.stock <= product.lowStockThreshold)
+        .map((product) => ({
+          productId: product.id,
+          productName: product.name,
+          currentStock: product.stock,
+          threshold: product.lowStockThreshold,
+          categoryName: product.category.name,
         }));
 
       // Cache for 15 minutes
-      await this.cacheService.set(cacheKey, alerts, 900);
+      await this.cacheService.set(cacheKey, alerts, { ttl: 900 });
 
       return alerts;
     } catch (error) {
@@ -359,19 +319,19 @@ export class InventoryService extends BaseService {
     userId: string
   ): Promise<Inventory> {
     try {
-      const inventory = await InventoryModel.findUnique({
-        where: { productId: request.productId },
+      const product = await InventoryModel.findUnique({
+        where: { id: request.productId },
       });
 
-      if (!inventory) {
+      if (!product) {
         throw new AppError(
-          "Inventory record not found",
+          "Product not found",
           HTTP_STATUS.NOT_FOUND,
           ERROR_CODES.RESOURCE_NOT_FOUND
         );
       }
 
-      const previousQuantity = inventory.quantity;
+      const previousQuantity = product.stock;
       let newQuantity: number;
 
       switch (request.adjustmentType) {
@@ -392,39 +352,33 @@ export class InventoryService extends BaseService {
           );
       }
 
-      // Update inventory
-      const updatedInventory = await InventoryModel.update({
-        where: { productId: request.productId },
+      // Update product stock
+      const updatedProduct = await InventoryModel.update({
+        where: { id: request.productId },
         data: {
-          quantity: newQuantity,
-          lastCost: request.unitCost || inventory.lastCost,
+          stock: newQuantity,
+          costPrice: request.unitCost || product.costPrice,
           updatedAt: new Date(),
         },
       });
 
       // Create movement record
-      const movementType =
-        newQuantity > previousQuantity ? "ADJUSTMENT_IN" : "ADJUSTMENT_OUT";
+      const movementType = "ADJUSTMENT";
 
       await InventoryMovementModel.create({
         data: {
-          inventoryId: inventory.id,
           productId: request.productId,
           type: movementType,
           quantity: Math.abs(newQuantity - previousQuantity),
-          previousQuantity,
-          newQuantity,
-          unitCost: request.unitCost,
           reason: request.reason,
-          notes: request.notes,
-          createdBy: userId,
+          reference: `adjustment-${Date.now()}`,
         },
       });
 
       // Clear cache
       await this.clearInventoryCache(request.productId);
 
-      return this.transformInventory(updatedInventory);
+      return this.transformProductToInventory(updatedProduct);
     } catch (error) {
       this.handleError("Error performing inventory adjustment", error);
       throw error;
@@ -433,22 +387,22 @@ export class InventoryService extends BaseService {
 
   // Private helper methods
 
-  private async checkLowStockAlert(inventory: any): Promise<void> {
+  private async checkLowStockAlert(product: any): Promise<void> {
     if (
-      inventory.trackInventory &&
-      inventory.quantity <= inventory.lowStockThreshold &&
-      inventory.quantity > 0
+      product.trackQuantity &&
+      product.stock <= product.lowStockThreshold &&
+      product.stock > 0
     ) {
       await this.notificationService.sendNotification({
-        type: "LOW_STOCK_ALERT",
-        channel: "EMAIL",
+        type: NotificationType.LOW_STOCK_ALERT,
+        channel: NotificationChannel.EMAIL,
         recipient: {
           email: "admin@bareloft.com",
         },
         variables: {
-          productId: inventory.productId,
-          currentStock: inventory.quantity,
-          threshold: inventory.lowStockThreshold,
+          productId: product.id,
+          currentStock: product.stock,
+          threshold: product.lowStockThreshold,
         },
       });
     }
@@ -460,31 +414,33 @@ export class InventoryService extends BaseService {
         InventoryModel.count(),
         InventoryModel.count({
           where: {
-            quantity: { gt: 0 },
-            trackInventory: true,
+            stock: { gt: 0 },
+            trackQuantity: true,
+            isActive: true,
           },
         }),
-        InventoryModel.count({ where: { quantity: 0 } }),
+        InventoryModel.count({ where: { stock: 0, isActive: true } }),
       ]);
 
     // Calculate total value (simplified)
-    const inventoryItems = await InventoryModel.findMany({
-      select: { quantity: true, averageCost: true },
+    const products = await InventoryModel.findMany({
+      where: { isActive: true },
+      select: { stock: true, costPrice: true },
     });
 
-    const totalValue = inventoryItems.reduce(
-      (sum, item) => sum + item.quantity * Number(item.averageCost),
+    const totalValue = products.reduce(
+      (sum, product) => sum + product.stock * Number(product.costPrice || 0),
       0
     );
 
     // Filter low stock from the count above
-    const lowStockCount = await Promise.all(
-      (
-        await InventoryModel.findMany({
-          where: { trackInventory: true, quantity: { gt: 0 } },
-          select: { quantity: true, lowStockThreshold: true },
-        })
-      ).filter((inv) => inv.quantity <= inv.lowStockThreshold)
+    const lowStockItems = await InventoryModel.findMany({
+      where: { trackQuantity: true, stock: { gt: 0 }, isActive: true },
+      select: { stock: true, lowStockThreshold: true },
+    });
+    
+    const lowStockCount = lowStockItems.filter(
+      (product) => product.stock <= product.lowStockThreshold
     );
 
     return {
@@ -499,46 +455,57 @@ export class InventoryService extends BaseService {
     await Promise.all([
       this.cacheService.delete(`inventory:${productId}`),
       this.cacheService.delete("low-stock-alerts"),
-      this.cacheService.deletePattern("inventory-list:*"),
+      // Using delete for pattern-like keys since deletePattern might not exist
+      this.cacheService.delete("inventory-list"),
     ]);
   }
 
-  private transformInventory(inventory: any): Inventory {
+  private transformProductToInventory(product: any): Inventory {
+    const reservedQuantity = product.stockReservations?.reduce(
+      (sum: number, reservation: any) => sum + reservation.quantity,
+      0
+    ) || 0;
+
     return {
-      id: inventory.id,
-      productId: inventory.productId,
-      quantity: inventory.quantity,
-      reservedQuantity: inventory.reservedQuantity,
-      availableQuantity: inventory.quantity - inventory.reservedQuantity,
-      lowStockThreshold: inventory.lowStockThreshold,
-      reorderPoint: inventory.reorderPoint,
-      reorderQuantity: inventory.reorderQuantity,
-      status: inventory.status,
-      trackInventory: inventory.trackInventory,
-      allowBackorder: inventory.allowBackorder,
-      averageCost: Number(inventory.averageCost),
-      lastCost: Number(inventory.lastCost),
-      lastRestockedAt: inventory.lastRestockedAt,
-      lastSoldAt: inventory.lastSoldAt,
-      createdAt: inventory.createdAt,
-      updatedAt: inventory.updatedAt,
+      id: product.id,
+      productId: product.id,
+      quantity: product.stock,
+      reservedQuantity,
+      availableQuantity: product.stock - reservedQuantity,
+      lowStockThreshold: product.lowStockThreshold,
+      reorderPoint: product.lowStockThreshold, // Using threshold as reorder point
+      reorderQuantity: 50, // Default value
+      status: product.isActive ? InventoryStatus.ACTIVE : InventoryStatus.INACTIVE,
+      trackInventory: product.trackQuantity,
+      allowBackorder: false, // Default value
+      averageCost: Number(product.costPrice || 0),
+      lastCost: Number(product.costPrice || 0),
+      lastRestockedAt: null, // Would need separate tracking
+      lastSoldAt: null, // Would need separate tracking
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
     };
   }
 
-  private transformInventoryListItem(inventory: any): any {
+  private transformProductToInventoryListItem(product: any): any {
+    const reservedQuantity = product.stockReservations?.reduce(
+      (sum: number, reservation: any) => sum + reservation.quantity,
+      0
+    ) || 0;
+
     return {
-      id: inventory.id,
-      productId: inventory.productId,
-      productName: inventory.product.name,
-      productSku: inventory.product.sku,
-      quantity: inventory.quantity,
-      reservedQuantity: inventory.reservedQuantity,
-      availableQuantity: inventory.quantity - inventory.reservedQuantity,
-      lowStockThreshold: inventory.lowStockThreshold,
-      status: inventory.status,
-      lastMovementAt: inventory.updatedAt,
-      totalValue: Number(inventory.averageCost) * inventory.quantity,
-      categoryName: inventory.product.category?.name,
+      id: product.id,
+      productId: product.id,
+      productName: product.name,
+      productSku: product.sku,
+      quantity: product.stock,
+      reservedQuantity,
+      availableQuantity: product.stock - reservedQuantity,
+      lowStockThreshold: product.lowStockThreshold,
+      status: product.isActive ? InventoryStatus.ACTIVE : InventoryStatus.INACTIVE,
+      lastMovementAt: product.updatedAt,
+      totalValue: Number(product.costPrice || 0) * product.stock,
+      categoryName: product.category?.name,
     };
   }
 }

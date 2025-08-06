@@ -85,7 +85,7 @@ export const createMiddlewareStack = {
     requestLogger,
     rateLimiter.admin,
     authenticate,
-    authorize(["admin", "super_admin"]),
+    authorize(["ADMIN", "SUPER_ADMIN"]),
     sanitizeInput,
     xssProtection,
     auditLogger,

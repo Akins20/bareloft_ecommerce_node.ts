@@ -1,6 +1,52 @@
 import { Request, Response, NextFunction } from "express";
 import { logger } from "../../utils/logger/winston";
-import { environment } from "../../config/environment";
+import { config } from "../../config/environment";
+
+/**
+ * 🧹 Sanitize sensitive data for logging
+ */
+const sanitizeForLogging = (data: any): any => {
+  if (!data || typeof data !== "object") return data;
+
+  const sensitiveFields = [
+    "password",
+    "token",
+    "authorization",
+    "cookie",
+    "session",
+    "secret",
+    "key",
+    "otp",
+    "pin",
+    "cvv",
+    "cardNumber",
+    "accountNumber",
+  ];
+
+  const sanitized = JSON.parse(JSON.stringify(data));
+
+  const recursiveSanitize = (obj: any): any => {
+    if (Array.isArray(obj)) {
+      return obj.map(recursiveSanitize);
+    }
+
+    if (obj && typeof obj === "object") {
+      for (const [key, value] of Object.entries(obj)) {
+        const lowerKey = key.toLowerCase();
+
+        if (sensitiveFields.some((field) => lowerKey.includes(field))) {
+          obj[key] = "[REDACTED]";
+        } else if (typeof value === "object") {
+          obj[key] = recursiveSanitize(value);
+        }
+      }
+    }
+
+    return obj;
+  };
+
+  return recursiveSanitize(sanitized);
+};
 
 interface ErrorContext {
   severity: "low" | "medium" | "high" | "critical";
@@ -105,7 +151,7 @@ const sendErrorAlert = async (
   req: Request,
   context: ErrorContext
 ): Promise<void> => {
-  if (!context.shouldAlert || environment.NODE_ENV !== "production") {
+  if (!context.shouldAlert || config.nodeEnv !== "production") {
     return;
   }
 
@@ -151,7 +197,7 @@ export const errorLogger = (
       name: error.name,
       code: error.errorCode || error.code,
       statusCode: error.statusCode || 500,
-      stack: environment.NODE_ENV === "development" ? error.stack : undefined,
+      stack: config.nodeEnv === "development" ? error.stack : undefined,
       details: error.details,
       isOperational: error.isOperational,
     },

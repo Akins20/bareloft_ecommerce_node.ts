@@ -187,7 +187,7 @@ export class ImageProcessingService extends BaseService {
         const processed = await this.processImage(imageBuffer, {
           resize: {
             width: variant.width,
-            height: variant.height,
+            height: variant.height ?? variant.width,
             fit: "cover",
           },
           format: "webp",
@@ -257,7 +257,7 @@ export class ImageProcessingService extends BaseService {
         size: imageBuffer.length,
         hasAlpha: metadata.hasAlpha || false,
         channels: metadata.channels || 3,
-        density: metadata.density,
+        density: metadata.density ?? 72,
         isAnimated: metadata.pages ? metadata.pages > 1 : false,
       };
     } catch (error) {
@@ -333,11 +333,11 @@ export class ImageProcessingService extends BaseService {
       ]);
 
       return {
-        original: variants.original,
-        large: variants.large,
-        medium: variants.medium,
-        small: variants.small,
-        thumbnail: variants.thumbnail,
+        original: variants.original || variants.large!,
+        large: variants.large!,
+        medium: variants.medium!,
+        small: variants.small!,
+        thumbnail: variants.thumbnail!,
       };
     } catch (error) {
       this.handleError("Error creating product image set", error);

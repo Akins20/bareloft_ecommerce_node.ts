@@ -1,50 +1,56 @@
 import { BaseService } from "../BaseService";
-import { UserRepository } from "@/repositories/UserRepository";
-import { OTPRepository } from "@/repositories/OTPRepository";
-import { SessionRepository } from "@/repositories/SessionRepository";
+import { UserRepository } from "../../repositories/UserRepository";
+import { OTPRepository } from "../../repositories/OTPRepository";
+import { SessionRepository } from "../../repositories/SessionRepository";
 import { JWTService } from "./JWTService";
 import { OTPService } from "./OTPService";
 import { SMSService } from "./SMSService";
 import {
   User,
   RequestOTPRequest,
-  RequestOTPResponse,
   VerifyOTPRequest,
   SignupRequest,
   LoginRequest,
   AuthResponse,
   RefreshTokenRequest,
-  RefreshTokenResponse,
   NigerianPhoneNumber,
-  OTPPurpose,
   UserRole,
-} from "@/types";
-import { AppError, HTTP_STATUS, ERROR_CODES } from "@/types/api.types";
-import { redisClient } from "@/config/redis";
-import { CONSTANTS } from "@/types/common.types";
+} from "../../types";
+import { AppError, HTTP_STATUS, ERROR_CODES } from "../../types/api.types";
+import { redisClient } from "../../config/redis";
+import { CONSTANTS } from "../../types/common.types";
+import { OTPPurpose, RefreshTokenResponse } from "@/types/auth.types";
 
-export class AuthService {
-  private userRepository: UserRepository;
-  private otpRepository: OTPRepository;
-  private sessionRepository: SessionRepository;
-  private jwtService: JWTService;
-  private otpService: OTPService;
-  private smsService: SMSService;
+export class AuthService extends BaseService {
+  private userRepository: any;
+  private otpRepository: any;
+  private sessionRepository: any;
+  private jwtService: any;
+  private otpService: any;
+  private smsService: any;
 
-  constructor() {
-    this.userRepository = new UserRepository();
-    this.otpRepository = new OTPRepository();
-    this.sessionRepository = new SessionRepository();
-    this.jwtService = new JWTService();
-    this.otpService = new OTPService();
-    this.smsService = new SMSService();
+  constructor(
+    userRepository?: any,
+    otpRepository?: any,
+    sessionRepository?: any,
+    jwtService?: any,
+    otpService?: any,
+    smsService?: any
+  ) {
+    super();
+    this.userRepository = userRepository || {};
+    this.otpRepository = otpRepository || {};
+    this.sessionRepository = sessionRepository || {};
+    this.jwtService = jwtService || {};
+    this.otpService = otpService || {};
+    this.smsService = smsService || {};
   }
 
   /**
    * Request OTP for phone number verification
    * Implements rate limiting and Nigerian phone validation
    */
-  async requestOTP(data: RequestOTPRequest): Promise<RequestOTPResponse> {
+  async requestOTP(data: RequestOTPRequest): Promise<any> {
     try {
       const { phoneNumber, purpose } = data;
 
@@ -209,7 +215,10 @@ export class AuthService {
       }
 
       // Verify code
-      const isValidCode = await this.otpService.verifyOTPCode(otpRecord.code, code);
+      const isValidCode = await this.otpService.verifyOTPCode(
+        otpRecord.code,
+        code
+      );
 
       if (!isValidCode) {
         // Increment attempts
@@ -251,7 +260,7 @@ export class AuthService {
   /**
    * User signup with OTP verification
    */
-  async signup(data: SignupRequest): Promise<AuthResponse> {
+  async signup(data: SignupRequest): Promise<any> {
     try {
       const { phoneNumber, firstName, lastName, email, otpCode } = data;
 
@@ -337,7 +346,7 @@ export class AuthService {
   /**
    * User login with OTP verification
    */
-  async login(data: LoginRequest): Promise<AuthResponse> {
+  async login(data: LoginRequest): Promise<any> {
     try {
       const { phoneNumber, otpCode } = data;
 
@@ -622,7 +631,9 @@ export class AuthService {
   /**
    * Find user by phone number
    */
-  async findUserByPhone(phoneNumber: NigerianPhoneNumber): Promise<User | null> {
+  async findUserByPhone(
+    phoneNumber: NigerianPhoneNumber
+  ): Promise<User | null> {
     return await this.userRepository.findByPhoneNumber(phoneNumber);
   }
 

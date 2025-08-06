@@ -2,11 +2,11 @@ import { Request, Response } from "express";
 import { BaseController } from "../BaseController";
 import { CategoryService } from "../../services/products/CategoryService";
 import {
+  Category,
   CategoryListQuery,
   CreateCategoryRequest,
   UpdateCategoryRequest,
   CategoryWithProductCount,
-  CategoryTreeNode,
 } from "../../types/product.types";
 import { ApiResponse, PaginationParams } from "../../types/api.types";
 
@@ -27,16 +27,18 @@ export class CategoryController extends BaseController {
       const query: CategoryListQuery = {
         page: parseInt(req.query.page as string) || 1,
         limit: Math.min(parseInt(req.query.limit as string) || 50, 100),
-        search: req.query.search as string,
-        parentId: req.query.parentId as string,
-        isActive:
-          req.query.isActive !== undefined
-            ? req.query.isActive === "true"
-            : undefined,
-        includeProductCount: req.query.includeProductCount === "true",
         sortBy: (req.query.sortBy as any) || "sortOrder",
         sortOrder: (req.query.sortOrder as "asc" | "desc") || "asc",
+        includeProductCount: req.query.includeProductCount === "true",
       };
+
+      if (req.query.parentId) {
+        query.parentId = req.query.parentId as string;
+      }
+
+      if (req.query.isActive !== undefined) {
+        query.isActive = req.query.isActive === "true";
+      }
 
       const result = await this.categoryService.getCategories(query);
 
@@ -63,6 +65,14 @@ export class CategoryController extends BaseController {
     try {
       const { id } = req.params;
       const includeProducts = req.query.includeProducts === "true";
+
+      if (!id) {
+        res.status(400).json({
+          success: false,
+          message: "Category ID is required",
+        });
+        return;
+      }
 
       const category = await this.categoryService.getCategoryById(
         id,
@@ -101,10 +111,15 @@ export class CategoryController extends BaseController {
       const { slug } = req.params;
       const includeProducts = req.query.includeProducts === "true";
 
-      const category = await this.categoryService.getCategoryBySlug(
-        slug,
-        includeProducts
-      );
+      if (!slug) {
+        res.status(400).json({
+          success: false,
+          message: "Category slug is required",
+        });
+        return;
+      }
+
+      const category = await this.categoryService.getCategoryBySlug(slug);
 
       if (!category) {
         res.status(404).json({
@@ -138,12 +153,9 @@ export class CategoryController extends BaseController {
       const includeProductCount = req.query.includeProductCount === "true";
       const activeOnly = req.query.activeOnly !== "false"; // Default to true
 
-      const tree = await this.categoryService.getCategoryTree(
-        includeProductCount,
-        activeOnly
-      );
+      const tree = await this.categoryService.getCategoryTree();
 
-      const response: ApiResponse<CategoryTreeNode[]> = {
+      const response: ApiResponse<any> = {
         success: true,
         message: "Category tree retrieved successfully",
         data: tree,
@@ -167,12 +179,9 @@ export class CategoryController extends BaseController {
       const includeProductCount = req.query.includeProductCount === "true";
       const activeOnly = req.query.activeOnly !== "false";
 
-      const categories = await this.categoryService.getRootCategories(
-        includeProductCount,
-        activeOnly
-      );
+      const categories = await this.categoryService.getRootCategories();
 
-      const response: ApiResponse<CategoryWithProductCount[]> = {
+      const response: ApiResponse<any> = {
         success: true,
         message: "Root categories retrieved successfully",
         data: categories,
@@ -197,13 +206,17 @@ export class CategoryController extends BaseController {
       const includeProductCount = req.query.includeProductCount === "true";
       const activeOnly = req.query.activeOnly !== "false";
 
-      const children = await this.categoryService.getChildCategories(
-        id,
-        includeProductCount,
-        activeOnly
-      );
+      if (!id) {
+        res.status(400).json({
+          success: false,
+          message: "Parent category ID is required",
+        });
+        return;
+      }
 
-      const response: ApiResponse<CategoryWithProductCount[]> = {
+      const children = await this.categoryService.getChildCategories(id);
+
+      const response: ApiResponse<Category[]> = {
         success: true,
         message: "Child categories retrieved successfully",
         data: children,
@@ -225,6 +238,14 @@ export class CategoryController extends BaseController {
   ): Promise<void> => {
     try {
       const { id } = req.params;
+
+      if (!id) {
+        res.status(400).json({
+          success: false,
+          message: "Category ID is required",
+        });
+        return;
+      }
 
       const breadcrumb = await this.categoryService.getCategoryBreadcrumb(id);
 
@@ -262,7 +283,7 @@ export class CategoryController extends BaseController {
       const categories =
         await this.categoryService.getFeaturedCategories(limit);
 
-      const response: ApiResponse<CategoryWithProductCount[]> = {
+      const response: ApiResponse<Category[]> = {
         success: true,
         message: "Featured categories retrieved successfully",
         data: categories,
@@ -347,6 +368,14 @@ export class CategoryController extends BaseController {
     try {
       const { id } = req.params;
 
+      if (!id) {
+        res.status(400).json({
+          success: false,
+          message: "Category ID is required",
+        });
+        return;
+      }
+
       const stats = await this.categoryService.getCategoryStats(id);
 
       if (!stats) {
@@ -381,10 +410,7 @@ export class CategoryController extends BaseController {
       const activeOnly = req.query.activeOnly !== "false";
       const includeHierarchy = req.query.includeHierarchy === "true";
 
-      const categories = await this.categoryService.getFlatCategoryList(
-        activeOnly,
-        includeHierarchy
-      );
+      const categories = await this.categoryService.getFlatCategoryList();
 
       const response: ApiResponse<any[]> = {
         success: true,
@@ -410,15 +436,17 @@ export class CategoryController extends BaseController {
       const { id } = req.params;
       const includeSubcategories = req.query.includeSubcategories === "true";
 
-      const hasProducts = await this.categoryService.checkCategoryHasProducts(
-        id,
-        includeSubcategories
-      );
+      if (!id) {
+        res.status(400).json({
+          success: false,
+          message: "Category ID is required",
+        });
+        return;
+      }
 
-      const response: ApiResponse<{
-        hasProducts: boolean;
-        productCount: number;
-      }> = {
+      const hasProducts = await this.categoryService.checkCategoryHasProducts(id);
+
+      const response: ApiResponse<boolean> = {
         success: true,
         message: "Category product check completed",
         data: hasProducts,
@@ -442,7 +470,7 @@ export class CategoryController extends BaseController {
       errors.push("Category name must be at least 2 characters long");
     }
 
-    if ("slug" in data && data.slug && !/^[a-z0-9-]+$/.test(data.slug)) {
+    if ("slug" in data && (data as any).slug && !/^[a-z0-9-]+$/.test((data as any).slug)) {
       errors.push(
         "Category slug can only contain lowercase letters, numbers, and hyphens"
       );

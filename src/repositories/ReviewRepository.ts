@@ -9,6 +9,7 @@ import {
   AppError,
   HTTP_STATUS,
   ERROR_CODES,
+  OrderStatus,
 } from "../types";
 
 interface CreateReviewData {
@@ -37,7 +38,7 @@ export class ReviewRepository extends BaseRepository<
   UpdateReviewData
 > {
   constructor(prisma?: PrismaClient) {
-    super(prisma || new PrismaClient(), "ProductReview");
+    super(prisma || new PrismaClient(), "productReview");
   }
 
   /**
@@ -74,13 +75,6 @@ export class ReviewRepository extends BaseRepository<
               firstName: true,
               lastName: true,
               avatar: true,
-            },
-          },
-          order: {
-            select: {
-              id: true,
-              orderNumber: true,
-              createdAt: true,
             },
           },
         },
@@ -159,13 +153,6 @@ export class ReviewRepository extends BaseRepository<
               },
             },
           },
-          order: {
-            select: {
-              id: true,
-              orderNumber: true,
-              createdAt: true,
-            },
-          },
         },
         orderBy: this.buildOrderBy(params?.sortBy, params?.sortOrder),
         pagination: {
@@ -190,7 +177,7 @@ export class ReviewRepository extends BaseRepository<
     data: CreateReviewRequest
   ): Promise<ProductReview> {
     try {
-      return await this.transaction(async (prisma) => {
+      const result = await this.transaction(async (prisma) => {
         // Check if user already reviewed this product
         const existingReview = await prisma.productReview.findFirst({
           where: {
@@ -211,7 +198,7 @@ export class ReviewRepository extends BaseRepository<
         const purchaseOrder = await prisma.order.findFirst({
           where: {
             userId,
-            status: "delivered",
+            status: "DELIVERED",
             items: {
               some: {
                 productId: data.productId,
@@ -256,21 +243,15 @@ export class ReviewRepository extends BaseRepository<
                 slug: true,
               },
             },
-            order: {
-              select: {
-                id: true,
-                orderNumber: true,
-                createdAt: true,
-              },
-            },
           },
         });
 
         // Update product average rating
         await this.updateProductRating(data.productId);
 
-        return review;
+        return review as ProductReview;
       });
+      return result;
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
@@ -292,7 +273,7 @@ export class ReviewRepository extends BaseRepository<
     data: UpdateReviewRequest
   ): Promise<ProductReview> {
     try {
-      return await this.transaction(async (prisma) => {
+      const result = await this.transaction(async (prisma) => {
         // Verify review belongs to user
         const existingReview = await prisma.productReview.findFirst({
           where: { id: reviewId, userId },
@@ -333,8 +314,9 @@ export class ReviewRepository extends BaseRepository<
           await this.updateProductRating(existingReview.productId);
         }
 
-        return updatedReview;
+        return updatedReview as ProductReview;
       });
+      return result;
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
@@ -352,7 +334,7 @@ export class ReviewRepository extends BaseRepository<
    */
   async deleteReview(reviewId: string, userId: string): Promise<boolean> {
     try {
-      return await this.transaction(async (prisma) => {
+      const result = await this.transaction(async (prisma) => {
         // Verify review belongs to user
         const existingReview = await prisma.productReview.findFirst({
           where: { id: reviewId, userId },
@@ -375,6 +357,7 @@ export class ReviewRepository extends BaseRepository<
 
         return true;
       });
+      return result;
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
@@ -392,19 +375,27 @@ export class ReviewRepository extends BaseRepository<
    */
   async addHelpfulVote(reviewId: string): Promise<ProductReview> {
     try {
-      return await this.update(
-        reviewId,
-        { helpfulVotes: { increment: 1 } } as any,
-        {
+      return await this.prisma.productReview.update({
+        where: { id: reviewId },
+        data: { helpfulVotes: { increment: 1 } },
+        include: {
           user: {
             select: {
               id: true,
               firstName: true,
               lastName: true,
+              avatar: true,
             },
           },
-        }
-      );
+          product: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+          },
+        },
+      }) as ProductReview;
     } catch (error) {
       throw new AppError(
         "Error adding helpful vote",
@@ -466,12 +457,26 @@ export class ReviewRepository extends BaseRepository<
     isApproved: boolean
   ): Promise<ProductReview> {
     try {
-      return await this.transaction(async (prisma) => {
+      const result = await this.transaction(async (prisma) => {
         const review = await prisma.productReview.update({
           where: { id: reviewId },
           data: { isApproved },
           include: {
-            product: true,
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+              },
+            },
+            product: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+              },
+            },
           },
         });
 
@@ -480,8 +485,9 @@ export class ReviewRepository extends BaseRepository<
           await this.updateProductRating(review.productId);
         }
 
-        return review;
+        return review as ProductReview;
       });
+      return result;
     } catch (error) {
       throw new AppError(
         "Error moderating review",
@@ -588,9 +594,9 @@ export class ReviewRepository extends BaseRepository<
   }
 
   /**
-   * Private: Build order by clause for reviews
+   * Protected: Build order by clause for reviews
    */
-  private buildOrderBy(sortBy?: string, sortOrder?: "asc" | "desc"): any {
+  protected buildOrderBy(sortBy?: string, sortOrder?: "asc" | "desc"): any {
     const order = sortOrder || "desc";
 
     switch (sortBy) {

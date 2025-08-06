@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, OrderStatus as PrismaOrderStatus, PaymentStatus as PrismaPaymentStatus } from "@prisma/client";
 import { BaseRepository } from "./BaseRepository";
 import {
   Order,
@@ -11,6 +11,9 @@ import {
   OrderListResponse,
   OrderDetailResponse,
   OrderAnalytics,
+  OrderStatus,
+  PaymentStatus,
+  PaymentMethod,
   PaginationParams,
   AppError,
   HTTP_STATUS,
@@ -20,54 +23,32 @@ import {
 export interface CreateOrderData {
   orderNumber: string;
   userId: string;
-  status?:
-    | "PENDING"
-    | "CONFIRMED"
-    | "PROCESSING"
-    | "SHIPPED"
-    | "DELIVERED"
-    | "CANCELLED"
-    | "REFUNDED";
+  status?: PrismaOrderStatus;
   subtotal: number;
-  taxAmount?: number;
-  shippingAmount?: number;
-  discountAmount?: number;
-  totalAmount: number;
+  tax?: number;
+  shippingCost?: number;
+  discount?: number;
+  total: number;
   currency?: string;
-  paymentStatus?: "PENDING" | "PAID" | "FAILED" | "REFUNDED" | "PARTIAL_REFUND";
-  paymentMethod?: "CARD" | "BANK_TRANSFER" | "USSD" | "WALLET";
+  paymentStatus?: PrismaPaymentStatus;
+  paymentMethod?: string;
   paymentReference?: string;
-  shippingAddress: any;
-  billingAddress: any;
-  customerNotes?: string;
-  adminNotes?: string;
-  trackingNumber?: string;
-  estimatedDelivery?: Date;
+  notes?: string;
+  shippingAddressId?: string;
+  billingAddressId?: string;
 }
 
 export interface UpdateOrderData {
-  status?:
-    | "PENDING"
-    | "CONFIRMED"
-    | "PROCESSING"
-    | "SHIPPED"
-    | "DELIVERED"
-    | "CANCELLED"
-    | "REFUNDED";
-  paymentStatus?: "PENDING" | "PAID" | "FAILED" | "REFUNDED" | "PARTIAL_REFUND";
-  paymentMethod?: "CARD" | "BANK_TRANSFER" | "USSD" | "WALLET";
+  status?: PrismaOrderStatus;
+  paymentStatus?: PrismaPaymentStatus;
+  paymentMethod?: string;
   paymentReference?: string;
-  adminNotes?: string;
-  trackingNumber?: string;
-  estimatedDelivery?: Date;
-  paidAt?: Date;
-  shippedAt?: Date;
-  deliveredAt?: Date;
+  notes?: string;
 }
 
 export interface OrderWithDetails extends Order {
-  items: OrderItem[];
-  timeline: OrderTimelineEvent[];
+  items?: OrderItem[]; // Make optional since it comes from Prisma includes
+  timeline?: OrderTimelineEvent[]; // Make optional since it comes from Prisma includes
   customer: {
     id: string;
     firstName: string;
@@ -101,20 +82,24 @@ export class OrderRepository extends BaseRepository<
           items: {
             include: {
               product: {
-                include: {
-                  images: {
-                    where: { isPrimary: true },
-                    take: 1,
-                  },
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true,
+                  sku: true,
+                  price: true,
+                  primaryImage: true,
                 },
               },
             },
           },
           user: true,
-          timeline: {
+          timelineEvents: {
             orderBy: { createdAt: "desc" },
           },
-          transactions: true,
+          paymentTransactions: true,
+          shippingAddress: true,
+          billingAddress: true,
         }
       );
 
@@ -125,6 +110,7 @@ export class OrderRepository extends BaseRepository<
 
       return {
         ...order,
+        timeline: order.timelineEvents || [],
         customer: {
           id: order.user.id,
           firstName: order.user.firstName,
@@ -148,19 +134,32 @@ export class OrderRepository extends BaseRepository<
     orderData: CreateOrderData,
     items: Array<{
       productId: string;
-      productName: string;
-      productSku: string;
-      productImage?: string;
       quantity: number;
-      unitPrice: number;
-      totalPrice: number;
+      price: number;
+      total: number;
     }>
   ): Promise<OrderWithDetails> {
     try {
       return await this.transaction(async (prisma) => {
         // Create the order
         const order = await prisma.order.create({
-          data: orderData,
+          data: {
+            orderNumber: orderData.orderNumber,
+            userId: orderData.userId,
+            status: orderData.status || PrismaOrderStatus.PENDING,
+            subtotal: orderData.subtotal,
+            tax: orderData.tax || 0,
+            shippingCost: orderData.shippingCost || 0,
+            discount: orderData.discount || 0,
+            total: orderData.total,
+            currency: orderData.currency || "NGN",
+            paymentStatus: orderData.paymentStatus || PrismaPaymentStatus.PENDING,
+            paymentMethod: orderData.paymentMethod,
+            paymentReference: orderData.paymentReference,
+            notes: orderData.notes,
+            shippingAddressId: orderData.shippingAddressId,
+            billingAddressId: orderData.billingAddressId,
+          },
           include: {
             user: true,
           },
@@ -169,7 +168,10 @@ export class OrderRepository extends BaseRepository<
         // Create order items
         await prisma.orderItem.createMany({
           data: items.map((item) => ({
-            ...item,
+            productId: item.productId,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.total,
             orderId: order.id,
           })),
         });
@@ -178,9 +180,8 @@ export class OrderRepository extends BaseRepository<
         await prisma.orderTimelineEvent.create({
           data: {
             orderId: order.id,
-            status: orderData.status || "PENDING",
-            description: "Order created",
-            createdBy: order.userId,
+            type: "ORDER_CREATED",
+            message: "Order created",
           },
         });
 
@@ -207,8 +208,6 @@ export class OrderRepository extends BaseRepository<
     statusData: {
       status: UpdateOrderData["status"];
       adminNotes?: string;
-      trackingNumber?: string;
-      estimatedDelivery?: Date;
       updatedBy?: string;
     }
   ): Promise<OrderWithDetails> {
@@ -230,36 +229,33 @@ export class OrderRepository extends BaseRepository<
         // Prepare update data
         const updateData: UpdateOrderData = {
           status: statusData.status,
-          adminNotes: statusData.adminNotes,
-          trackingNumber: statusData.trackingNumber,
-          estimatedDelivery: statusData.estimatedDelivery,
+          notes: statusData.adminNotes,
         };
-
-        // Set timestamp based on status
-        const now = new Date();
-        switch (statusData.status) {
-          case "SHIPPED":
-            updateData.shippedAt = now;
-            break;
-          case "DELIVERED":
-            updateData.deliveredAt = now;
-            break;
-        }
 
         // Update the order
         await prisma.order.update({
           where: { id: orderId },
-          data: updateData,
+          data: {
+            status: updateData.status,
+            paymentStatus: updateData.paymentStatus,
+            paymentMethod: updateData.paymentMethod,
+            paymentReference: updateData.paymentReference,
+            notes: updateData.notes,
+          },
         });
 
         // Create timeline event
         await prisma.orderTimelineEvent.create({
           data: {
             orderId,
-            status: statusData.status!,
-            description: this.getStatusDescription(statusData.status!),
-            notes: statusData.adminNotes,
-            createdBy: statusData.updatedBy,
+            type: "STATUS_CHANGE",
+            message: this.getStatusDescription(statusData.status!),
+            data: {
+              oldStatus: currentOrder.status,
+              newStatus: statusData.status,
+              notes: statusData.adminNotes,
+              updatedBy: statusData.updatedBy,
+            },
           },
         });
 
@@ -373,17 +369,22 @@ export class OrderRepository extends BaseRepository<
         orderNumber: order.orderNumber,
         status: order.status,
         paymentStatus: order.paymentStatus,
-        totalAmount: Number(order.totalAmount),
+        totalAmount: Number(order.total),
         currency: order.currency,
         itemCount: order._count.items,
         customerName: `${order.user.firstName} ${order.user.lastName}`,
         createdAt: order.createdAt,
-        estimatedDelivery: order.estimatedDelivery,
+        estimatedDelivery: undefined, // Field not in schema
       }));
 
       return {
         orders,
-        pagination: result.pagination,
+        pagination: {
+          page: result.pagination.currentPage,
+          limit: result.pagination.itemsPerPage,
+          total: result.pagination.totalItems,
+          totalPages: result.pagination.totalPages,
+        },
         summary,
       };
     } catch (error) {
@@ -412,10 +413,7 @@ export class OrderRepository extends BaseRepository<
                 product: {
                   select: {
                     name: true,
-                    images: {
-                      where: { isPrimary: true },
-                      take: 1,
-                    },
+                    primaryImage: true,
                   },
                 },
               },
@@ -435,12 +433,12 @@ export class OrderRepository extends BaseRepository<
         orderNumber: order.orderNumber,
         status: order.status,
         paymentStatus: order.paymentStatus,
-        totalAmount: Number(order.totalAmount),
+        totalAmount: Number(order.total),
         currency: order.currency,
         itemCount: order._count.items,
         customerName: "", // Not needed for user's own orders
         createdAt: order.createdAt,
-        estimatedDelivery: order.estimatedDelivery,
+        estimatedDelivery: undefined, // Field not in schema
       }));
 
       return {
@@ -487,12 +485,12 @@ export class OrderRepository extends BaseRepository<
         orderNumber: order.orderNumber,
         status: order.status,
         paymentStatus: order.paymentStatus,
-        totalAmount: Number(order.totalAmount),
+        totalAmount: Number(order.total),
         currency: order.currency,
         itemCount: order._count.items,
         customerName: `${order.user.firstName} ${order.user.lastName}`,
         createdAt: order.createdAt,
-        estimatedDelivery: order.estimatedDelivery,
+        estimatedDelivery: undefined, // Field not in schema
       }));
     } catch (error) {
       this.handleError("Error getting recent orders", error);
@@ -518,17 +516,17 @@ export class OrderRepository extends BaseRepository<
         await Promise.all([
           // Orders with pending payment for more than 1 day
           this.getOrderSummaries({
-            paymentStatus: "PENDING",
+            paymentStatus: PrismaPaymentStatus.PENDING,
             createdAt: { lt: oneDayAgo },
           }),
           // Orders in processing for more than 3 days
           this.getOrderSummaries({
-            status: "PROCESSING",
+            status: PrismaOrderStatus.PROCESSING,
             createdAt: { lt: threeDaysAgo },
           }),
           // Shipped orders without delivery confirmation after estimated delivery
           this.getOrderSummaries({
-            status: "SHIPPED",
+            status: PrismaOrderStatus.SHIPPED,
             estimatedDelivery: { lt: now },
           }),
         ]);
@@ -620,7 +618,12 @@ export class OrderRepository extends BaseRepository<
           );
         }
 
-        if (["DELIVERED", "CANCELLED", "REFUNDED"].includes(order.status)) {
+        const nonCancellableStatuses: PrismaOrderStatus[] = [
+          PrismaOrderStatus.DELIVERED, 
+          PrismaOrderStatus.CANCELLED, 
+          PrismaOrderStatus.REFUNDED
+        ];
+        if (nonCancellableStatuses.includes(order.status)) {
           throw new AppError(
             "Order cannot be cancelled",
             HTTP_STATUS.BAD_REQUEST,
@@ -632,8 +635,8 @@ export class OrderRepository extends BaseRepository<
         await prisma.order.update({
           where: { id: orderId },
           data: {
-            status: "CANCELLED",
-            adminNotes: reason,
+            status: PrismaOrderStatus.CANCELLED,
+            notes: reason,
           },
         });
 
@@ -641,10 +644,12 @@ export class OrderRepository extends BaseRepository<
         await prisma.orderTimelineEvent.create({
           data: {
             orderId,
-            status: "CANCELLED",
-            description: "Order cancelled",
-            notes: reason,
-            createdBy: cancelledBy,
+            type: "ORDER_CANCELLED",
+            message: "Order cancelled",
+            data: {
+              reason,
+              cancelledBy,
+            },
           },
         });
 
@@ -655,6 +660,39 @@ export class OrderRepository extends BaseRepository<
     } catch (error) {
       this.handleError("Error cancelling order", error);
       throw error;
+    }
+  }
+
+  /**
+   * Find verified purchase for review
+   */
+  async findVerifiedPurchase(
+    userId: string,
+    productId: string
+  ): Promise<{ orderId: string } | null> {
+    try {
+      const order = await this.findFirst(
+        {
+          userId,
+          status: PrismaOrderStatus.DELIVERED,
+          paymentStatus: PrismaPaymentStatus.COMPLETED,
+          items: {
+            some: {
+              productId,
+            },
+          },
+        },
+        {
+          select: {
+            id: true,
+          },
+        }
+      );
+
+      return order ? { orderId: order.id } : null;
+    } catch (error) {
+      this.handleError("Error finding verified purchase", error);
+      return null;
     }
   }
 
@@ -702,11 +740,11 @@ export class OrderRepository extends BaseRepository<
       const result = await this.aggregate(
         {
           userId,
-          status: { not: "CANCELLED" },
+          status: { not: PrismaOrderStatus.CANCELLED },
         },
         {
           _count: { id: true },
-          _sum: { totalAmount: true },
+          _sum: { total: true },
         }
       );
 
@@ -719,19 +757,19 @@ export class OrderRepository extends BaseRepository<
     }
   }
 
-  private getStatusDescription(status: string): string {
-    const descriptions = {
-      PENDING: "Order is pending confirmation",
-      CONFIRMED: "Order has been confirmed",
-      PROCESSING: "Order is being processed",
-      SHIPPED: "Order has been shipped",
-      DELIVERED: "Order has been delivered",
-      CANCELLED: "Order has been cancelled",
-      REFUNDED: "Order has been refunded",
+  private getStatusDescription(status: PrismaOrderStatus): string {
+    const descriptions: Record<PrismaOrderStatus, string> = {
+      [PrismaOrderStatus.PENDING]: "Order is pending confirmation",
+      [PrismaOrderStatus.CONFIRMED]: "Order has been confirmed",
+      [PrismaOrderStatus.PROCESSING]: "Order is being processed",
+      [PrismaOrderStatus.SHIPPED]: "Order has been shipped",
+      [PrismaOrderStatus.DELIVERED]: "Order has been delivered",
+      [PrismaOrderStatus.CANCELLED]: "Order has been cancelled",
+      [PrismaOrderStatus.REFUNDED]: "Order has been refunded",
     };
 
     return (
-      descriptions[status as keyof typeof descriptions] ||
+      descriptions[status] ||
       `Order status changed to ${status}`
     );
   }
@@ -743,15 +781,15 @@ export class OrderRepository extends BaseRepository<
   }> {
     try {
       const result = await this.aggregate(
-        { ...where, status: { not: "CANCELLED" } },
+        { ...where, status: { not: PrismaOrderStatus.CANCELLED } },
         {
           _count: { id: true },
-          _sum: { totalAmount: true },
+          _sum: { total: true },
         }
       );
 
       const totalOrders = result._count.id;
-      const totalRevenue = Number(result._sum.totalAmount) || 0;
+      const totalRevenue = Number(result._sum.total) || 0;
       const averageOrderValue =
         totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
@@ -792,12 +830,12 @@ export class OrderRepository extends BaseRepository<
         orderNumber: order.orderNumber,
         status: order.status,
         paymentStatus: order.paymentStatus,
-        totalAmount: Number(order.totalAmount),
+        totalAmount: Number(order.total),
         currency: order.currency,
         itemCount: order._count.items,
         customerName: `${order.user.firstName} ${order.user.lastName}`,
         createdAt: order.createdAt,
-        estimatedDelivery: order.estimatedDelivery,
+        estimatedDelivery: undefined, // Field not in schema
       }));
     } catch (error) {
       return [];
@@ -807,10 +845,10 @@ export class OrderRepository extends BaseRepository<
   private async getRevenue(where: any): Promise<number> {
     try {
       const result = await this.aggregate(
-        { ...where, status: { not: "CANCELLED" } },
-        { _sum: { totalAmount: true } }
+        { ...where, status: { not: PrismaOrderStatus.CANCELLED } },
+        { _sum: { total: true } }
       );
-      return Number(result._sum.totalAmount) || 0;
+      return Number(result._sum.total) || 0;
     } catch (error) {
       return 0;
     }

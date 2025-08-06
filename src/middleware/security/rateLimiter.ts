@@ -8,6 +8,9 @@ import rateLimit from "express-rate-limit";
 import { Request, Response } from "express";
 import { logger } from "../../utils/logger/winston";
 
+// Import to ensure extended Request type is available
+import "../auth/authenticate";
+
 // 🇳🇬 Nigerian-optimized rate limiting
 // Accounts for slower mobile networks and data costs
 const createRateLimiter = (options: {
@@ -33,7 +36,7 @@ const createRateLimiter = (options: {
       options.keyGenerator ||
       ((req: Request) => {
         // Prefer user ID for authenticated requests, fallback to IP
-        return req.user?.id || req.ip;
+        return req.user?.id || req.ip || 'anonymous';
       }),
 
     // Custom handler for rate limit exceeded
@@ -57,7 +60,7 @@ const createRateLimiter = (options: {
     // Skip certain IPs (admin, health checks)
     skip: (req: Request) => {
       const skipIPs = process.env.RATE_LIMIT_SKIP_IPS?.split(",") || [];
-      return skipIPs.includes(req.ip);
+      return req.ip ? skipIPs.includes(req.ip) : false;
     },
   });
 };
@@ -127,7 +130,7 @@ export { createRateLimiter };
  */
 
 import cors from "cors";
-import { environment } from "../../config/environment";
+import { config } from "../../config/environment";
 
 const allowedOrigins = [
   "http://localhost:3000", // Development frontend
@@ -142,7 +145,7 @@ const allowedOrigins = [
 ];
 
 // 🇳🇬 Add Nigerian CDN and development origins
-if (environment.NODE_ENV === "development") {
+if (config.nodeEnv === "development") {
   allowedOrigins.push(
     "http://localhost:8080",
     "http://127.0.0.1:3000",

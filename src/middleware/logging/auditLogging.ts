@@ -1,13 +1,13 @@
 import { Request, Response, NextFunction } from "express";
 import { logger } from "../../utils/logger/winston";
-import { environment } from "../../config/environment";
-import { PhoneUtils, MarketUtils } from "../../utils/helpers/nigerian";
+import { config } from "../../config/environment";
+import { NigerianPhoneUtils, NigerianMarketplaceUtils } from "../../utils/helpers/nigerian";
 import crypto from "crypto";
 
 interface AuditEvent {
   action: string;
   resource: string;
-  resourceId?: string;
+  resourceId?: string | undefined;
   changes?: any;
   metadata?: any;
 }
@@ -615,7 +615,7 @@ export const auditLogger = (
   const requestStartTime = Date.now();
   const originalEnd = res.end;
 
-  res.end = function (chunk?: any, ...args: any[]): void {
+  res.end = function (chunk?: any, ...args: any[]): Response<any, Record<string, any>> {
     const requestDuration = Date.now() - requestStartTime;
     const isSuccess = res.statusCode >= 200 && res.statusCode < 300;
     const isClientError = res.statusCode >= 400 && res.statusCode < 500;
@@ -705,7 +705,7 @@ export const auditLogger = (
       // Additional metadata
       metadata: {
         ...auditEvent.metadata,
-        environment: environment.NODE_ENV,
+        environment: config.nodeEnv,
         timestamp: new Date().toISOString(),
         timezone: "Africa/Lagos",
         serverHostname: require("os").hostname(),
@@ -715,15 +715,15 @@ export const auditLogger = (
 
       // Nigerian market context
       nigerianContext: {
-        detectedState: detectStateFromIP(req.ip),
+        detectedState: req.ip ? detectStateFromIP(req.ip) : null,
         isMobileDevice: /Mobile|Android|iPhone|iPad/i.test(
           req.get("User-Agent") || ""
         ),
         networkProvider: req.user?.phoneNumber
-          ? PhoneUtils.getProvider(req.user.phoneNumber)
+          ? NigerianPhoneUtils.detectNetwork(req.user.phoneNumber)
           : null,
-        isNigerianIP: isNigerianIP(req.ip),
-        isPeakHour: MarketUtils.isPeakTime(),
+        isNigerianIP: req.ip ? isNigerianIP(req.ip) : false,
+        isPeakHour: NigerianMarketplaceUtils.getPeakTrafficTimes().dailyPeaks.some(peak => peak.hour === new Date().getHours()),
         currency: "NGN",
       },
 
@@ -811,7 +811,7 @@ export const auditLogger = (
       setImmediate(() => triggerSecurityAlert(auditLog));
     }
 
-    originalEnd.call(this, chunk, ...args);
+    return (originalEnd as any).call(this, chunk, ...args);
   };
 
   next();
@@ -833,7 +833,7 @@ export const financialAuditLogger = (
 
   const originalEnd = res.end;
 
-  res.end = function (chunk?: any, ...args: any[]): void {
+  res.end = function (chunk?: any, ...args: any[]): Response<any, Record<string, any>> {
     const financialLog = {
       eventType: "FINANCIAL_TRANSACTION",
       transactionId:
@@ -882,7 +882,7 @@ export const financialAuditLogger = (
     };
 
     logger.info("FINANCIAL_AUDIT", financialLog);
-    originalEnd.call(this, chunk, ...args);
+    return (originalEnd as any).call(this, chunk, ...args);
   };
 
   next();
@@ -900,7 +900,7 @@ export const adminAuditLogger = (
 
   const originalEnd = res.end;
 
-  res.end = function (chunk?: any, ...args: any[]): void {
+  res.end = function (chunk?: any, ...args: any[]): Response<any, Record<string, any>> {
     const adminLog = {
       eventType: "ADMINISTRATIVE_ACTION",
       actionId: `admin_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
@@ -952,7 +952,7 @@ export const adminAuditLogger = (
     };
 
     logger.info("ADMIN_AUDIT", adminLog);
-    originalEnd.call(this, chunk, ...args);
+    return (originalEnd as any).call(this, chunk, ...args);
   };
 
   next();
@@ -970,8 +970,8 @@ export const authenticationAuditLogger = (
 
   const originalEnd = res.end;
 
-  res.end = function (chunk?: any, ...args: any[]): void {
-    const authAction = req.path.split("/").pop();
+  res.end = function (chunk?: any, ...args: any[]): Response<any, Record<string, any>> {
+    const authAction = req.path.split("/").pop() || "unknown";
     const isSuccess = res.statusCode >= 200 && res.statusCode < 300;
 
     const authLog = {
@@ -999,8 +999,8 @@ export const authenticationAuditLogger = (
         location: {
           ip: req.ip,
           country: "NG",
-          state: detectStateFromIP(req.ip),
-          isNigerianIP: isNigerianIP(req.ip),
+          state: req.ip ? detectStateFromIP(req.ip) : null,
+          isNigerianIP: req.ip ? isNigerianIP(req.ip) : false,
         },
       },
       security: {
@@ -1030,7 +1030,7 @@ export const authenticationAuditLogger = (
     const logLevel = !isSuccess && authAction === "login" ? "warn" : "info";
     logger[logLevel]("AUTH_AUDIT", authLog);
 
-    originalEnd.call(this, chunk, ...args);
+    return (originalEnd as any).call(this, chunk, ...args);
   };
 
   next();
@@ -1048,7 +1048,7 @@ export const dataAccessAuditLogger = (
 
   const originalEnd = res.end;
 
-  res.end = function (chunk?: any, ...args: any[]): void {
+  res.end = function (chunk?: any, ...args: any[]): Response<any, Record<string, any>> {
     const dataLog = {
       eventType: "DATA_ACCESS",
       accessId: `data_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
@@ -1094,7 +1094,7 @@ export const dataAccessAuditLogger = (
     };
 
     logger.info("DATA_ACCESS_AUDIT", dataLog);
-    originalEnd.call(this, chunk, ...args);
+    return (originalEnd as any).call(this, chunk, ...args);
   };
 
   next();
@@ -1108,7 +1108,7 @@ export const performanceAuditLogger = (threshold: number = 1000) => {
 
     const originalEnd = res.end;
 
-    res.end = function (chunk?: any, ...args: any[]): void {
+    res.end = function (chunk?: any, ...args: any[]): Response<any, Record<string, any>> {
       const duration = Date.now() - startTime;
       const endMemory = process.memoryUsage();
 
@@ -1143,7 +1143,7 @@ export const performanceAuditLogger = (threshold: number = 1000) => {
           context: {
             timestamp: new Date().toISOString(),
             requestId: (req as any).id,
-            environment: environment.NODE_ENV,
+            environment: config.nodeEnv,
             nodeVersion: process.version,
           },
         };
@@ -1151,7 +1151,7 @@ export const performanceAuditLogger = (threshold: number = 1000) => {
         logger.warn("PERFORMANCE_AUDIT", performanceLog);
       }
 
-      originalEnd.call(this, chunk, ...args);
+      return (originalEnd as any).call(this, chunk, ...args);
     };
 
     next();
@@ -1246,7 +1246,7 @@ const calculateAuthRiskLevel = (
   let risk = 0;
 
   if (!success && action === "login") risk += 2;
-  if (!isNigerianIP(req.ip)) risk += 1;
+  if (req.ip && !isNigerianIP(req.ip)) risk += 1;
   if (action === "signup") risk += 1;
 
   const hour = new Date().getHours();
@@ -1265,7 +1265,7 @@ const detectAuthThreats = (
   const threats: string[] = [];
 
   if (!success && action === "login") threats.push("failed_login");
-  if (!isNigerianIP(req.ip)) threats.push("foreign_ip");
+  if (req.ip && !isNigerianIP(req.ip)) threats.push("foreign_ip");
 
   const userAgent = req.get("User-Agent") || "";
   if (/bot|crawler|automated/i.test(userAgent))
@@ -1364,7 +1364,7 @@ export const generateAuditSummary = (
       context: {
         timestamp: new Date().toISOString(),
         generatedBy: "system",
-        environment: environment.NODE_ENV,
+        environment: config.nodeEnv,
       },
     };
 

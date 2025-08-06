@@ -24,8 +24,9 @@ export interface BaseEntity {
   
   export interface NairaCurrency {
     amount: number;
-    currency: Currency;
+    currency?: Currency;
     formatted: string;
+    inKobo?: number;
   }
   
   // Phone number validation type
@@ -87,7 +88,7 @@ export interface BaseEntity {
     country: 'NG'; // Always Nigeria
     phoneNumber: NigerianPhoneNumber;
     isDefault: boolean;
-    type: 'shipping' | 'billing';
+    type: 'SHIPPING' | 'BILLING';
   }
   
   // Generic response wrapper
@@ -101,6 +102,14 @@ export interface BaseEntity {
     };
     meta?: {
       pagination?: PaginationMeta;
+      timestamp: string;
+    };
+  }
+
+  // Paginated response type
+  export interface PaginatedResponse<T = any> extends ResponseData<T[]> {
+    meta: {
+      pagination: PaginationMeta;
       timestamp: string;
     };
   }

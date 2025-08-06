@@ -31,16 +31,26 @@ export class ReviewController extends BaseController {
     try {
       const { productId } = req.params;
 
+      if (!productId) {
+        this.sendError(res, "Product ID is required", 400, "VALIDATION_ERROR");
+        return;
+      }
+
       const query: ReviewListQuery = {
         page: parseInt(req.query.page as string) || 1,
         limit: Math.min(parseInt(req.query.limit as string) || 20, 100),
-        rating: req.query.rating
-          ? parseInt(req.query.rating as string)
-          : undefined,
-        verified: this.parseBoolean(req.query.verified),
+        ...(req.query.rating && {
+          rating: parseInt(req.query.rating as string)
+        }),
         sortBy: (req.query.sortBy as any) || "createdAt",
         sortOrder: (req.query.sortOrder as "asc" | "desc") || "desc",
       };
+
+      // Handle optional isVerified parameter
+      const isVerified = req.query.verified ? this.parseBoolean(req.query.verified) : undefined;
+      if (isVerified !== undefined) {
+        query.isVerified = isVerified;
+      }
 
       const result = await this.reviewService.getProductReviews(
         productId,
@@ -50,7 +60,14 @@ export class ReviewController extends BaseController {
       this.sendPaginatedResponse(
         res,
         result.reviews,
-        result.pagination,
+        {
+          page: result.pagination.currentPage,
+          limit: result.pagination.itemsPerPage,
+          total: result.pagination.totalItems,
+          totalPages: result.pagination.totalPages,
+          hasNext: result.pagination.hasNextPage,
+          hasPrev: result.pagination.hasPreviousPage,
+        },
         "Product reviews retrieved successfully"
       );
     } catch (error) {
@@ -69,12 +86,27 @@ export class ReviewController extends BaseController {
     try {
       const { productId } = req.params;
 
+      if (!productId) {
+        this.sendError(res, "Product ID is required", 400, "VALIDATION_ERROR");
+        return;
+      }
+
       const summary = await this.reviewService.getReviewSummary(productId);
+
+      // Convert rating distribution to expected format
+      const formattedSummary = {
+        ...summary,
+        ratingDistribution: Object.entries(summary.ratingDistribution).map(([rating, count]) => ({
+          rating: parseInt(rating),
+          count,
+          percentage: summary.totalReviews > 0 ? Math.round((count / summary.totalReviews) * 100) : 0,
+        })),
+      };
 
       const response: ApiResponse<ReviewSummary> = {
         success: true,
         message: "Review summary retrieved successfully",
-        data: summary,
+        data: formattedSummary,
       };
 
       res.json(response);
@@ -94,6 +126,11 @@ export class ReviewController extends BaseController {
     try {
       const userId = this.getUserId(req);
       const { productId } = req.params;
+
+      if (!productId) {
+        this.sendError(res, "Product ID is required", 400, "VALIDATION_ERROR");
+        return;
+      }
 
       if (!userId) {
         this.sendError(res, "Authentication required", 401, "UNAUTHORIZED");
@@ -121,15 +158,16 @@ export class ReviewController extends BaseController {
 
       // Check if user has purchased the product
       const canReview = await this.reviewService.canUserReview(
-        userId,
-        productId
+        userId!,
+        productId!
       );
       if (!canReview.allowed) {
-        this.sendError(res, canReview.reason, 403, "REVIEW_NOT_ALLOWED");
+        this.sendError(res, canReview.reason!, 403, "REVIEW_NOT_ALLOWED");
         return;
       }
 
-      const review = await this.reviewService.createReview(reviewData);
+      const result = await this.reviewService.createReview(reviewData);
+      const review = result.review;
 
       this.logAction("REVIEW_CREATED", userId, "REVIEW", review.id, {
         productId,
@@ -153,6 +191,11 @@ export class ReviewController extends BaseController {
     try {
       const userId = this.getUserId(req);
       const { reviewId } = req.params;
+
+      if (!reviewId) {
+        this.sendError(res, "Review ID is required", 400, "VALIDATION_ERROR");
+        return;
+      }
 
       if (!userId) {
         this.sendError(res, "Authentication required", 401, "UNAUTHORIZED");
@@ -210,6 +253,11 @@ export class ReviewController extends BaseController {
       const userId = this.getUserId(req);
       const { reviewId } = req.params;
 
+      if (!reviewId) {
+        this.sendError(res, "Review ID is required", 400, "VALIDATION_ERROR");
+        return;
+      }
+
       if (!userId) {
         this.sendError(res, "Authentication required", 401, "UNAUTHORIZED");
         return;
@@ -256,7 +304,14 @@ export class ReviewController extends BaseController {
       this.sendPaginatedResponse(
         res,
         result.reviews,
-        result.pagination,
+        {
+          page: result.pagination.currentPage,
+          limit: result.pagination.itemsPerPage,
+          total: result.pagination.totalItems,
+          totalPages: result.pagination.totalPages,
+          hasNext: result.pagination.hasNextPage,
+          hasPrev: result.pagination.hasPreviousPage,
+        },
         "User reviews retrieved successfully"
       );
     } catch (error) {
@@ -281,13 +336,18 @@ export class ReviewController extends BaseController {
         return;
       }
 
+      if (!reviewId) {
+        this.sendError(res, "Review ID is required", 400, "VALIDATION_ERROR");
+        return;
+      }
+
       const result = await this.reviewService.markReviewHelpful(
-        reviewId,
-        userId
+        reviewId!,
+        userId!
       );
 
       if (!result.success) {
-        this.sendError(res, result.message, 400, "HELPFUL_VOTE_FAILED");
+        this.sendError(res, result.message!, 400, "HELPFUL_VOTE_FAILED");
         return;
       }
 
@@ -320,13 +380,18 @@ export class ReviewController extends BaseController {
         return;
       }
 
+      if (!reviewId) {
+        this.sendError(res, "Review ID is required", 400, "VALIDATION_ERROR");
+        return;
+      }
+
       const result = await this.reviewService.removeHelpfulMark(
-        reviewId,
-        userId
+        reviewId!,
+        userId!
       );
 
       if (!result.success) {
-        this.sendError(res, result.message, 400, "HELPFUL_VOTE_REMOVAL_FAILED");
+        this.sendError(res, result.message!, 400, "HELPFUL_VOTE_REMOVAL_FAILED");
         return;
       }
 
@@ -360,6 +425,11 @@ export class ReviewController extends BaseController {
         return;
       }
 
+      if (!reviewId) {
+        this.sendError(res, "Review ID is required", 400, "VALIDATION_ERROR");
+        return;
+      }
+
       if (!reason) {
         this.sendError(
           res,
@@ -370,13 +440,13 @@ export class ReviewController extends BaseController {
         return;
       }
 
-      const result = await this.reviewService.reportReview(reviewId, userId, {
+      const result = await this.reviewService.reportReview(reviewId!, userId!, {
         reason,
         description,
       });
 
       if (!result.success) {
-        this.sendError(res, result.message, 400, "REPORT_FAILED");
+        this.sendError(res, result.message!, 400, "REPORT_FAILED");
         return;
       }
 
@@ -399,6 +469,11 @@ export class ReviewController extends BaseController {
   public getReviewById = async (req: Request, res: Response): Promise<void> => {
     try {
       const { reviewId } = req.params;
+
+      if (!reviewId) {
+        this.sendError(res, "Review ID is required", 400, "VALIDATION_ERROR");
+        return;
+      }
 
       const review = await this.reviewService.getReviewById(reviewId);
 
@@ -423,7 +498,12 @@ export class ReviewController extends BaseController {
   ): Promise<void> => {
     try {
       const { productId, rating } = req.params;
-      const ratingValue = parseInt(rating);
+
+      if (!productId) {
+        this.sendError(res, "Product ID is required", 400, "VALIDATION_ERROR");
+        return;
+      }
+      const ratingValue = parseInt(rating!);
 
       if (isNaN(ratingValue) || ratingValue < 1 || ratingValue > 5) {
         this.sendError(
@@ -446,7 +526,14 @@ export class ReviewController extends BaseController {
       this.sendPaginatedResponse(
         res,
         result.reviews,
-        result.pagination,
+        {
+          page: result.pagination.currentPage,
+          limit: result.pagination.itemsPerPage,
+          total: result.pagination.totalItems,
+          totalPages: result.pagination.totalPages,
+          hasNext: result.pagination.hasNextPage,
+          hasPrev: result.pagination.hasPreviousPage,
+        },
         `Reviews with ${ratingValue} star${ratingValue > 1 ? "s" : ""} retrieved successfully`
       );
     } catch (error) {
@@ -464,6 +551,11 @@ export class ReviewController extends BaseController {
   ): Promise<void> => {
     try {
       const { productId } = req.params;
+
+      if (!productId) {
+        this.sendError(res, "Product ID is required", 400, "VALIDATION_ERROR");
+        return;
+      }
       const { page, limit } = this.parsePaginationParams(req.query);
 
       const result = await this.reviewService.getVerifiedReviews(productId, {
@@ -474,7 +566,14 @@ export class ReviewController extends BaseController {
       this.sendPaginatedResponse(
         res,
         result.reviews,
-        result.pagination,
+        {
+          page: result.pagination.currentPage,
+          limit: result.pagination.itemsPerPage,
+          total: result.pagination.totalItems,
+          totalPages: result.pagination.totalPages,
+          hasNext: result.pagination.hasNextPage,
+          hasPrev: result.pagination.hasPreviousPage,
+        },
         "Verified purchase reviews retrieved successfully"
       );
     } catch (error) {
@@ -493,6 +592,11 @@ export class ReviewController extends BaseController {
     try {
       const userId = this.getUserId(req);
       const { productId } = req.params;
+
+      if (!productId) {
+        this.sendError(res, "Product ID is required", 400, "VALIDATION_ERROR");
+        return;
+      }
 
       if (!userId) {
         this.sendError(res, "Authentication required", 401, "UNAUTHORIZED");

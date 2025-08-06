@@ -236,13 +236,14 @@ export const validateRequest = (options: ValidationOptions) => {
           userAgent: req.get("User-Agent"),
         });
 
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: "VALIDATION_ERROR",
           message: "Request validation failed",
           details: errors,
           code: "VAL_001",
         });
+        return;
       }
 
       next();
@@ -263,6 +264,7 @@ export const validateRequest = (options: ValidationOptions) => {
         message: "Validation service temporarily unavailable",
         code: "VAL_500",
       });
+      return;
     }
   };
 };

@@ -89,7 +89,12 @@ export class NigerianPhoneUtils {
   /**
    * Parse phone number with full details
    */
-  static parse(phone: string): NigerianPhoneNumber {
+  static parseDetailed(phone: string): {
+    raw: string;
+    formatted: string;
+    network: any;
+    isValid: boolean;
+  } {
     const raw = phone;
     const formatted = this.format(phone);
     const isValid = this.validate(formatted);
@@ -101,6 +106,15 @@ export class NigerianPhoneUtils {
       network: network as any,
       isValid,
     };
+  }
+
+  /**
+   * Parse phone number to valid format
+   */
+  static parse(phone: string): NigerianPhoneNumber {
+    const formatted = this.format(phone);
+    const isValid = this.validate(formatted);
+    return isValid ? formatted : phone;
   }
 
   /**
@@ -637,8 +651,8 @@ export class NigerianEcommerceUtils {
       other: 0.1, // 10%
     };
 
-    const dutyRate = dutyRates[productCategory] || dutyRates.other;
-    return costPrice * dutyRate as any;
+    const dutyRate = dutyRates[productCategory] ?? dutyRates.other;
+    return costPrice * (dutyRate || 0.1);
   }
 
   /**

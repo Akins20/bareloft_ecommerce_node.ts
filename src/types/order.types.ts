@@ -1,19 +1,20 @@
 export enum OrderStatus {
-  PENDING = "pending",
-  CONFIRMED = "confirmed",
-  PROCESSING = "processing",
-  SHIPPED = "shipped",
-  DELIVERED = "delivered",
-  CANCELLED = "cancelled",
-  REFUNDED = "refunded",
+  PENDING,
+  CONFIRMED,
+  PROCESSING,
+  SHIPPED,
+  DELIVERED,
+  CANCELLED,
+  REFUNDED,
 }
 
 export enum PaymentStatus {
-  PENDING = "pending",
-  PAID = "paid",
-  FAILED = "failed",
-  REFUNDED = "refunded",
-  PARTIAL_REFUND = "partial_refund",
+  PENDING,
+  PROCESSING,
+  COMPLETED,
+  FAILED,
+  CANCELLED,
+  REFUNDED,
 }
 
 export enum PaymentMethod {
@@ -38,58 +39,62 @@ export interface OrderAddress {
 
 export interface OrderItem {
   id: string;
+  quantity: number;
+  price: number;
+  total: number;
   orderId: string;
   productId: string;
-  productName: string;
-  productSku: string;
-  productImage?: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
   createdAt: Date;
   updatedAt: Date;
+
+  // Relations (optional - populated by includes)
+  order?: Order;
+  product?: {
+    id: string;
+    name: string;
+    slug: string;
+    sku: string;
+    price: number;
+    primaryImage?: string;
+  };
 }
 
 export interface Order {
   id: string;
   orderNumber: string;
-  userId: string;
   status: OrderStatus;
-
-  // Pricing
   subtotal: number;
-  taxAmount: number;
-  shippingAmount: number;
-  discountAmount: number;
-  totalAmount: number;
+  tax: number;
+  shippingCost: number;
+  discount: number;
+  total: number;
   currency: string;
-
-  // Payment
   paymentStatus: PaymentStatus;
-  paymentMethod?: PaymentMethod;
+  paymentMethod?: string;
   paymentReference?: string;
-  paidAt?: Date;
-
-  // Addresses (JSON fields)
-  shippingAddress: OrderAddress;
-  billingAddress: OrderAddress;
-
-  // Notes
-  customerNotes?: string;
-  adminNotes?: string;
-
-  // Tracking
-  trackingNumber?: string;
-  estimatedDelivery?: Date;
-  shippedAt?: Date;
-  deliveredAt?: Date;
-
-  // Relations
-  items: OrderItem[];
-
-  // Timestamps
+  notes?: string;
+  userId: string;
+  shippingAddressId?: string;
+  billingAddressId?: string;
   createdAt: Date;
   updatedAt: Date;
+
+  // Relations (optional - populated by includes)
+  user?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phoneNumber: string;
+  };
+  items?: OrderItem[];
+  timelineEvents?: OrderTimelineEvent[];
+  paymentTransactions?: any[];
+  shippingAddress?: OrderAddress;
+  billingAddress?: OrderAddress;
+  _count?: {
+    items: number;
+  };
 }
 
 // Request/Response Types
@@ -125,12 +130,12 @@ export interface OrderSummary {
   orderNumber: string;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
-  totalAmount: number;
+  totalAmount: number; // This can stay as totalAmount for display purposes
   currency: string;
   itemCount: number;
   customerName: string;
   createdAt: Date;
-  estimatedDelivery?: Date;
+  estimatedDelivery?: Date; // Keep for compatibility
 }
 
 export interface OrderListResponse {
@@ -164,12 +169,14 @@ export interface OrderDetailResponse {
 
 export interface OrderTimelineEvent {
   id: string;
+  type: string;
+  message: string;
+  data?: any;
   orderId: string;
-  status: OrderStatus;
-  description: string;
-  notes?: string;
-  createdBy?: string;
   createdAt: Date;
+
+  // Relations (optional)
+  order?: Order;
 }
 
 // Checkout Types

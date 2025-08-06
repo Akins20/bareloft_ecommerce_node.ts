@@ -39,6 +39,7 @@ export interface CreateInventoryData {
 }
 
 export interface UpdateInventoryData {
+  stock?: number;
   quantity?: number;
   reservedQuantity?: number;
   lowStockThreshold?: number;
@@ -46,6 +47,7 @@ export interface UpdateInventoryData {
   reorderQuantity?: number;
   status?: InventoryStatus;
   trackInventory?: boolean;
+  trackQuantity?: boolean;
   allowBackorder?: boolean;
   averageCost?: number;
   lastCost?: number;
@@ -71,11 +73,28 @@ export interface CreateMovementData {
   batchId?: string;
 }
 
-export interface InventoryWithDetails extends Inventory {
+export interface InventoryWithDetails {
+  id: string;
+  productId: string;
+  quantity: number;
+  reservedQuantity: number;
+  lowStockThreshold: number;
+  reorderPoint: number;
+  reorderQuantity: number;
+  status: InventoryStatus;
+  trackInventory: boolean;
+  allowBackorder: boolean;
+  averageCost: number;
+  lastCost: number;
+  lastRestockedAt?: Date;
+  lastSoldAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  
   product: {
     id: string;
     name: string;
-    sku: string;
+    sku?: string;
     price: number;
     isActive: boolean;
   };
@@ -87,12 +106,12 @@ export interface InventoryWithDetails extends Inventory {
 }
 
 export class InventoryRepository extends BaseRepository<
-  Inventory,
+  any,
   CreateInventoryData,
   UpdateInventoryData
 > {
   constructor(prisma: PrismaClient) {
-    super(prisma, "Inventory");
+    super(prisma, "product");
   }
 
   /**
@@ -102,28 +121,22 @@ export class InventoryRepository extends BaseRepository<
     productId: string
   ): Promise<InventoryWithDetails | null> {
     try {
-      const inventory = await this.findFirst(
-        { productId },
+      const product = await this.findFirst(
+        { id: productId },
         {
-          product: {
-            select: {
-              id: true,
-              name: true,
-              sku: true,
-              price: true,
-              isActive: true,
-            },
-          },
-          movements: {
+          inventoryMovements: {
             orderBy: { createdAt: "desc" },
             take: 1,
+          },
+          stockReservations: {
+            where: { expiresAt: { gt: new Date() } },
           },
         }
       );
 
-      if (!inventory) return null;
+      if (!product) return null;
 
-      return this.transformInventoryWithDetails(inventory);
+      return this.transformProductToInventoryWithDetails(product);
     } catch (error) {
       this.handleError("Error finding inventory by product ID", error);
       throw error;
@@ -138,35 +151,26 @@ export class InventoryRepository extends BaseRepository<
       let inventory = await this.findByProductId(productId);
 
       if (!inventory) {
-        // Create new inventory record
-        const newInventory = await this.create(
+        // Product should already exist, just need to ensure stock fields are set
+        const updatedProduct = await this.update(
+          productId,
           {
-            productId,
-            quantity: 0,
-            reservedQuantity: 0,
-            lowStockThreshold: CONSTANTS.LOW_STOCK_DEFAULT_THRESHOLD,
-            reorderPoint: 5,
-            reorderQuantity: 50,
-            status: "ACTIVE",
-            trackInventory: true,
-            allowBackorder: false,
-            averageCost: 0,
-            lastCost: 0,
+            stock: 0,
+            lowStockThreshold: CONSTANTS?.LOW_STOCK_DEFAULT_THRESHOLD || 10,
+            trackQuantity: true,
           },
           {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                sku: true,
-                price: true,
-                isActive: true,
-              },
+            inventoryMovements: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            },
+            stockReservations: {
+              where: { expiresAt: { gt: new Date() } },
             },
           }
         );
 
-        inventory = this.transformInventoryWithDetails(newInventory);
+        inventory = this.transformProductToInventoryWithDetails(updatedProduct);
       }
 
       return inventory;
@@ -209,8 +213,8 @@ export class InventoryRepository extends BaseRepository<
         } else {
           newQuantity = previousQuantity - adjustment.quantity;
 
-          // Prevent negative inventory unless backorders are allowed
-          if (newQuantity < 0 && !inventory.allowBackorder) {
+          // Prevent negative inventory (no backorders in this schema)
+          if (newQuantity < 0) {
             throw new AppError(
               "Insufficient inventory for this operation",
               HTTP_STATUS.BAD_REQUEST,
@@ -219,38 +223,20 @@ export class InventoryRepository extends BaseRepository<
           }
         }
 
-        // Update inventory
-        const updatedInventory = await prisma.inventory.update({
-          where: { id: inventory.id },
+        // Update product stock
+        const updatedProduct = await prisma.product.update({
+          where: { id: inventory.productId },
           data: {
-            quantity: newQuantity,
-            averageCost: adjustment.unitCost
-              ? this.calculateAverageCost(
-                  inventory,
-                  adjustment.quantity,
-                  adjustment.unitCost
-                )
-              : inventory.averageCost,
-            lastCost: adjustment.unitCost || inventory.lastCost,
-            lastRestockedAt: this.isInboundMovement(adjustment.type)
-              ? new Date()
-              : inventory.lastRestockedAt,
-            lastSoldAt:
-              adjustment.type === "SALE" ? new Date() : inventory.lastSoldAt,
-            status: this.calculateInventoryStatus(
-              newQuantity,
-              inventory.lowStockThreshold
-            ),
+            stock: newQuantity,
+            updatedAt: new Date(),
           },
           include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                sku: true,
-                price: true,
-                isActive: true,
-              },
+            inventoryMovements: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            },
+            stockReservations: {
+              where: { expiresAt: { gt: new Date() } },
             },
           },
         });
@@ -258,25 +244,15 @@ export class InventoryRepository extends BaseRepository<
         // Create movement record
         await prisma.inventoryMovement.create({
           data: {
-            inventoryId: inventory.id,
             productId,
-            type: adjustment.type,
+            type: this.mapToSchemaMovementType(adjustment.type) as any,
             quantity: adjustment.quantity,
-            previousQuantity,
-            newQuantity,
-            unitCost: adjustment.unitCost,
-            totalCost: adjustment.unitCost
-              ? adjustment.quantity * adjustment.unitCost
-              : undefined,
-            referenceType: adjustment.referenceType,
-            referenceId: adjustment.referenceId,
-            reason: adjustment.reason,
-            notes: adjustment.notes,
-            createdBy: adjustment.createdBy,
+            reference: adjustment.referenceId || null,
+            reason: adjustment.reason || null,
           },
         });
 
-        return this.transformInventoryWithDetails(updatedInventory);
+        return this.transformProductToInventoryWithDetails(updatedProduct);
       });
     } catch (error) {
       this.handleError("Error updating inventory quantity", error);
@@ -311,31 +287,20 @@ export class InventoryRepository extends BaseRepository<
 
         // Create reservation
         const expirationMinutes =
-          request.expirationMinutes || CONSTANTS.INVENTORY_RESERVATION_MINUTES;
+          request.expirationMinutes || CONSTANTS?.INVENTORY_RESERVATION_MINUTES || 15;
         const expiresAt = new Date();
         expiresAt.setMinutes(expiresAt.getMinutes() + expirationMinutes);
 
         const reservation = await prisma.stockReservation.create({
           data: {
-            inventoryId: inventory.id,
             productId: request.productId,
-            orderId: request.orderId,
-            cartId: request.cartId,
+            orderId: request.orderId || null,
             quantity: request.quantity,
-            reason: request.reason,
             expiresAt,
           },
         });
 
-        // Update reserved quantity
-        await prisma.inventory.update({
-          where: { id: inventory.id },
-          data: {
-            reservedQuantity: inventory.reservedQuantity + request.quantity,
-          },
-        });
-
-        return reservation;
+        return reservation as StockReservation;
       });
     } catch (error) {
       this.handleError("Error reserving stock", error);
@@ -356,42 +321,20 @@ export class InventoryRepository extends BaseRepository<
         if (request.reservationId) {
           reservation = await prisma.stockReservation.findUnique({
             where: { id: request.reservationId },
-            include: { inventory: true },
           });
         } else if (request.orderId) {
           reservation = await prisma.stockReservation.findFirst({
-            where: { orderId: request.orderId, isReleased: false },
-            include: { inventory: true },
-          });
-        } else if (request.cartId) {
-          reservation = await prisma.stockReservation.findFirst({
-            where: { cartId: request.cartId, isReleased: false },
-            include: { inventory: true },
+            where: { orderId: request.orderId },
           });
         }
 
-        if (!reservation) {
-          return false; // Reservation not found or already released
+        if (!reservation || reservation.expiresAt < new Date()) {
+          return false; // Reservation not found or already expired
         }
 
-        // Mark reservation as released
-        await prisma.stockReservation.update({
+        // Delete the reservation (schema doesn't have isReleased field)
+        await prisma.stockReservation.delete({
           where: { id: reservation.id },
-          data: {
-            isReleased: true,
-            releasedAt: new Date(),
-          },
-        });
-
-        // Update reserved quantity
-        await prisma.inventory.update({
-          where: { id: reservation.inventoryId },
-          data: {
-            reservedQuantity: Math.max(
-              0,
-              reservation.inventory.reservedQuantity - reservation.quantity
-            ),
-          },
         });
 
         return true;
@@ -418,84 +361,91 @@ export class InventoryRepository extends BaseRepository<
     try {
       const where: any = {};
 
-      // Status filter
-      if (filters.status) {
-        where.status = filters.status;
-      }
-
       // Stock level filters
       if (filters.lowStock) {
         where.AND = [
-          { quantity: { gt: 0 } },
-          { quantity: { lte: { path: ["lowStockThreshold"] } } },
+          { stock: { gt: 0 } },
+          { stock: { lte: { path: ["lowStockThreshold"] } } },
         ];
       }
 
       if (filters.outOfStock) {
-        where.quantity = { lte: 0 };
+        where.stock = { lte: 0 };
       }
 
       // Category filter
       if (filters.categoryId) {
-        where.product = { categoryId: filters.categoryId };
+        where.categoryId = filters.categoryId;
       }
 
       // Search filter
       if (filters.search) {
-        where.product = {
-          OR: [
-            { name: { contains: filters.search, mode: "insensitive" } },
-            { sku: { contains: filters.search, mode: "insensitive" } },
-          ],
-        };
+        where.OR = [
+          { name: { contains: filters.search, mode: "insensitive" } },
+          { sku: { contains: filters.search, mode: "insensitive" } },
+        ];
       }
 
-      const result = await this.findMany(where, {
+      // Active products only
+      where.isActive = true;
+
+      const findManyOptions: any = {
         include: {
-          product: {
-            select: {
-              id: true,
-              name: true,
-              sku: true,
-              price: true,
-              isActive: true,
-            },
-          },
-          movements: {
+          inventoryMovements: {
             orderBy: { createdAt: "desc" },
             take: 1,
           },
+          stockReservations: {
+            where: { expiresAt: { gt: new Date() } },
+          },
         },
         orderBy: { updatedAt: "desc" },
-        pagination,
-      });
+      };
+      
+      if (pagination) {
+        findManyOptions.pagination = pagination;
+      }
+      
+      const result = await this.findMany(where, findManyOptions);
 
       // Calculate summary
       const summary = await this.getInventorySummary(where);
 
-      const inventories: InventoryListItem[] = result.data.map((inventory) => {
-        const availableQuantity =
-          inventory.quantity - inventory.reservedQuantity;
-        const totalValue = inventory.quantity * Number(inventory.averageCost);
+      const inventories: InventoryListItem[] = result.data.map((product) => {
+        const reservedQuantity = product.stockReservations?.reduce(
+          (sum: number, reservation: any) => sum + reservation.quantity,
+          0
+        ) || 0;
+        const availableQuantity = product.stock - reservedQuantity;
+        const totalValue = product.stock * Number(product.costPrice || 0);
+        
+        const status = product.stock <= 0 ? InventoryStatus.OUT_OF_STOCK :
+                      product.stock <= product.lowStockThreshold ? InventoryStatus.LOW_STOCK :
+                      InventoryStatus.ACTIVE;
 
         return {
-          id: inventory.id,
-          productId: inventory.productId,
-          productName: inventory.product.name,
-          productSku: inventory.product.sku,
-          quantity: inventory.quantity,
-          reservedQuantity: inventory.reservedQuantity,
+          id: product.id,
+          productId: product.id,
+          productName: product.name,
+          productSku: product.sku || '',
+          quantity: product.stock,
+          reservedQuantity,
           availableQuantity,
-          lowStockThreshold: inventory.lowStockThreshold,
-          status: inventory.status,
-          lastMovementAt: inventory.movements[0]?.createdAt,
+          lowStockThreshold: product.lowStockThreshold,
+          status,
+          lastMovementAt: product.inventoryMovements[0]?.createdAt,
           totalValue,
         };
       });
 
       return {
         inventories,
-        pagination: result.pagination,
+        pagination: {
+          page: result.pagination?.currentPage || 1,
+          limit: result.pagination?.itemsPerPage || 50,
+          total: result.pagination?.totalItems || 0,
+          totalPages: result.pagination?.totalPages || 1,
+        },
         summary,
       };
     } catch (error) {
@@ -509,39 +459,33 @@ export class InventoryRepository extends BaseRepository<
    */
   async getLowStockAlerts(): Promise<InventoryAlert[]> {
     try {
-      const lowStockInventories = await this.findMany(
+      const lowStockProducts = await this.findMany(
         {
-          status: "LOW_STOCK",
-          product: { isActive: true },
+          isActive: true,
+          OR: [
+            { stock: { lte: 0 } },
+            { stock: { lte: { path: ["lowStockThreshold"] } } },
+          ],
         },
         {
-          include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                sku: true,
-              },
-            },
-          },
-          orderBy: [{ quantity: "asc" }, { updatedAt: "desc" }],
+          orderBy: [{ stock: "asc" }, { updatedAt: "desc" }],
         }
       );
 
-      return lowStockInventories.data.map((inventory) => ({
+      return lowStockProducts.data.map((product) => ({
         id: crypto.randomUUID(),
-        type: "LOW_STOCK" as StockAlert,
-        severity: inventory.quantity <= 0 ? "critical" : "medium",
-        productId: inventory.productId,
-        productName: inventory.product.name,
-        currentStock: inventory.quantity,
-        threshold: inventory.lowStockThreshold,
+        type: product.stock <= 0 ? StockAlert.OUT_OF_STOCK : StockAlert.LOW_STOCK,
+        severity: product.stock <= 0 ? ("critical" as const) : ("medium" as const),
+        productId: product.id,
+        productName: product.name,
+        currentStock: product.stock,
+        threshold: product.lowStockThreshold,
         message:
-          inventory.quantity <= 0
-            ? `${inventory.product.name} is out of stock`
-            : `${inventory.product.name} is running low (${inventory.quantity} remaining)`,
+          product.stock <= 0
+            ? `${product.name} is out of stock`
+            : `${product.name} is running low (${product.stock} remaining)`,
         isRead: false,
-        createdAt: inventory.updatedAt,
+        createdAt: product.updatedAt,
       }));
     } catch (error) {
       this.handleError("Error getting low stock alerts", error);
@@ -602,12 +546,12 @@ export class InventoryRepository extends BaseRepository<
           },
         },
         orderBy: { createdAt: "desc" },
-        skip: pagination ? (pagination.page - 1) * pagination.limit : 0,
+        skip: pagination && pagination.page && pagination.limit ? (pagination.page - 1) * pagination.limit : 0,
         take: pagination?.limit || 50,
       });
 
       const total = await this.prisma.inventoryMovement.count({ where });
-      const pagination_meta = pagination
+      const pagination_meta = pagination && pagination.page && pagination.limit
         ? this.buildPagination(pagination.page, pagination.limit, total)
         : undefined;
 
@@ -615,8 +559,8 @@ export class InventoryRepository extends BaseRepository<
         data: movements.map((movement) => ({
           ...movement,
           productName: movement.product.name,
-          productSku: movement.product.sku,
-        })),
+          productSku: movement.product.sku || '',
+        })) as any,
         pagination: pagination_meta,
       };
     } catch (error) {
@@ -646,7 +590,7 @@ export class InventoryRepository extends BaseRepository<
       for (const update of request.updates) {
         try {
           await this.updateInventoryQuantity(update.productId, {
-            type: update.quantity > 0 ? "ADJUSTMENT_IN" : "ADJUSTMENT_OUT",
+            type: update.quantity > 0 ? InventoryMovementType.ADJUSTMENT_IN : InventoryMovementType.ADJUSTMENT_OUT,
             quantity: Math.abs(update.quantity),
             reason: update.reason || request.batchReason || "Bulk adjustment",
             notes: request.notes,
@@ -676,36 +620,19 @@ export class InventoryRepository extends BaseRepository<
   async cleanupExpiredReservations(): Promise<{ releasedCount: number }> {
     try {
       return await this.transaction(async (prisma) => {
-        // Find expired reservations
+        // Find and delete expired reservations
         const expiredReservations = await prisma.stockReservation.findMany({
           where: {
             expiresAt: { lt: new Date() },
-            isReleased: false,
           },
-          include: { inventory: true },
         });
 
         let releasedCount = 0;
 
         for (const reservation of expiredReservations) {
-          // Release reservation
-          await prisma.stockReservation.update({
+          // Delete expired reservation
+          await prisma.stockReservation.delete({
             where: { id: reservation.id },
-            data: {
-              isReleased: true,
-              releasedAt: new Date(),
-            },
-          });
-
-          // Update inventory reserved quantity
-          await prisma.inventory.update({
-            where: { id: reservation.inventoryId },
-            data: {
-              reservedQuantity: Math.max(
-                0,
-                reservation.inventory.reservedQuantity - reservation.quantity
-              ),
-            },
           });
 
           releasedCount++;
@@ -751,9 +678,9 @@ export class InventoryRepository extends BaseRepository<
     quantity: number,
     lowStockThreshold: number
   ): InventoryStatus {
-    if (quantity <= 0) return "OUT_OF_STOCK";
-    if (quantity <= lowStockThreshold) return "LOW_STOCK";
-    return "ACTIVE";
+    if (quantity <= 0) return InventoryStatus.OUT_OF_STOCK;
+    if (quantity <= lowStockThreshold) return InventoryStatus.LOW_STOCK;
+    return InventoryStatus.ACTIVE;
   }
 
   private transformInventoryWithDetails(inventory: any): InventoryWithDetails {
@@ -775,6 +702,79 @@ export class InventoryRepository extends BaseRepository<
     };
   }
 
+  private transformProductToInventoryWithDetails(product: any): InventoryWithDetails {
+    const reservedQuantity = product.stockReservations?.reduce(
+      (sum: number, reservation: any) => sum + reservation.quantity,
+      0
+    ) || 0;
+    const availableQuantity = product.stock - reservedQuantity;
+    const isLowStock = product.stock > 0 && product.stock <= product.lowStockThreshold;
+    const isOutOfStock = product.stock <= 0;
+    const totalValue = product.stock * Number(product.costPrice || 0);
+    const lastMovement = product.inventoryMovements?.[0]?.createdAt;
+    
+    const status = isOutOfStock ? InventoryStatus.OUT_OF_STOCK :
+                   isLowStock ? InventoryStatus.LOW_STOCK :
+                   InventoryStatus.ACTIVE;
+
+    return {
+      id: product.id,
+      productId: product.id,
+      quantity: product.stock,
+      reservedQuantity,
+      lowStockThreshold: product.lowStockThreshold,
+      reorderPoint: product.lowStockThreshold, // fallback
+      reorderQuantity: 50, // default
+      status,
+      trackInventory: product.trackQuantity,
+      allowBackorder: false, // default
+      averageCost: Number(product.costPrice || 0),
+      lastCost: Number(product.costPrice || 0),
+      lastRestockedAt: undefined,
+      lastSoldAt: undefined,
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+      product: {
+        id: product.id,
+        name: product.name,
+        sku: product.sku || undefined,
+        price: Number(product.price),
+        isActive: product.isActive,
+      },
+      availableQuantity,
+      isLowStock,
+      isOutOfStock,
+      lastMovement,
+      totalValue,
+    } as InventoryWithDetails;
+  }
+
+  private mapToSchemaMovementType(type: InventoryMovementType): string {
+    switch (type) {
+      case InventoryMovementType.IN:
+      case InventoryMovementType.INITIAL_STOCK:
+      case InventoryMovementType.RESTOCK:
+      case InventoryMovementType.PURCHASE:
+      case InventoryMovementType.RETURN:
+      case InventoryMovementType.TRANSFER_IN:
+      case InventoryMovementType.RELEASE_RESERVE:
+        return "IN";
+      case InventoryMovementType.OUT:
+      case InventoryMovementType.SALE:
+      case InventoryMovementType.TRANSFER_OUT:
+      case InventoryMovementType.DAMAGE:
+      case InventoryMovementType.THEFT:
+      case InventoryMovementType.EXPIRED:
+      case InventoryMovementType.RESERVE:
+        return "OUT";
+      case InventoryMovementType.ADJUSTMENT:
+      case InventoryMovementType.ADJUSTMENT_IN:
+      case InventoryMovementType.ADJUSTMENT_OUT:
+      default:
+        return "ADJUSTMENT";
+    }
+  }
+
   private async getInventorySummary(where: any): Promise<{
     totalProducts: number;
     lowStockProducts: number;
@@ -785,17 +785,21 @@ export class InventoryRepository extends BaseRepository<
       const [totalProducts, lowStockProducts, outOfStockProducts, valueResult] =
         await Promise.all([
           this.count(where),
-          this.count({ ...where, status: "LOW_STOCK" }),
-          this.count({ ...where, status: "OUT_OF_STOCK" }),
+          this.count({ 
+            ...where, 
+            stock: { lte: { path: ["lowStockThreshold"] } },
+            stock_gt: 0 
+          }),
+          this.count({ ...where, stock: { lte: 0 } }),
           this.aggregate(where, {
             _sum: {
-              quantity: true,
+              stock: true,
             },
           }),
         ]);
 
-      // Calculate total value (simplified - would need to multiply by average cost)
-      const totalValue = Number(valueResult._sum.quantity) || 0;
+      // Calculate total value (simplified - using stock quantity)
+      const totalValue = Number(valueResult._sum.stock) || 0;
 
       return {
         totalProducts,

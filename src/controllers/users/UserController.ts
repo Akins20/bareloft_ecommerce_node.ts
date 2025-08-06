@@ -465,7 +465,7 @@ export class UserController extends BaseController {
       }
 
       // Validate Nigerian phone number format
-      if (!this.isValidNigerianPhoneNumber(phoneNumber)) {
+      if (!this.isValidNigerianPhone(phoneNumber)) {
         res.status(400).json({
           success: false,
           message: "Invalid Nigerian phone number format",
@@ -655,7 +655,7 @@ export class UserController extends BaseController {
     if (
       data.phoneNumber !== undefined &&
       data.phoneNumber &&
-      !this.isValidNigerianPhoneNumber(data.phoneNumber)
+      !this.isValidNigerianPhone(data.phoneNumber)
     ) {
       errors.push("Invalid Nigerian phone number format");
     }
@@ -711,26 +711,4 @@ export class UserController extends BaseController {
     return errors;
   }
 
-  /**
-   * Validate email format
-   */
-  private isValidEmail(email: string): boolean {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  }
-
-  /**
-   * Validate Nigerian phone number format
-   */
-  private isValidNigerianPhoneNumber(phoneNumber: string): boolean {
-    // Nigerian phone number patterns
-    const patterns = [
-      /^(\+234|234|0)(70|71|80|81|90|91|70|71)\d{8}$/, // Mobile numbers
-      /^(\+234|234|0)(1)\d{8}$/, // Lagos landline
-    ];
-
-    return patterns.some((pattern) =>
-      pattern.test(phoneNumber.replace(/\s+/g, ""))
-    );
-  }
 }

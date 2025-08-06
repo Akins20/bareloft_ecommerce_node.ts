@@ -35,7 +35,7 @@ export interface UpdateCategoryData {
   seoDescription?: string;
 }
 
-export interface CategoryWithProducts extends Category {
+export interface CategoryWithProducts extends Omit<Category, 'products'> {
   productCount: number;
   hasChildren: boolean;
   products?: any[];
@@ -86,7 +86,7 @@ export class CategoryRepository extends BaseRepository<
             },
           },
         }
-      );
+      ) as (Category & { _count: { products: number; children: number } }) | null;
 
       if (!category) return null;
 
@@ -408,7 +408,7 @@ export class CategoryRepository extends BaseRepository<
             },
           },
           orderBy: { sortOrder: "asc" },
-          pagination,
+          ...(pagination && { pagination }),
         }
       );
 
@@ -432,7 +432,7 @@ export class CategoryRepository extends BaseRepository<
 
       while (currentCategory) {
         breadcrumb.unshift(currentCategory);
-        currentCategory = currentCategory.parent;
+        currentCategory = currentCategory.parent || null;
       }
 
       return breadcrumb;
@@ -513,7 +513,7 @@ export class CategoryRepository extends BaseRepository<
             },
           },
         },
-        pagination,
+        ...(pagination && { pagination }),
       });
 
       return {
@@ -577,9 +577,14 @@ export class CategoryRepository extends BaseRepository<
         }
       }
 
+      const updateData: UpdateCategoryData = {};
+      if (newParentId !== null) {
+        updateData.parentId = newParentId;
+      }
+      
       return await this.update(
         categoryId,
-        { parentId: newParentId },
+        updateData,
         {
           parent: true,
           children: {
@@ -800,7 +805,7 @@ export class CategoryRepository extends BaseRepository<
 
         while (current.parent) {
           depth++;
-          current = current.parent;
+          current = current.parent as any;
           if (depth > 10) break; // Prevent infinite loops
         }
 

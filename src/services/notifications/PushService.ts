@@ -1,7 +1,7 @@
 import { BaseService } from "../BaseService";
 import { PushNotification } from "../../types";
-import admin from "firebase-admin";
-import { pushConfig } from "../../config";
+import * as admin from "firebase-admin";
+// import { pushConfig } from "../../config";
 
 export interface SendPushRequest {
   userId: string;
@@ -40,9 +40,9 @@ export class PushService extends BaseService {
       if (!admin.apps.length) {
         admin.initializeApp({
           credential: admin.credential.cert({
-            projectId: pushConfig.firebase.projectId,
-            clientEmail: pushConfig.firebase.clientEmail,
-            privateKey: pushConfig.firebase.privateKey.replace(/\\n/g, "\n"),
+            projectId: process.env.FIREBASE_PROJECT_ID || 'bareloft-api',
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
+            privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, "\n"),
           }),
         });
       }
