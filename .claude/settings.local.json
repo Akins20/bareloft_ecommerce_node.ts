@@ -22,7 +22,14 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(set NODE_ENV=test)",
+      "Bash(set PORT=3001)",
+      "Bash(taskkill:*)",
+      "Bash(node:*)",
+      "Bash(curl:*)",
+      "Bash(powershell:*)",
+      "Bash(timeout 3s npm run dev)"
     ],
     "deny": []
   }

@@ -153,7 +153,7 @@ export class OTPController extends BaseController {
    * Resend OTP code
    * POST /api/v1/auth/otp/resend
    */
-  public resendOTP = async (req: Request, res: Response): Promise<void> => {
+  public resendOTP = async (req: Request, res: Response, next?: unknown): Promise<void> => {
     try {
       const { phoneNumber, purpose } = req.body;
 
@@ -211,7 +211,7 @@ export class OTPController extends BaseController {
    * Check OTP status
    * GET /api/v1/auth/otp/status/:phoneNumber
    */
-  public getOTPStatus = async (req: Request, res: Response): Promise<void> => {
+  public getOTPStatus = async (req: Request, res: Response, next?: unknown): Promise<void> => {
     try {
       const { phoneNumber } = req.params;
       const { purpose } = req.query;
@@ -251,9 +251,7 @@ export class OTPController extends BaseController {
    * GET /api/v1/auth/otp/attempts/:phoneNumber
    */
   public getAttemptsRemaining = async (
-    req: Request,
-    res: Response
-  ): Promise<void> => {
+req: Request, res: Response, next?: unknown  ): Promise<void> => {
     try {
       const { phoneNumber } = req.params;
 

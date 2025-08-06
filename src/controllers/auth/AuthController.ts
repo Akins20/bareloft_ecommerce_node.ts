@@ -38,7 +38,7 @@ export class AuthController extends BaseController {
    * User signup with OTP verification
    * POST /api/v1/auth/signup
    */
-  public signup = async (req: Request, res: Response): Promise<void> => {
+  public signup = async (req: Request, res: Response, next?: unknown): Promise<void> => {
     try {
       const signupData: SignupRequest = req.body;
 
@@ -135,7 +135,7 @@ export class AuthController extends BaseController {
    * User login with OTP verification
    * POST /api/v1/auth/login
    */
-  public login = async (req: Request, res: Response): Promise<void> => {
+  public login = async (req: Request, res: Response, next?: unknown): Promise<void> => {
     try {
       const loginData: LoginRequest = req.body;
 
@@ -205,7 +205,7 @@ export class AuthController extends BaseController {
    * Request OTP for login or signup
    * POST /api/v1/auth/request-otp
    */
-  public requestOTP = async (req: Request, res: Response): Promise<void> => {
+  public requestOTP = async (req: Request, res: Response, next?: unknown): Promise<void> => {
     try {
       const { phoneNumber, purpose }: RequestOTPRequest = req.body;
 
@@ -306,7 +306,7 @@ export class AuthController extends BaseController {
    * Verify OTP (standalone verification)
    * POST /api/v1/auth/verify-otp
    */
-  public verifyOTP = async (req: Request, res: Response): Promise<void> => {
+  public verifyOTP = async (req: Request, res: Response, next?: unknown): Promise<void> => {
     try {
       const { phoneNumber, code, purpose }: VerifyOTPRequest = req.body;
 
@@ -371,7 +371,7 @@ export class AuthController extends BaseController {
    * Refresh access token
    * POST /api/v1/auth/refresh
    */
-  public refreshToken = async (req: Request, res: Response): Promise<void> => {
+  public refreshToken = async (req: Request, res: Response, next?: unknown): Promise<void> => {
     try {
       const { refreshToken }: RefreshTokenRequest = req.body;
 
@@ -419,9 +419,7 @@ export class AuthController extends BaseController {
    * POST /api/v1/auth/logout
    */
   public logout = async (
-    req: AuthenticatedRequest,
-    res: Response
-  ): Promise<void> => {
+req: unknown, res: unknown, next: unknown, req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const userId = this.getUserId(req);
       const { refreshToken, logoutAllDevices }: LogoutRequest = req.body;
@@ -476,9 +474,7 @@ export class AuthController extends BaseController {
    * GET /api/v1/auth/me
    */
   public getCurrentUser = async (
-    req: AuthenticatedRequest,
-    res: Response
-  ): Promise<void> => {
+req: unknown, res: unknown, next: unknown, req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const userId = this.getUserId(req);
 
@@ -511,9 +507,7 @@ export class AuthController extends BaseController {
    * GET /api/v1/auth/check-phone/:phoneNumber
    */
   public checkPhoneAvailability = async (
-    req: Request,
-    res: Response
-  ): Promise<void> => {
+req: Request, res: Response, next?: unknown  ): Promise<void> => {
     try {
       const { phoneNumber } = req.params;
 

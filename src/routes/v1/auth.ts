@@ -38,76 +38,27 @@ const authSchemas = {
   changePassword: {},
 };
 
-// Services (with fallback for dependency injection)
-let authService: any;
-let otpService: any;
-let sessionService: any;
+// Import service container
+import { getServiceContainer } from "../../config/serviceContainer";
 
-try {
-  authService = require("../../services/auth/AuthService").authService || {};
-  otpService = require("../../services/auth/OTPService").otpService || {};
-  sessionService = require("../../services/auth/SessionService").sessionService || {};
-} catch (error) {
-  // Fallback services
-  authService = {};
-  otpService = {};
-  sessionService = {};
-}
+// Get service container instance
+const serviceContainer = getServiceContainer();
+
+// Get services from container
+const authService = serviceContainer.getService('authService');
+const otpService = serviceContainer.getService('otpService');
+const sessionService = serviceContainer.getService('sessionService');
 
 const router = Router();
 
-// Initialize controllers with fallback
-let authController: any;
-let otpController: any;
+// Initialize controllers with services from container
+const authController = new AuthController(
+  authService,
+  otpService,
+  sessionService
+);
 
-try {
-  authController = new AuthController(
-    authService,
-    otpService,
-    sessionService
-  );
-  otpController = new OTPController(otpService);
-} catch (error) {
-  // Create fallback controllers
-  authController = {
-    signup: async (req: any, res: any) => {
-      res.status(501).json({ success: false, message: "Auth service not initialized" });
-    },
-    login: async (req: any, res: any) => {
-      res.status(501).json({ success: false, message: "Auth service not initialized" });
-    },
-    requestOTP: async (req: any, res: any) => {
-      res.status(501).json({ success: false, message: "Auth service not initialized" });
-    },
-    verifyOTP: async (req: any, res: any) => {
-      res.status(501).json({ success: false, message: "Auth service not initialized" });
-    },
-    refreshToken: async (req: any, res: any) => {
-      res.status(501).json({ success: false, message: "Auth service not initialized" });
-    },
-    logout: async (req: any, res: any) => {
-      res.status(501).json({ success: false, message: "Auth service not initialized" });
-    },
-    getCurrentUser: async (req: any, res: any) => {
-      res.status(501).json({ success: false, message: "Auth service not initialized" });
-    },
-    checkPhoneAvailability: async (req: any, res: any) => {
-      res.status(501).json({ success: false, message: "Auth service not initialized" });
-    }
-  };
-  
-  otpController = {
-    resendOTP: async (req: any, res: any) => {
-      res.status(501).json({ success: false, message: "OTP service not initialized" });
-    },
-    getOTPStatus: async (req: any, res: any) => {
-      res.status(501).json({ success: false, message: "OTP service not initialized" });
-    },
-    getAttemptsRemaining: async (req: any, res: any) => {
-      res.status(501).json({ success: false, message: "OTP service not initialized" });
-    }
-  };
-}
+const otpController = new OTPController(otpService);
 
 /**
  * @route   POST /api/v1/auth/signup
