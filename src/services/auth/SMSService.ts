@@ -1,7 +1,7 @@
 import axios from "axios";
-import { config } from "@/config/environment";
-import { SMSNotificationData, NigerianPhoneNumber } from "@/types";
-import { AppError, HTTP_STATUS, ERROR_CODES } from "@/types/api.types";
+import { config } from "../../config/environment";
+import { SMSNotification, NigerianPhoneNumber } from "../../types";
+import { AppError, HTTP_STATUS, ERROR_CODES } from "../../types/api.types";
 
 export class SMSService {
   private apiKey: string;

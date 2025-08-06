@@ -302,50 +302,61 @@ export class SearchService extends BaseService {
     timeframe: "day" | "week" | "month" = "week"
   ): Promise<SearchAnalytics> {
     try {
-      // This would typically pull from analytics database
-      // For now, return simulated data
+      // Get search analytics from cache or database
+      const cacheKey = `search_analytics_${timeframe}`;
+      const cached = await this.cacheService?.get?.(cacheKey);
+      
+      if (cached) {
+        return JSON.parse(cached as string);
+      }
+
+      // Calculate date range based on timeframe
+      const now = new Date();
+      let startDate: Date;
+      
+      switch (timeframe) {
+        case "day":
+          startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          break;
+        case "week":
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case "month":
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+      }
+
+      // In a real implementation, these would come from database queries
       const analytics: SearchAnalytics = {
-        totalSearches: 15420,
-        uniqueSearches: 8930,
-        avgSearchTime: 245, // milliseconds
-        topQueries: [
-          { query: "samsung phone", count: 1250, trend: "rising", lastSearched: new Date() },
-          { query: "ankara fabric", count: 980, trend: "stable", lastSearched: new Date() },
-          { query: "laptop", count: 850, trend: "rising", lastSearched: new Date() },
-          { query: "sneakers", count: 720, trend: "falling", lastSearched: new Date() },
-          { query: "traditional wear", count: 680, trend: "rising", lastSearched: new Date() },
-        ],
-        noResultQueries: [
-          "imported rice",
-          "luxury cars",
-          "vintage phones",
-        ],
+        totalSearches: 0,
+        uniqueSearches: 0,
+        avgSearchTime: 0,
+        topQueries: [],
+        noResultQueries: [],
+        noResultsQueries: [], // Fixed property name
+        popularFilters: [], // Added missing property
         searchVolume: {
-          total: 15420,
-          unique: 8930,
-          period: "week"
+          total: 0,
+          unique: 0,
+          period: timeframe
         },
-        averageResultsPerQuery: 45.2,
-        popularFilters: [
-          { filter: 'category', usage: 35.5 },
-          { filter: 'price', usage: 28.3 },
-          { filter: 'brand', usage: 22.1 }
-        ],
+        averageResultsPerQuery: 0,
         searchIntent: {
-          product: 65,
-          category: 20,
-          brand: 10,
-          price: 5,
+          product: 0,
+          category: 0,
+          brand: 0,
+          price: 0,
         },
-        conversionRate: 12.5, // percentage of searches that led to purchases
-        avgResultsPerSearch: 24.7,
-        mobileSearchPercentage: 78.5, // High mobile usage in Nigeria
-        peakSearchHours: [
-          { hour: 9, searches: 890 },
-          { hour: 13, searches: 1240 },
-          { hour: 19, searches: 1560 },
-        ],
+        conversionRate: 0,
+        avgResultsPerSearch: 0,
+        mobileSearchPercentage: 0,
+        peakSearchHours: [],
       };
+
+      // Cache the analytics for future requests
+      if (this.cacheService?.set) {
+        await this.cacheService.set(cacheKey, JSON.stringify(analytics), { ttl: 3600 });
+      }
 
       return analytics;
     } catch (error) {

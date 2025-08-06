@@ -1,9 +1,9 @@
 import { BaseService } from "../BaseService";
-import * as Redis from "ioredis";
+import Redis from "ioredis";
 // import { redisConfig } from "../../config";
 
 export class RedisService extends BaseService {
-  private client: Redis.Redis;
+  private client: Redis;
   private isConnected: boolean = false;
 
   constructor() {
@@ -16,15 +16,13 @@ export class RedisService extends BaseService {
    */
   private initializeRedis(): void {
     try {
-      this.client = new Redis.Redis({
+      this.client = new Redis({
         host: process.env.REDIS_HOST || 'localhost',
         port: parseInt(process.env.REDIS_PORT || '6379'),
         password: process.env.REDIS_PASSWORD,
         db: parseInt(process.env.REDIS_DATABASE || '0'),
-        retryDelayOnFailover: 100,
         maxRetriesPerRequest: 3,
         lazyConnect: true,
-        keepAlive: 30000,
         connectionName: "bareloft-api",
         family: 4, // IPv4
       });

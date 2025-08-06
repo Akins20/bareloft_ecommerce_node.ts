@@ -23,7 +23,7 @@ export class JWTService {
     payload: Omit<JWTPayload, "iat" | "exp">
   ): Promise<string> {
     try {
-      return jwt.sign(payload as any, this.accessTokenSecret, {
+      return jwt.sign(payload, this.accessTokenSecret, {
         expiresIn: this.accessTokenExpiresIn,
         issuer: "bareloft-api",
         audience: "bareloft-client",
@@ -45,7 +45,7 @@ export class JWTService {
     payload: Omit<JWTPayload, "iat" | "exp">
   ): Promise<string> {
     try {
-      return jwt.sign(payload as any, this.refreshTokenSecret, {
+      return jwt.sign(payload, this.refreshTokenSecret, {
         expiresIn: this.refreshTokenExpiresIn,
         issuer: "bareloft-api",
         audience: "bareloft-client",

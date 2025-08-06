@@ -53,14 +53,14 @@ export class SessionService extends BaseService {
 
       // Generate tokens
       const sessionId = this.generateSessionId();
-      const accessToken = await this.jwtService.generateAccessToken?.({
+      const accessToken = await this.jwtService.generateAccessToken({
         userId,
         sessionId,
-      } as any) || 'mock-access-token';
-      const refreshToken = await this.jwtService.generateRefreshToken?.({
+      } as any);
+      const refreshToken = await this.jwtService.generateRefreshToken({
         userId,
         sessionId,
-      } as any) || 'mock-refresh-token';
+      } as any);
 
       const expiresAt = new Date(Date.now() + this.REFRESH_TOKEN_EXPIRY);
 
@@ -184,14 +184,14 @@ export class SessionService extends BaseService {
       }
 
       // Generate new tokens
-      const newAccessToken = await this.jwtService.generateAccessToken?.({
+      const newAccessToken = await this.jwtService.generateAccessToken({
         userId: session.userId,
         sessionId: session.sessionId,
-      } as any) || 'mock-access-token';
-      const newRefreshToken = await this.jwtService.generateRefreshToken?.({
+      } as any);
+      const newRefreshToken = await this.jwtService.generateRefreshToken({
         userId: session.userId,
         sessionId: session.sessionId,
-      } as any) || 'mock-refresh-token';
+      } as any);
 
       // Update session with new tokens
       const updatedSession = await this.sessionRepository.updateTokens(
@@ -401,7 +401,7 @@ export class SessionService extends BaseService {
   /**
    * Handle service errors
    */
-  protected handleError(message: string, error: any): void {
+  protected handleError(message: string, error: any): never {
     if (error instanceof AppError) {
       throw error;
     }

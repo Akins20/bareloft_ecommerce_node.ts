@@ -607,7 +607,7 @@ export class CartService extends BaseService {
   /**
    * Handle service errors
    */
-  protected handleError(message: string, error: any): void {
+  protected handleError(message: string, error: any): never {
     console.error(message, error);
     if (error instanceof AppError) {
       throw error;

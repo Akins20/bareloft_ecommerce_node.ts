@@ -137,7 +137,11 @@ export class ReservationService extends BaseService {
           quantity: request.quantity,
           expiresAt,
         },
-      }) || { id: 'mock-id', productId: request.productId, quantity: request.quantity };
+      });
+
+      if (!reservation) {
+        throw new Error('Failed to create stock reservation');
+      }
 
       // Update inventory reserved quantity (simplified)
       // await this.updateReservedQuantity(request.productId);
@@ -601,14 +605,14 @@ export class ReservationService extends BaseService {
         }) || 0,
       ]);
 
-      const totalReservedQuantity = activeReservations.reduce(
+      const totalReservedQuantity = (activeReservations as any[]).reduce(
         (sum, r) => sum + (r as any).quantity,
         0
       );
 
       // Group by product
       const productMap = new Map();
-      activeReservations.forEach((reservation: any) => {
+      (activeReservations as any[]).forEach((reservation: any) => {
         const productId = reservation.productId;
         const productName = reservation.product?.name || 'Unknown Product';
 
@@ -627,7 +631,7 @@ export class ReservationService extends BaseService {
       });
 
       return {
-        totalActiveReservations: activeReservations.length,
+        totalActiveReservations: (activeReservations as any[]).length,
         totalReservedQuantity,
         expiringSoon: expiringSoonCount,
         byProduct: Array.from(productMap.values()),

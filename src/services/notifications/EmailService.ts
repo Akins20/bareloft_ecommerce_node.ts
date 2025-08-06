@@ -34,11 +34,11 @@ export class EmailService extends BaseService {
    */
   private initializeTransporter(): void {
     // Since emailConfig doesn't have provider property, default to SendGrid
-    this.transporter = nodemailer.createTransporter({
+    this.transporter = nodemailer.createTransport({
       service: "SendGrid",
       auth: {
         user: "apikey",
-        pass: process.env.SENDGRID_API_KEY || '',
+        pass: process.env.SENDGRID_API_KEY || "",
       },
     });
   }
@@ -49,14 +49,17 @@ export class EmailService extends BaseService {
   async sendEmail(request: SendEmailRequest): Promise<string> {
     try {
       const mailOptions = {
-        from: request.from || process.env.FROM_EMAIL || 'noreply@bareloft.com',
+        from: request.from || process.env.FROM_EMAIL || "noreply@bareloft.com",
         to: request.to,
         subject: request.subject,
         text: request.message,
         html:
           request.htmlContent ||
           this.generateHtmlContent(request.message, request.recipientName),
-        replyTo: request.replyTo || process.env.REPLY_TO_EMAIL || 'support@bareloft.com',
+        replyTo:
+          request.replyTo ||
+          process.env.REPLY_TO_EMAIL ||
+          "support@bareloft.com",
         attachments: request.attachments,
       };
 
@@ -338,7 +341,7 @@ export class EmailService extends BaseService {
               </div>
             </div>
             
-            <a href="${process.env.BASE_URL || 'https://bareloft.com'}/products" class="button">Start Shopping Now</a>
+            <a href="${process.env.BASE_URL || "https://bareloft.com"}/products" class="button">Start Shopping Now</a>
             
             <p>If you have any questions, feel free to reach out to our support team.</p>
           </div>
@@ -400,7 +403,7 @@ export class EmailService extends BaseService {
             
             <p><strong>Cart Total: ₦${data.cartTotal.toLocaleString()}</strong></p>
             
-            <a href="${process.env.BASE_URL || 'https://bareloft.com'}/cart" class="button">Complete Your Purchase</a>
+            <a href="${process.env.BASE_URL || "https://bareloft.com"}/cart" class="button">Complete Your Purchase</a>
             
             <p>Need help? Our customer support team is here for you!</p>
           </div>
