@@ -127,7 +127,7 @@ export declare class SessionService extends BaseService {
     /**
      * Handle service errors
      */
-    protected handleError(message: string, error: any): void;
+    protected handleError(message: string, error: any): never;
     /**
      * Invalidate all user sessions
      */

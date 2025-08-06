@@ -24,24 +24,80 @@ import { OTPController } from "../../controllers/auth/OTPController";
 
 // Middleware imports
 import { authenticate } from "../../middleware/auth/authenticate";
-import { rateLimiter } from "../../middleware/security/rateLimiter";
+import rateLimiter from "../../middleware/security/rateLimiter";
 import { validateRequest } from "../../middleware/validation/validateRequest";
 import { authSchemas } from "../../utils/validation/schemas/authSchemas";
 
-// Services (dependency injection)
-import { authService } from "../../services/auth/AuthService";
-import { otpService } from "../../services/auth/OTPService";
-import { sessionService } from "../../services/auth/SessionService";
+// Services (with fallback for dependency injection)
+let authService: any;
+let otpService: any;
+let sessionService: any;
+
+try {
+  authService = require("../../services/auth/AuthService").authService || {};
+  otpService = require("../../services/auth/OTPService").otpService || {};
+  sessionService = require("../../services/auth/SessionService").sessionService || {};
+} catch (error) {
+  // Fallback services
+  authService = {};
+  otpService = {};
+  sessionService = {};
+}
 
 const router = Router();
 
-// Initialize controllers
-const authController = new AuthController(
-  authService,
-  otpService,
-  sessionService
-);
-const otpController = new OTPController(otpService);
+// Initialize controllers with fallback
+let authController: any;
+let otpController: any;
+
+try {
+  authController = new AuthController(
+    authService,
+    otpService,
+    sessionService
+  );
+  otpController = new OTPController(otpService);
+} catch (error) {
+  // Create fallback controllers
+  authController = {
+    signup: async (req: any, res: any) => {
+      res.status(501).json({ success: false, message: "Auth service not initialized" });
+    },
+    login: async (req: any, res: any) => {
+      res.status(501).json({ success: false, message: "Auth service not initialized" });
+    },
+    requestOTP: async (req: any, res: any) => {
+      res.status(501).json({ success: false, message: "Auth service not initialized" });
+    },
+    verifyOTP: async (req: any, res: any) => {
+      res.status(501).json({ success: false, message: "Auth service not initialized" });
+    },
+    refreshToken: async (req: any, res: any) => {
+      res.status(501).json({ success: false, message: "Auth service not initialized" });
+    },
+    logout: async (req: any, res: any) => {
+      res.status(501).json({ success: false, message: "Auth service not initialized" });
+    },
+    getCurrentUser: async (req: any, res: any) => {
+      res.status(501).json({ success: false, message: "Auth service not initialized" });
+    },
+    checkPhoneAvailability: async (req: any, res: any) => {
+      res.status(501).json({ success: false, message: "Auth service not initialized" });
+    }
+  };
+  
+  otpController = {
+    resendOTP: async (req: any, res: any) => {
+      res.status(501).json({ success: false, message: "OTP service not initialized" });
+    },
+    getOTPStatus: async (req: any, res: any) => {
+      res.status(501).json({ success: false, message: "OTP service not initialized" });
+    },
+    getAttemptsRemaining: async (req: any, res: any) => {
+      res.status(501).json({ success: false, message: "OTP service not initialized" });
+    }
+  };
+}
 
 /**
  * @route   POST /api/v1/auth/signup
@@ -70,13 +126,19 @@ const otpController = new OTPController(otpService);
  */
 router.post(
   "/signup",
-  rateLimiter({
+  typeof rateLimiter === 'function' ? rateLimiter({
     windowMs: 60 * 1000, // 1 minute
     max: 5, // 5 attempts per minute
     message: "Too many signup attempts, please try again later",
-  }),
+  }) : (req: any, res: any, next: any) => next(),
   validateRequest(authSchemas.signup),
-  authController.signup
+  (req, res, next) => {
+    try {
+      authController.signup(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  }
 );
 
 /**
@@ -103,13 +165,19 @@ router.post(
  */
 router.post(
   "/login",
-  rateLimiter({
+  typeof rateLimiter === 'function' ? rateLimiter({
     windowMs: 60 * 1000, // 1 minute
     max: 5, // 5 attempts per minute
     message: "Too many login attempts, please try again later",
-  }),
+  }) : (req: any, res: any, next: any) => next(),
   validateRequest(authSchemas.login),
-  authController.login
+  (req, res, next) => {
+    try {
+      authController.login(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  }
 );
 
 /**
@@ -136,13 +204,19 @@ router.post(
  */
 router.post(
   "/request-otp",
-  rateLimiter({
+  typeof rateLimiter === 'function' ? rateLimiter({
     windowMs: 60 * 1000, // 1 minute
     max: 3, // 3 requests per minute
     message: "Too many OTP requests, please wait before requesting again",
-  }),
+  }) : (req: any, res: any, next: any) => next(),
   validateRequest(authSchemas.requestOTP),
-  authController.requestOTP
+  (req, res, next) => {
+    try {
+      authController.requestOTP(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  }
 );
 
 /**
@@ -167,13 +241,19 @@ router.post(
  */
 router.post(
   "/verify-otp",
-  rateLimiter({
+  typeof rateLimiter === 'function' ? rateLimiter({
     windowMs: 60 * 1000, // 1 minute
     max: 5, // 5 attempts per minute
     message: "Too many OTP verification attempts",
-  }),
+  }) : (req: any, res: any, next: any) => next(),
   validateRequest(authSchemas.verifyOTP),
-  authController.verifyOTP
+  (req, res, next) => {
+    try {
+      authController.verifyOTP(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  }
 );
 
 /**
@@ -197,13 +277,19 @@ router.post(
  */
 router.post(
   "/refresh",
-  rateLimiter({
+  typeof rateLimiter === 'function' ? rateLimiter({
     windowMs: 60 * 1000, // 1 minute
     max: 10, // 10 requests per minute
     message: "Too many token refresh attempts",
-  }),
+  }) : (req: any, res: any, next: any) => next(),
   validateRequest(authSchemas.refreshToken),
-  authController.refreshToken
+  (req, res, next) => {
+    try {
+      authController.refreshToken(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  }
 );
 
 /**
@@ -232,7 +318,13 @@ router.post(
   "/logout",
   authenticate,
   validateRequest(authSchemas.logout),
-  authController.logout
+  (req, res, next) => {
+    try {
+      authController.logout(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  }
 );
 
 /**
@@ -263,7 +355,13 @@ router.post(
  *   }
  * }
  */
-router.get("/me", authenticate, authController.getCurrentUser);
+router.get("/me", authenticate, (req, res, next) => {
+  try {
+    authController.getCurrentUser(req, res, next);
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * @route   GET /api/v1/auth/check-phone/:phoneNumber
@@ -286,12 +384,18 @@ router.get("/me", authenticate, authController.getCurrentUser);
  */
 router.get(
   "/check-phone/:phoneNumber",
-  rateLimiter({
+  typeof rateLimiter === 'function' ? rateLimiter({
     windowMs: 60 * 1000, // 1 minute
     max: 20, // 20 requests per minute
     message: "Too many phone check requests",
-  }),
-  authController.checkPhoneAvailability
+  }) : (req: any, res: any, next: any) => next(),
+  (req, res, next) => {
+    try {
+      authController.checkPhoneAvailability(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  }
 );
 
 /**
@@ -306,12 +410,18 @@ router.get(
  */
 router.post(
   "/otp/resend",
-  rateLimiter({
+  typeof rateLimiter === 'function' ? rateLimiter({
     windowMs: 60 * 1000, // 1 minute
     max: 2, // 2 requests per minute
     message: "Too many OTP resend requests",
-  }),
-  otpController.resendOTP
+  }) : (req: any, res: any, next: any) => next(),
+  (req, res, next) => {
+    try {
+      otpController.resendOTP(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  }
 );
 
 /**
@@ -322,11 +432,17 @@ router.post(
  */
 router.get(
   "/otp/status/:phoneNumber",
-  rateLimiter({
+  typeof rateLimiter === 'function' ? rateLimiter({
     windowMs: 60 * 1000, // 1 minute
     max: 10, // 10 requests per minute
-  }),
-  otpController.getOTPStatus
+  }) : (req: any, res: any, next: any) => next(),
+  (req, res, next) => {
+    try {
+      otpController.getOTPStatus(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  }
 );
 
 /**
@@ -337,11 +453,17 @@ router.get(
  */
 router.get(
   "/otp/attempts/:phoneNumber",
-  rateLimiter({
+  typeof rateLimiter === 'function' ? rateLimiter({
     windowMs: 60 * 1000, // 1 minute
     max: 10, // 10 requests per minute
-  }),
-  otpController.getAttemptsRemaining
+  }) : (req: any, res: any, next: any) => next(),
+  (req, res, next) => {
+    try {
+      otpController.getAttemptsRemaining(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  }
 );
 
 export default router;

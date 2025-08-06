@@ -1,9 +1,16 @@
 import { Router } from "express";
-import { helmetMiddleware } from "../middleware/security/helmet";
-import { rateLimiter } from "../middleware/security/rateLimiter";
-import { requestLogger } from "../middleware/logging/requestLogger";
-import { errorHandler } from "../middleware/error/errorHandler";
-import { notFoundHandler } from "../middleware/error/notFound";
+import cors from "cors";
+import helmetMiddleware from "../middleware/security/helmet";
+import rateLimiter from "../middleware/security/rateLimiter";
+import requestLogger from "../middleware/logging/requestLogger";
+import errorHandler from "../middleware/error/errorHandler";
+// NotFound handler doesn't exist, create inline
+const notFoundHandler = (req: any, res: any) => {
+  res.status(404).json({
+    success: false,
+    message: `Route ${req.method} ${req.originalUrl} not found`,
+  });
+};
 
 // Import v1 routes
 import authRoutes from "./v1/auth";
@@ -18,33 +25,36 @@ import userRoutes from "./v1/users";
 import addressRoutes from "./v1/addresses";
 import wishlistRoutes from "./v1/wishlist";
 
-// Import admin routes
-import adminRoutes from "./admin";
-
-// Import webhook routes
-import webhookRoutes from "./webhooks";
+// Admin and webhook routes don't exist yet, comment out
+// import adminRoutes from "./admin";
+// import webhookRoutes from "./webhooks";
 
 const router = Router();
 
 // ==================== GLOBAL MIDDLEWARE ====================
 
 // Security middleware
-router.use(corsMiddleware);
+router.use(cors());
 router.use(helmetMiddleware);
 
 // Logging middleware
 router.use(requestLogger);
 
-// Global rate limiting
-router.use(
-  rateLimiter({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    maxRequests: 1000, // 1000 requests per 15 minutes globally
-    message: "Too many requests from this IP. Please try again later.",
-    standardHeaders: true,
-    legacyHeaders: false,
-  })
-);
+// Global rate limiting (rateLimiter is an object/middleware, not a function)
+if (typeof rateLimiter === 'function') {
+  router.use(
+    rateLimiter({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      maxRequests: 1000, // 1000 requests per 15 minutes globally
+      message: "Too many requests from this IP. Please try again later.",
+      standardHeaders: true,
+      legacyHeaders: false,
+    })
+  );
+} else {
+  // Use rateLimiter directly if it's already middleware
+  router.use(rateLimiter);
+}
 
 // ==================== API HEALTH CHECK ====================
 
@@ -191,11 +201,13 @@ router.use("/v1/upload", uploadRoutes);
 
 // ==================== ADMIN ROUTES ====================
 
-router.use("/admin", adminRoutes);
+// Comment out until admin routes are implemented
+// router.use("/admin", adminRoutes);
 
 // ==================== WEBHOOK ROUTES ====================
 
-router.use("/webhooks", webhookRoutes);
+// Comment out until webhook routes are implemented
+// router.use("/webhooks", webhookRoutes);
 
 // ==================== API VERSIONING REDIRECTS ====================
 

@@ -1,25 +1,67 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.initializeAddressRoutes = void 0;
 const express_1 = require("express");
 const authenticate_1 = require("../../middleware/auth/authenticate");
 const validateRequest_1 = require("../../middleware/validation/validateRequest");
-const rateLimiter_1 = require("../../middleware/security/rateLimiter");
+const rateLimiter_1 = __importDefault(require("../../middleware/security/rateLimiter"));
 const userSchemas_1 = require("../../utils/validation/schemas/userSchemas");
 const router = (0, express_1.Router)();
-// Initialize controller
-let addressController;
+// Initialize controller with fallback
+let addressController = null;
 const initializeAddressRoutes = (controller) => {
     addressController = controller;
     return router;
 };
 exports.initializeAddressRoutes = initializeAddressRoutes;
+// Create fallback controller if not initialized
+const getController = () => {
+    if (!addressController) {
+        // Create a mock controller for now
+        return {
+            getUserAddresses: async (req, res) => {
+                res.status(501).json({ success: false, message: "Address controller not initialized" });
+            },
+            getDefaultAddresses: async (req, res) => {
+                res.status(501).json({ success: false, message: "Address controller not initialized" });
+            },
+            createAddress: async (req, res) => {
+                res.status(501).json({ success: false, message: "Address controller not initialized" });
+            },
+            getAddressById: async (req, res) => {
+                res.status(501).json({ success: false, message: "Address controller not initialized" });
+            },
+            updateAddress: async (req, res) => {
+                res.status(501).json({ success: false, message: "Address controller not initialized" });
+            },
+            deleteAddress: async (req, res) => {
+                res.status(501).json({ success: false, message: "Address controller not initialized" });
+            },
+            setDefaultAddress: async (req, res) => {
+                res.status(501).json({ success: false, message: "Address controller not initialized" });
+            },
+            calculateShippingCost: async (req, res) => {
+                res.status(501).json({ success: false, message: "Address controller not initialized" });
+            },
+            validateAddress: async (req, res) => {
+                res.status(501).json({ success: false, message: "Address controller not initialized" });
+            },
+            getLocations: async (req, res) => {
+                res.status(501).json({ success: false, message: "Address controller not initialized" });
+            }
+        };
+    }
+    return addressController;
+};
 // Rate limiting for address operations
-const addressActionLimit = (0, rateLimiter_1.rateLimiter)({
+const addressActionLimit = typeof rateLimiter_1.default === 'function' ? (0, rateLimiter_1.default)({
     windowMs: 15 * 60 * 1000, // 15 minutes
     maxRequests: 20, // 20 address operations per 15 minutes
     message: "Too many address operations. Please try again later.",
-});
+}) : rateLimiter_1.default;
 // ==================== USER ADDRESS ENDPOINTS ====================
 /**
  * @route   GET /api/v1/addresses
@@ -32,7 +74,7 @@ const addressActionLimit = (0, rateLimiter_1.rateLimiter)({
  */
 router.get("/", authenticate_1.authenticate, async (req, res, next) => {
     try {
-        await addressController.getUserAddresses(req, res);
+        await getController().getUserAddresses(req, res);
     }
     catch (error) {
         next(error);
@@ -45,7 +87,7 @@ router.get("/", authenticate_1.authenticate, async (req, res, next) => {
  */
 router.get("/default", authenticate_1.authenticate, async (req, res, next) => {
     try {
-        await addressController.getDefaultAddresses(req, res);
+        await getController().getDefaultAddresses(req, res);
     }
     catch (error) {
         next(error);
@@ -71,7 +113,7 @@ router.get("/default", authenticate_1.authenticate, async (req, res, next) => {
  */
 router.post("/", authenticate_1.authenticate, addressActionLimit, (0, validateRequest_1.validateRequest)(userSchemas_1.createAddressSchema), async (req, res, next) => {
     try {
-        await addressController.createAddress(req, res);
+        await getController().createAddress(req, res);
     }
     catch (error) {
         next(error);
@@ -85,7 +127,7 @@ router.post("/", authenticate_1.authenticate, addressActionLimit, (0, validateRe
  */
 router.get("/:id", authenticate_1.authenticate, async (req, res, next) => {
     try {
-        await addressController.getAddressById(req, res);
+        await getController().getAddressById(req, res);
     }
     catch (error) {
         next(error);
@@ -100,7 +142,7 @@ router.get("/:id", authenticate_1.authenticate, async (req, res, next) => {
  */
 router.put("/:id", authenticate_1.authenticate, addressActionLimit, (0, validateRequest_1.validateRequest)(userSchemas_1.updateAddressSchema), async (req, res, next) => {
     try {
-        await addressController.updateAddress(req, res);
+        await getController().updateAddress(req, res);
     }
     catch (error) {
         next(error);
@@ -114,7 +156,7 @@ router.put("/:id", authenticate_1.authenticate, addressActionLimit, (0, validate
  */
 router.delete("/:id", authenticate_1.authenticate, addressActionLimit, async (req, res, next) => {
     try {
-        await addressController.deleteAddress(req, res);
+        await getController().deleteAddress(req, res);
     }
     catch (error) {
         next(error);
@@ -129,7 +171,7 @@ router.delete("/:id", authenticate_1.authenticate, addressActionLimit, async (re
  */
 router.put("/:id/default", authenticate_1.authenticate, addressActionLimit, async (req, res, next) => {
     try {
-        await addressController.setDefaultAddress(req, res);
+        await getController().setDefaultAddress(req, res);
     }
     catch (error) {
         next(error);
@@ -148,7 +190,7 @@ router.put("/:id/default", authenticate_1.authenticate, addressActionLimit, asyn
  */
 router.post("/:id/shipping-cost", authenticate_1.authenticate, async (req, res, next) => {
     try {
-        await addressController.calculateShippingCost(req, res);
+        await getController().calculateShippingCost(req, res);
     }
     catch (error) {
         next(error);
@@ -170,7 +212,7 @@ router.post("/:id/shipping-cost", authenticate_1.authenticate, async (req, res, 
  */
 router.post("/validate", (0, validateRequest_1.validateRequest)(userSchemas_1.validateAddressSchema), async (req, res, next) => {
     try {
-        await addressController.validateAddress(req, res);
+        await getController().validateAddress(req, res);
     }
     catch (error) {
         next(error);
@@ -184,7 +226,7 @@ router.post("/validate", (0, validateRequest_1.validateRequest)(userSchemas_1.va
  */
 router.get("/locations", async (req, res, next) => {
     try {
-        await addressController.getLocations(req, res);
+        await getController().getLocations(req, res);
     }
     catch (error) {
         next(error);

@@ -24,14 +24,14 @@ class SessionService extends BaseService_1.BaseService {
             const { userId, deviceInfo, ipAddress, userAgent } = options;
             // Generate tokens
             const sessionId = this.generateSessionId();
-            const accessToken = await this.jwtService.generateAccessToken?.({
+            const accessToken = await this.jwtService.generateAccessToken({
                 userId,
                 sessionId,
-            }) || 'mock-access-token';
-            const refreshToken = await this.jwtService.generateRefreshToken?.({
+            });
+            const refreshToken = await this.jwtService.generateRefreshToken({
                 userId,
                 sessionId,
-            }) || 'mock-refresh-token';
+            });
             const expiresAt = new Date(Date.now() + this.REFRESH_TOKEN_EXPIRY);
             // Create session in database
             const session = await this.sessionRepository.create({
@@ -124,14 +124,14 @@ class SessionService extends BaseService_1.BaseService {
                 throw new types_1.AppError("Invalid refresh token", types_1.HTTP_STATUS.UNAUTHORIZED, types_1.ERROR_CODES.INVALID_TOKEN);
             }
             // Generate new tokens
-            const newAccessToken = await this.jwtService.generateAccessToken?.({
+            const newAccessToken = await this.jwtService.generateAccessToken({
                 userId: session.userId,
                 sessionId: session.sessionId,
-            }) || 'mock-access-token';
-            const newRefreshToken = await this.jwtService.generateRefreshToken?.({
+            });
+            const newRefreshToken = await this.jwtService.generateRefreshToken({
                 userId: session.userId,
                 sessionId: session.sessionId,
-            }) || 'mock-refresh-token';
+            });
             // Update session with new tokens
             const updatedSession = await this.sessionRepository.updateTokens(session.id, newAccessToken, newRefreshToken);
             this.logger.info("Session refreshed successfully", {

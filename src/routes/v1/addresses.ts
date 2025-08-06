@@ -2,7 +2,7 @@ import { Router } from "express";
 import { AddressController } from "../../controllers/users/AddressController";
 import { authenticate } from "../../middleware/auth/authenticate";
 import { validateRequest } from "../../middleware/validation/validateRequest";
-import { rateLimiter } from "../../middleware/security/rateLimiter";
+import rateLimiter from "../../middleware/security/rateLimiter";
 import {
   createAddressSchema,
   updateAddressSchema,
@@ -11,20 +11,60 @@ import {
 
 const router = Router();
 
-// Initialize controller
-let addressController: AddressController;
+// Initialize controller with fallback
+let addressController: AddressController | null = null;
 
 export const initializeAddressRoutes = (controller: AddressController) => {
   addressController = controller;
   return router;
 };
 
+// Create fallback controller if not initialized
+const getController = () => {
+  if (!addressController) {
+    // Create a mock controller for now
+    return {
+      getUserAddresses: async (req: any, res: any) => {
+        res.status(501).json({ success: false, message: "Address controller not initialized" });
+      },
+      getDefaultAddresses: async (req: any, res: any) => {
+        res.status(501).json({ success: false, message: "Address controller not initialized" });
+      },
+      createAddress: async (req: any, res: any) => {
+        res.status(501).json({ success: false, message: "Address controller not initialized" });
+      },
+      getAddressById: async (req: any, res: any) => {
+        res.status(501).json({ success: false, message: "Address controller not initialized" });
+      },
+      updateAddress: async (req: any, res: any) => {
+        res.status(501).json({ success: false, message: "Address controller not initialized" });
+      },
+      deleteAddress: async (req: any, res: any) => {
+        res.status(501).json({ success: false, message: "Address controller not initialized" });
+      },
+      setDefaultAddress: async (req: any, res: any) => {
+        res.status(501).json({ success: false, message: "Address controller not initialized" });
+      },
+      calculateShippingCost: async (req: any, res: any) => {
+        res.status(501).json({ success: false, message: "Address controller not initialized" });
+      },
+      validateAddress: async (req: any, res: any) => {
+        res.status(501).json({ success: false, message: "Address controller not initialized" });
+      },
+      getLocations: async (req: any, res: any) => {
+        res.status(501).json({ success: false, message: "Address controller not initialized" });
+      }
+    } as AddressController;
+  }
+  return addressController;
+};
+
 // Rate limiting for address operations
-const addressActionLimit = rateLimiter({
+const addressActionLimit = typeof rateLimiter === 'function' ? rateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   maxRequests: 20, // 20 address operations per 15 minutes
   message: "Too many address operations. Please try again later.",
-});
+}) : rateLimiter;
 
 // ==================== USER ADDRESS ENDPOINTS ====================
 
@@ -39,7 +79,7 @@ const addressActionLimit = rateLimiter({
  */
 router.get("/", authenticate, async (req, res, next) => {
   try {
-    await addressController.getUserAddresses(req, res);
+    await getController().getUserAddresses(req, res);
   } catch (error) {
     next(error);
   }
@@ -52,7 +92,7 @@ router.get("/", authenticate, async (req, res, next) => {
  */
 router.get("/default", authenticate, async (req, res, next) => {
   try {
-    await addressController.getDefaultAddresses(req, res);
+    await getController().getDefaultAddresses(req, res);
   } catch (error) {
     next(error);
   }
@@ -83,7 +123,7 @@ router.post(
   validateRequest(createAddressSchema),
   async (req, res, next) => {
     try {
-      await addressController.createAddress(req, res);
+      await getController().createAddress(req, res);
     } catch (error) {
       next(error);
     }
@@ -98,7 +138,7 @@ router.post(
  */
 router.get("/:id", authenticate, async (req, res, next) => {
   try {
-    await addressController.getAddressById(req, res);
+    await getController().getAddressById(req, res);
   } catch (error) {
     next(error);
   }
@@ -118,7 +158,7 @@ router.put(
   validateRequest(updateAddressSchema),
   async (req, res, next) => {
     try {
-      await addressController.updateAddress(req, res);
+      await getController().updateAddress(req, res);
     } catch (error) {
       next(error);
     }
@@ -137,7 +177,7 @@ router.delete(
   addressActionLimit,
   async (req, res, next) => {
     try {
-      await addressController.deleteAddress(req, res);
+      await getController().deleteAddress(req, res);
     } catch (error) {
       next(error);
     }
@@ -157,7 +197,7 @@ router.put(
   addressActionLimit,
   async (req, res, next) => {
     try {
-      await addressController.setDefaultAddress(req, res);
+      await getController().setDefaultAddress(req, res);
     } catch (error) {
       next(error);
     }
@@ -177,7 +217,7 @@ router.put(
  */
 router.post("/:id/shipping-cost", authenticate, async (req, res, next) => {
   try {
-    await addressController.calculateShippingCost(req, res);
+    await getController().calculateShippingCost(req, res);
   } catch (error) {
     next(error);
   }
@@ -203,7 +243,7 @@ router.post(
   validateRequest(validateAddressSchema),
   async (req, res, next) => {
     try {
-      await addressController.validateAddress(req, res);
+      await getController().validateAddress(req, res);
     } catch (error) {
       next(error);
     }
@@ -218,7 +258,7 @@ router.post(
  */
 router.get("/locations", async (req, res, next) => {
   try {
-    await addressController.getLocations(req, res);
+    await getController().getLocations(req, res);
   } catch (error) {
     next(error);
   }

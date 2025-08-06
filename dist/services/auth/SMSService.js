@@ -5,8 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SMSService = void 0;
 const axios_1 = __importDefault(require("axios"));
-const environment_1 = require("@/config/environment");
-const api_types_1 = require("@/types/api.types");
+const environment_1 = require("../../config/environment");
+const api_types_1 = require("../../types/api.types");
 class SMSService {
     apiKey;
     senderId;

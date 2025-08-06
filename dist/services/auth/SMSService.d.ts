@@ -1,4 +1,4 @@
-import { SMSNotificationData, NigerianPhoneNumber } from "@/types";
+import { NigerianPhoneNumber } from "../../types";
 export declare class SMSService {
     private apiKey;
     private senderId;

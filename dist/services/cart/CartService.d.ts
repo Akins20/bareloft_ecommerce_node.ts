@@ -134,6 +134,6 @@ export declare class CartService extends BaseService {
     /**
      * Handle service errors
      */
-    protected handleError(message: string, error: any): void;
+    protected handleError(message: string, error: any): never;
 }
 //# sourceMappingURL=CartService.d.ts.map

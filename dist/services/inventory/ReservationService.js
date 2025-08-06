@@ -85,7 +85,10 @@ class ReservationService extends BaseService_1.BaseService {
                     quantity: request.quantity,
                     expiresAt,
                 },
-            }) || { id: 'mock-id', productId: request.productId, quantity: request.quantity };
+            });
+            if (!reservation) {
+                throw new Error('Failed to create stock reservation');
+            }
             // Update inventory reserved quantity (simplified)
             // await this.updateReservedQuantity(request.productId);
             // Clear cache

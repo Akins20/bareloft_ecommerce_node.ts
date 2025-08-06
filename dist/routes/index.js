@@ -4,11 +4,18 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const helmet_1 = require("../middleware/security/helmet");
-const rateLimiter_1 = require("../middleware/security/rateLimiter");
-const requestLogger_1 = require("../middleware/logging/requestLogger");
-const errorHandler_1 = require("../middleware/error/errorHandler");
-const notFound_1 = require("../middleware/error/notFound");
+const cors_1 = __importDefault(require("cors"));
+const helmet_1 = __importDefault(require("../middleware/security/helmet"));
+const rateLimiter_1 = __importDefault(require("../middleware/security/rateLimiter"));
+const requestLogger_1 = __importDefault(require("../middleware/logging/requestLogger"));
+const errorHandler_1 = __importDefault(require("../middleware/error/errorHandler"));
+// NotFound handler doesn't exist, create inline
+const notFoundHandler = (req, res) => {
+    res.status(404).json({
+        success: false,
+        message: `Route ${req.method} ${req.originalUrl} not found`,
+    });
+};
 // Import v1 routes
 const auth_1 = __importDefault(require("./v1/auth"));
 const products_1 = __importDefault(require("./v1/products"));
@@ -21,25 +28,30 @@ const upload_1 = __importDefault(require("./v1/upload"));
 const users_1 = __importDefault(require("./v1/users"));
 const addresses_1 = __importDefault(require("./v1/addresses"));
 const wishlist_1 = __importDefault(require("./v1/wishlist"));
-// Import admin routes
-const admin_1 = __importDefault(require("./admin"));
-// Import webhook routes
-const webhooks_1 = __importDefault(require("./webhooks"));
+// Admin and webhook routes don't exist yet, comment out
+// import adminRoutes from "./admin";
+// import webhookRoutes from "./webhooks";
 const router = (0, express_1.Router)();
 // ==================== GLOBAL MIDDLEWARE ====================
 // Security middleware
-router.use(corsMiddleware);
-router.use(helmet_1.helmetMiddleware);
+router.use((0, cors_1.default)());
+router.use(helmet_1.default);
 // Logging middleware
-router.use(requestLogger_1.requestLogger);
-// Global rate limiting
-router.use((0, rateLimiter_1.rateLimiter)({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    maxRequests: 1000, // 1000 requests per 15 minutes globally
-    message: "Too many requests from this IP. Please try again later.",
-    standardHeaders: true,
-    legacyHeaders: false,
-}));
+router.use(requestLogger_1.default);
+// Global rate limiting (rateLimiter is an object/middleware, not a function)
+if (typeof rateLimiter_1.default === 'function') {
+    router.use((0, rateLimiter_1.default)({
+        windowMs: 15 * 60 * 1000, // 15 minutes
+        maxRequests: 1000, // 1000 requests per 15 minutes globally
+        message: "Too many requests from this IP. Please try again later.",
+        standardHeaders: true,
+        legacyHeaders: false,
+    }));
+}
+else {
+    // Use rateLimiter directly if it's already middleware
+    router.use(rateLimiter_1.default);
+}
 // ==================== API HEALTH CHECK ====================
 /**
  * @route   GET /api/health
@@ -170,9 +182,11 @@ router.use("/v1/wishlist", wishlist_1.default);
 // Utility routes
 router.use("/v1/upload", upload_1.default);
 // ==================== ADMIN ROUTES ====================
-router.use("/admin", admin_1.default);
+// Comment out until admin routes are implemented
+// router.use("/admin", adminRoutes);
 // ==================== WEBHOOK ROUTES ====================
-router.use("/webhooks", webhooks_1.default);
+// Comment out until webhook routes are implemented
+// router.use("/webhooks", webhookRoutes);
 // ==================== API VERSIONING REDIRECTS ====================
 /**
  * Default routes without version prefix redirect to v1
@@ -191,9 +205,9 @@ router.use("/orders", (req, res) => {
 });
 // ==================== ERROR HANDLING ====================
 // 404 handler for unknown routes
-router.use(notFound_1.notFoundHandler);
+router.use(notFoundHandler);
 // Global error handler
-router.use(errorHandler_1.errorHandler);
+router.use(errorHandler_1.default);
 // ==================== ROUTE DOCUMENTATION ====================
 /**
  * @route   GET /api/routes

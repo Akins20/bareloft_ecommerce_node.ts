@@ -17,11 +17,11 @@ class EmailService extends BaseService_1.BaseService {
      */
     initializeTransporter() {
         // Since emailConfig doesn't have provider property, default to SendGrid
-        this.transporter = nodemailer_1.default.createTransporter({
+        this.transporter = nodemailer_1.default.createTransport({
             service: "SendGrid",
             auth: {
                 user: "apikey",
-                pass: process.env.SENDGRID_API_KEY || '',
+                pass: process.env.SENDGRID_API_KEY || "",
             },
         });
     }
@@ -31,13 +31,15 @@ class EmailService extends BaseService_1.BaseService {
     async sendEmail(request) {
         try {
             const mailOptions = {
-                from: request.from || process.env.FROM_EMAIL || 'noreply@bareloft.com',
+                from: request.from || process.env.FROM_EMAIL || "noreply@bareloft.com",
                 to: request.to,
                 subject: request.subject,
                 text: request.message,
                 html: request.htmlContent ||
                     this.generateHtmlContent(request.message, request.recipientName),
-                replyTo: request.replyTo || process.env.REPLY_TO_EMAIL || 'support@bareloft.com',
+                replyTo: request.replyTo ||
+                    process.env.REPLY_TO_EMAIL ||
+                    "support@bareloft.com",
                 attachments: request.attachments,
             };
             const result = await this.transporter.sendMail(mailOptions);
@@ -268,7 +270,7 @@ class EmailService extends BaseService_1.BaseService {
               </div>
             </div>
             
-            <a href="${process.env.BASE_URL || 'https://bareloft.com'}/products" class="button">Start Shopping Now</a>
+            <a href="${process.env.BASE_URL || "https://bareloft.com"}/products" class="button">Start Shopping Now</a>
             
             <p>If you have any questions, feel free to reach out to our support team.</p>
           </div>
@@ -322,7 +324,7 @@ class EmailService extends BaseService_1.BaseService {
             
             <p><strong>Cart Total: ₦${data.cartTotal.toLocaleString()}</strong></p>
             
-            <a href="${process.env.BASE_URL || 'https://bareloft.com'}/cart" class="button">Complete Your Purchase</a>
+            <a href="${process.env.BASE_URL || "https://bareloft.com"}/cart" class="button">Complete Your Purchase</a>
             
             <p>Need help? Our customer support team is here for you!</p>
           </div>
