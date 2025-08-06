@@ -1,4 +1,6 @@
 export declare const uploadConfig: {
+    readonly provider: "cloudinary" | "aws-s3" | "local";
+    readonly baseUrl: string;
     readonly cloudinary: {
         readonly cloudName: string;
         readonly apiKey: string;
@@ -10,6 +12,15 @@ export declare const uploadConfig: {
             readonly categories: "bareloft/categories";
             readonly temp: "bareloft/temp";
         };
+    };
+    readonly aws: {
+        readonly accessKeyId: string;
+        readonly secretAccessKey: string;
+        readonly region: string;
+        readonly bucket: string;
+    };
+    readonly local: {
+        readonly basePath: string;
     };
     readonly limits: {
         readonly fileSize: number;

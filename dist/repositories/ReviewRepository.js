@@ -6,7 +6,7 @@ const BaseRepository_1 = require("./BaseRepository");
 const types_1 = require("../types");
 class ReviewRepository extends BaseRepository_1.BaseRepository {
     constructor(prisma) {
-        super(prisma || new client_1.PrismaClient(), "ProductReview");
+        super(prisma || new client_1.PrismaClient(), "productReview");
     }
     /**
      * Get reviews for a specific product
@@ -30,13 +30,6 @@ class ReviewRepository extends BaseRepository_1.BaseRepository {
                             firstName: true,
                             lastName: true,
                             avatar: true,
-                        },
-                    },
-                    order: {
-                        select: {
-                            id: true,
-                            orderNumber: true,
-                            createdAt: true,
                         },
                     },
                 },
@@ -98,13 +91,6 @@ class ReviewRepository extends BaseRepository_1.BaseRepository {
                             },
                         },
                     },
-                    order: {
-                        select: {
-                            id: true,
-                            orderNumber: true,
-                            createdAt: true,
-                        },
-                    },
                 },
                 orderBy: this.buildOrderBy(params?.sortBy, params?.sortOrder),
                 pagination: {
@@ -122,7 +108,7 @@ class ReviewRepository extends BaseRepository_1.BaseRepository {
      */
     async createReview(userId, data) {
         try {
-            return await this.transaction(async (prisma) => {
+            const result = await this.transaction(async (prisma) => {
                 // Check if user already reviewed this product
                 const existingReview = await prisma.productReview.findFirst({
                     where: {
@@ -137,7 +123,7 @@ class ReviewRepository extends BaseRepository_1.BaseRepository {
                 const purchaseOrder = await prisma.order.findFirst({
                     where: {
                         userId,
-                        status: "delivered",
+                        status: "DELIVERED",
                         items: {
                             some: {
                                 productId: data.productId,
@@ -180,19 +166,13 @@ class ReviewRepository extends BaseRepository_1.BaseRepository {
                                 slug: true,
                             },
                         },
-                        order: {
-                            select: {
-                                id: true,
-                                orderNumber: true,
-                                createdAt: true,
-                            },
-                        },
                     },
                 });
                 // Update product average rating
                 await this.updateProductRating(data.productId);
                 return review;
             });
+            return result;
         }
         catch (error) {
             if (error instanceof types_1.AppError) {
@@ -206,7 +186,7 @@ class ReviewRepository extends BaseRepository_1.BaseRepository {
      */
     async updateReview(reviewId, userId, data) {
         try {
-            return await this.transaction(async (prisma) => {
+            const result = await this.transaction(async (prisma) => {
                 // Verify review belongs to user
                 const existingReview = await prisma.productReview.findFirst({
                     where: { id: reviewId, userId },
@@ -241,6 +221,7 @@ class ReviewRepository extends BaseRepository_1.BaseRepository {
                 }
                 return updatedReview;
             });
+            return result;
         }
         catch (error) {
             if (error instanceof types_1.AppError) {
@@ -254,7 +235,7 @@ class ReviewRepository extends BaseRepository_1.BaseRepository {
      */
     async deleteReview(reviewId, userId) {
         try {
-            return await this.transaction(async (prisma) => {
+            const result = await this.transaction(async (prisma) => {
                 // Verify review belongs to user
                 const existingReview = await prisma.productReview.findFirst({
                     where: { id: reviewId, userId },
@@ -269,6 +250,7 @@ class ReviewRepository extends BaseRepository_1.BaseRepository {
                 await this.updateProductRating(existingReview.productId);
                 return true;
             });
+            return result;
         }
         catch (error) {
             if (error instanceof types_1.AppError) {
@@ -282,12 +264,24 @@ class ReviewRepository extends BaseRepository_1.BaseRepository {
      */
     async addHelpfulVote(reviewId) {
         try {
-            return await this.update(reviewId, { helpfulVotes: { increment: 1 } }, {
-                user: {
-                    select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
+            return await this.prisma.productReview.update({
+                where: { id: reviewId },
+                data: { helpfulVotes: { increment: 1 } },
+                include: {
+                    user: {
+                        select: {
+                            id: true,
+                            firstName: true,
+                            lastName: true,
+                            avatar: true,
+                        },
+                    },
+                    product: {
+                        select: {
+                            id: true,
+                            name: true,
+                            slug: true,
+                        },
                     },
                 },
             });
@@ -335,12 +329,26 @@ class ReviewRepository extends BaseRepository_1.BaseRepository {
      */
     async moderateReview(reviewId, isApproved) {
         try {
-            return await this.transaction(async (prisma) => {
+            const result = await this.transaction(async (prisma) => {
                 const review = await prisma.productReview.update({
                     where: { id: reviewId },
                     data: { isApproved },
                     include: {
-                        product: true,
+                        user: {
+                            select: {
+                                id: true,
+                                firstName: true,
+                                lastName: true,
+                                avatar: true,
+                            },
+                        },
+                        product: {
+                            select: {
+                                id: true,
+                                name: true,
+                                slug: true,
+                            },
+                        },
                     },
                 });
                 // Update product rating if approved
@@ -349,6 +357,7 @@ class ReviewRepository extends BaseRepository_1.BaseRepository {
                 }
                 return review;
             });
+            return result;
         }
         catch (error) {
             throw new types_1.AppError("Error moderating review", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
@@ -428,7 +437,7 @@ class ReviewRepository extends BaseRepository_1.BaseRepository {
         }
     }
     /**
-     * Private: Build order by clause for reviews
+     * Protected: Build order by clause for reviews
      */
     buildOrderBy(sortBy, sortOrder) {
         const order = sortOrder || "desc";

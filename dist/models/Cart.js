@@ -4,7 +4,8 @@ exports.CartSchema = exports.CartModel = void 0;
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
 // Cart Model Schema
-exports.CartModel = prisma.cart;
+// Note: Using CartItem model since Cart model doesn't exist in current Prisma schema
+exports.CartModel = prisma.cartItem;
 // Cart Schema Definition for Prisma
 exports.CartSchema = `
 model Cart {

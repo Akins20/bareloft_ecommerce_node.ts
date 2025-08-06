@@ -1,18 +1,19 @@
 export declare enum OrderStatus {
-    PENDING = "pending",
-    CONFIRMED = "confirmed",
-    PROCESSING = "processing",
-    SHIPPED = "shipped",
-    DELIVERED = "delivered",
-    CANCELLED = "cancelled",
-    REFUNDED = "refunded"
+    PENDING = 0,
+    CONFIRMED = 1,
+    PROCESSING = 2,
+    SHIPPED = 3,
+    DELIVERED = 4,
+    CANCELLED = 5,
+    REFUNDED = 6
 }
 export declare enum PaymentStatus {
-    PENDING = "pending",
-    PAID = "paid",
-    FAILED = "failed",
-    REFUNDED = "refunded",
-    PARTIAL_REFUND = "partial_refund"
+    PENDING = 0,
+    PROCESSING = 1,
+    COMPLETED = 2,
+    FAILED = 3,
+    CANCELLED = 4,
+    REFUNDED = 5
 }
 export declare enum PaymentMethod {
     CARD = "card",
@@ -34,43 +35,57 @@ export interface OrderAddress {
 }
 export interface OrderItem {
     id: string;
+    quantity: number;
+    price: number;
+    total: number;
     orderId: string;
     productId: string;
-    productName: string;
-    productSku: string;
-    productImage?: string;
-    quantity: number;
-    unitPrice: number;
-    totalPrice: number;
     createdAt: Date;
     updatedAt: Date;
+    order?: Order;
+    product?: {
+        id: string;
+        name: string;
+        slug: string;
+        sku: string;
+        price: number;
+        primaryImage?: string;
+    };
 }
 export interface Order {
     id: string;
     orderNumber: string;
-    userId: string;
     status: OrderStatus;
     subtotal: number;
-    taxAmount: number;
-    shippingAmount: number;
-    discountAmount: number;
-    totalAmount: number;
+    tax: number;
+    shippingCost: number;
+    discount: number;
+    total: number;
     currency: string;
     paymentStatus: PaymentStatus;
-    paymentMethod?: PaymentMethod;
+    paymentMethod?: string;
     paymentReference?: string;
-    paidAt?: Date;
-    shippingAddress: OrderAddress;
-    billingAddress: OrderAddress;
-    customerNotes?: string;
-    adminNotes?: string;
-    trackingNumber?: string;
-    estimatedDelivery?: Date;
-    shippedAt?: Date;
-    deliveredAt?: Date;
-    items: OrderItem[];
+    notes?: string;
+    userId: string;
+    shippingAddressId?: string;
+    billingAddressId?: string;
     createdAt: Date;
     updatedAt: Date;
+    user?: {
+        id: string;
+        firstName: string;
+        lastName: string;
+        email: string;
+        phoneNumber: string;
+    };
+    items?: OrderItem[];
+    timelineEvents?: OrderTimelineEvent[];
+    paymentTransactions?: any[];
+    shippingAddress?: OrderAddress;
+    billingAddress?: OrderAddress;
+    _count?: {
+        items: number;
+    };
 }
 export interface CreateOrderRequest {
     shippingAddress: OrderAddress;
@@ -137,12 +152,12 @@ export interface OrderDetailResponse {
 }
 export interface OrderTimelineEvent {
     id: string;
+    type: string;
+    message: string;
+    data?: any;
     orderId: string;
-    status: OrderStatus;
-    description: string;
-    notes?: string;
-    createdBy?: string;
     createdAt: Date;
+    order?: Order;
 }
 export interface CheckoutSession {
     id: string;

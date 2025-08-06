@@ -353,7 +353,7 @@ class UserController extends BaseController_1.BaseController {
                 return;
             }
             // Validate Nigerian phone number format
-            if (!this.isValidNigerianPhoneNumber(phoneNumber)) {
+            if (!this.isValidNigerianPhone(phoneNumber)) {
                 res.status(400).json({
                     success: false,
                     message: "Invalid Nigerian phone number format",
@@ -491,7 +491,7 @@ class UserController extends BaseController_1.BaseController {
         }
         if (data.phoneNumber !== undefined &&
             data.phoneNumber &&
-            !this.isValidNigerianPhoneNumber(data.phoneNumber)) {
+            !this.isValidNigerianPhone(data.phoneNumber)) {
             errors.push("Invalid Nigerian phone number format");
         }
         if (data.dateOfBirth !== undefined && data.dateOfBirth) {
@@ -528,24 +528,6 @@ class UserController extends BaseController_1.BaseController {
             errors.push("New password must be different from current password");
         }
         return errors;
-    }
-    /**
-     * Validate email format
-     */
-    isValidEmail(email) {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return emailRegex.test(email);
-    }
-    /**
-     * Validate Nigerian phone number format
-     */
-    isValidNigerianPhoneNumber(phoneNumber) {
-        // Nigerian phone number patterns
-        const patterns = [
-            /^(\+234|234|0)(70|71|80|81|90|91|70|71)\d{8}$/, // Mobile numbers
-            /^(\+234|234|0)(1)\d{8}$/, // Lagos landline
-        ];
-        return patterns.some((pattern) => pattern.test(phoneNumber.replace(/\s+/g, "")));
     }
 }
 exports.UserController = UserController;

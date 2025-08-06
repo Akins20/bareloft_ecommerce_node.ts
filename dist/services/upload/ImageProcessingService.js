@@ -118,7 +118,7 @@ class ImageProcessingService extends BaseService_1.BaseService {
                 const processed = await this.processImage(imageBuffer, {
                     resize: {
                         width: variant.width,
-                        height: variant.height,
+                        height: variant.height ?? variant.width,
                         fit: "cover",
                     },
                     format: "webp",
@@ -177,7 +177,7 @@ class ImageProcessingService extends BaseService_1.BaseService {
                 size: imageBuffer.length,
                 hasAlpha: metadata.hasAlpha || false,
                 channels: metadata.channels || 3,
-                density: metadata.density,
+                density: metadata.density ?? 72,
                 isAnimated: metadata.pages ? metadata.pages > 1 : false,
             };
         }
@@ -238,7 +238,7 @@ class ImageProcessingService extends BaseService_1.BaseService {
                 { name: "thumbnail", width: 150, height: 150, quality: 70 },
             ]);
             return {
-                original: variants.original,
+                original: variants.original || variants.large,
                 large: variants.large,
                 medium: variants.medium,
                 small: variants.small,

@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.OrderRepository = void 0;
+const client_1 = require("@prisma/client");
 const BaseRepository_1 = require("./BaseRepository");
 const types_1 = require("../types");
 class OrderRepository extends BaseRepository_1.BaseRepository {
@@ -16,20 +17,24 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
                 items: {
                     include: {
                         product: {
-                            include: {
-                                images: {
-                                    where: { isPrimary: true },
-                                    take: 1,
-                                },
+                            select: {
+                                id: true,
+                                name: true,
+                                slug: true,
+                                sku: true,
+                                price: true,
+                                primaryImage: true,
                             },
                         },
                     },
                 },
                 user: true,
-                timeline: {
+                timelineEvents: {
                     orderBy: { createdAt: "desc" },
                 },
-                transactions: true,
+                paymentTransactions: true,
+                shippingAddress: true,
+                billingAddress: true,
             });
             if (!order)
                 return null;
@@ -37,6 +42,7 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
             const customerStats = await this.getCustomerOrderStats(order.userId);
             return {
                 ...order,
+                timeline: order.timelineEvents || [],
                 customer: {
                     id: order.user.id,
                     firstName: order.user.firstName,
@@ -61,7 +67,23 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
             return await this.transaction(async (prisma) => {
                 // Create the order
                 const order = await prisma.order.create({
-                    data: orderData,
+                    data: {
+                        orderNumber: orderData.orderNumber,
+                        userId: orderData.userId,
+                        status: orderData.status || client_1.OrderStatus.PENDING,
+                        subtotal: orderData.subtotal,
+                        tax: orderData.tax || 0,
+                        shippingCost: orderData.shippingCost || 0,
+                        discount: orderData.discount || 0,
+                        total: orderData.total,
+                        currency: orderData.currency || "NGN",
+                        paymentStatus: orderData.paymentStatus || client_1.PaymentStatus.PENDING,
+                        paymentMethod: orderData.paymentMethod,
+                        paymentReference: orderData.paymentReference,
+                        notes: orderData.notes,
+                        shippingAddressId: orderData.shippingAddressId,
+                        billingAddressId: orderData.billingAddressId,
+                    },
                     include: {
                         user: true,
                     },
@@ -69,7 +91,10 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
                 // Create order items
                 await prisma.orderItem.createMany({
                     data: items.map((item) => ({
-                        ...item,
+                        productId: item.productId,
+                        quantity: item.quantity,
+                        price: item.price,
+                        total: item.total,
                         orderId: order.id,
                     })),
                 });
@@ -77,9 +102,8 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
                 await prisma.orderTimelineEvent.create({
                     data: {
                         orderId: order.id,
-                        status: orderData.status || "PENDING",
-                        description: "Order created",
-                        createdBy: order.userId,
+                        type: "ORDER_CREATED",
+                        message: "Order created",
                     },
                 });
                 // Get the complete order with all relations
@@ -111,33 +135,31 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
                 // Prepare update data
                 const updateData = {
                     status: statusData.status,
-                    adminNotes: statusData.adminNotes,
-                    trackingNumber: statusData.trackingNumber,
-                    estimatedDelivery: statusData.estimatedDelivery,
+                    notes: statusData.adminNotes,
                 };
-                // Set timestamp based on status
-                const now = new Date();
-                switch (statusData.status) {
-                    case "SHIPPED":
-                        updateData.shippedAt = now;
-                        break;
-                    case "DELIVERED":
-                        updateData.deliveredAt = now;
-                        break;
-                }
                 // Update the order
                 await prisma.order.update({
                     where: { id: orderId },
-                    data: updateData,
+                    data: {
+                        status: updateData.status,
+                        paymentStatus: updateData.paymentStatus,
+                        paymentMethod: updateData.paymentMethod,
+                        paymentReference: updateData.paymentReference,
+                        notes: updateData.notes,
+                    },
                 });
                 // Create timeline event
                 await prisma.orderTimelineEvent.create({
                     data: {
                         orderId,
-                        status: statusData.status,
-                        description: this.getStatusDescription(statusData.status),
-                        notes: statusData.adminNotes,
-                        createdBy: statusData.updatedBy,
+                        type: "STATUS_CHANGE",
+                        message: this.getStatusDescription(statusData.status),
+                        data: {
+                            oldStatus: currentOrder.status,
+                            newStatus: statusData.status,
+                            notes: statusData.adminNotes,
+                            updatedBy: statusData.updatedBy,
+                        },
                     },
                 });
                 // Return updated order
@@ -232,16 +254,21 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
                 orderNumber: order.orderNumber,
                 status: order.status,
                 paymentStatus: order.paymentStatus,
-                totalAmount: Number(order.totalAmount),
+                totalAmount: Number(order.total),
                 currency: order.currency,
                 itemCount: order._count.items,
                 customerName: `${order.user.firstName} ${order.user.lastName}`,
                 createdAt: order.createdAt,
-                estimatedDelivery: order.estimatedDelivery,
+                estimatedDelivery: undefined, // Field not in schema
             }));
             return {
                 orders,
-                pagination: result.pagination,
+                pagination: {
+                    page: result.pagination.currentPage,
+                    limit: result.pagination.itemsPerPage,
+                    total: result.pagination.totalItems,
+                    totalPages: result.pagination.totalPages,
+                },
                 summary,
             };
         }
@@ -262,10 +289,7 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
                             product: {
                                 select: {
                                     name: true,
-                                    images: {
-                                        where: { isPrimary: true },
-                                        take: 1,
-                                    },
+                                    primaryImage: true,
                                 },
                             },
                         },
@@ -283,12 +307,12 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
                 orderNumber: order.orderNumber,
                 status: order.status,
                 paymentStatus: order.paymentStatus,
-                totalAmount: Number(order.totalAmount),
+                totalAmount: Number(order.total),
                 currency: order.currency,
                 itemCount: order._count.items,
                 customerName: "", // Not needed for user's own orders
                 createdAt: order.createdAt,
-                estimatedDelivery: order.estimatedDelivery,
+                estimatedDelivery: undefined, // Field not in schema
             }));
             return {
                 data: orders,
@@ -329,12 +353,12 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
                 orderNumber: order.orderNumber,
                 status: order.status,
                 paymentStatus: order.paymentStatus,
-                totalAmount: Number(order.totalAmount),
+                totalAmount: Number(order.total),
                 currency: order.currency,
                 itemCount: order._count.items,
                 customerName: `${order.user.firstName} ${order.user.lastName}`,
                 createdAt: order.createdAt,
-                estimatedDelivery: order.estimatedDelivery,
+                estimatedDelivery: undefined, // Field not in schema
             }));
         }
         catch (error) {
@@ -353,17 +377,17 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
             const [pendingPayment, processingDelayed, shippingDelayed] = await Promise.all([
                 // Orders with pending payment for more than 1 day
                 this.getOrderSummaries({
-                    paymentStatus: "PENDING",
+                    paymentStatus: client_1.PaymentStatus.PENDING,
                     createdAt: { lt: oneDayAgo },
                 }),
                 // Orders in processing for more than 3 days
                 this.getOrderSummaries({
-                    status: "PROCESSING",
+                    status: client_1.OrderStatus.PROCESSING,
                     createdAt: { lt: threeDaysAgo },
                 }),
                 // Shipped orders without delivery confirmation after estimated delivery
                 this.getOrderSummaries({
-                    status: "SHIPPED",
+                    status: client_1.OrderStatus.SHIPPED,
                     estimatedDelivery: { lt: now },
                 }),
             ]);
@@ -431,25 +455,32 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
                 if (!order) {
                     throw new types_1.AppError("Order not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
                 }
-                if (["DELIVERED", "CANCELLED", "REFUNDED"].includes(order.status)) {
+                const nonCancellableStatuses = [
+                    client_1.OrderStatus.DELIVERED,
+                    client_1.OrderStatus.CANCELLED,
+                    client_1.OrderStatus.REFUNDED
+                ];
+                if (nonCancellableStatuses.includes(order.status)) {
                     throw new types_1.AppError("Order cannot be cancelled", types_1.HTTP_STATUS.BAD_REQUEST, types_1.ERROR_CODES.VALIDATION_ERROR);
                 }
                 // Update order status
                 await prisma.order.update({
                     where: { id: orderId },
                     data: {
-                        status: "CANCELLED",
-                        adminNotes: reason,
+                        status: client_1.OrderStatus.CANCELLED,
+                        notes: reason,
                     },
                 });
                 // Create timeline event
                 await prisma.orderTimelineEvent.create({
                     data: {
                         orderId,
-                        status: "CANCELLED",
-                        description: "Order cancelled",
-                        notes: reason,
-                        createdBy: cancelledBy,
+                        type: "ORDER_CANCELLED",
+                        message: "Order cancelled",
+                        data: {
+                            reason,
+                            cancelledBy,
+                        },
                     },
                 });
                 // Return updated order
@@ -460,6 +491,32 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
         catch (error) {
             this.handleError("Error cancelling order", error);
             throw error;
+        }
+    }
+    /**
+     * Find verified purchase for review
+     */
+    async findVerifiedPurchase(userId, productId) {
+        try {
+            const order = await this.findFirst({
+                userId,
+                status: client_1.OrderStatus.DELIVERED,
+                paymentStatus: client_1.PaymentStatus.COMPLETED,
+                items: {
+                    some: {
+                        productId,
+                    },
+                },
+            }, {
+                select: {
+                    id: true,
+                },
+            });
+            return order ? { orderId: order.id } : null;
+        }
+        catch (error) {
+            this.handleError("Error finding verified purchase", error);
+            return null;
         }
     }
     /**
@@ -493,10 +550,10 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
         try {
             const result = await this.aggregate({
                 userId,
-                status: { not: "CANCELLED" },
+                status: { not: client_1.OrderStatus.CANCELLED },
             }, {
                 _count: { id: true },
-                _sum: { totalAmount: true },
+                _sum: { total: true },
             });
             return {
                 totalOrders: result._count.id,
@@ -509,25 +566,25 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
     }
     getStatusDescription(status) {
         const descriptions = {
-            PENDING: "Order is pending confirmation",
-            CONFIRMED: "Order has been confirmed",
-            PROCESSING: "Order is being processed",
-            SHIPPED: "Order has been shipped",
-            DELIVERED: "Order has been delivered",
-            CANCELLED: "Order has been cancelled",
-            REFUNDED: "Order has been refunded",
+            [client_1.OrderStatus.PENDING]: "Order is pending confirmation",
+            [client_1.OrderStatus.CONFIRMED]: "Order has been confirmed",
+            [client_1.OrderStatus.PROCESSING]: "Order is being processed",
+            [client_1.OrderStatus.SHIPPED]: "Order has been shipped",
+            [client_1.OrderStatus.DELIVERED]: "Order has been delivered",
+            [client_1.OrderStatus.CANCELLED]: "Order has been cancelled",
+            [client_1.OrderStatus.REFUNDED]: "Order has been refunded",
         };
         return (descriptions[status] ||
             `Order status changed to ${status}`);
     }
     async getOrdersSummary(where) {
         try {
-            const result = await this.aggregate({ ...where, status: { not: "CANCELLED" } }, {
+            const result = await this.aggregate({ ...where, status: { not: client_1.OrderStatus.CANCELLED } }, {
                 _count: { id: true },
-                _sum: { totalAmount: true },
+                _sum: { total: true },
             });
             const totalOrders = result._count.id;
-            const totalRevenue = Number(result._sum.totalAmount) || 0;
+            const totalRevenue = Number(result._sum.total) || 0;
             const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
             return {
                 totalRevenue,
@@ -565,12 +622,12 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
                 orderNumber: order.orderNumber,
                 status: order.status,
                 paymentStatus: order.paymentStatus,
-                totalAmount: Number(order.totalAmount),
+                totalAmount: Number(order.total),
                 currency: order.currency,
                 itemCount: order._count.items,
                 customerName: `${order.user.firstName} ${order.user.lastName}`,
                 createdAt: order.createdAt,
-                estimatedDelivery: order.estimatedDelivery,
+                estimatedDelivery: undefined, // Field not in schema
             }));
         }
         catch (error) {
@@ -579,8 +636,8 @@ class OrderRepository extends BaseRepository_1.BaseRepository {
     }
     async getRevenue(where) {
         try {
-            const result = await this.aggregate({ ...where, status: { not: "CANCELLED" } }, { _sum: { totalAmount: true } });
-            return Number(result._sum.totalAmount) || 0;
+            const result = await this.aggregate({ ...where, status: { not: client_1.OrderStatus.CANCELLED } }, { _sum: { total: true } });
+            return Number(result._sum.total) || 0;
         }
         catch (error) {
             return 0;

@@ -1,9 +1,10 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, AddressType } from "@prisma/client";
 import { BaseRepository } from "./BaseRepository";
-import { Address, CreateAddressRequest, UpdateAddressRequest, NigerianPhoneNumber, NigerianState } from "../types";
+import { Address, NigerianPhoneNumber, NigerianState } from "../types/common.types";
+import { CreateAddressRequest, UpdateAddressRequest } from "../types/user.types";
 interface CreateAddressData {
     userId: string;
-    type: "shipping" | "billing";
+    type: AddressType;
     firstName: string;
     lastName: string;
     company?: string;
@@ -17,7 +18,7 @@ interface CreateAddressData {
     isDefault: boolean;
 }
 interface UpdateAddressData {
-    type?: "shipping" | "billing";
+    type?: AddressType;
     firstName?: string;
     lastName?: string;
     company?: string;
@@ -38,7 +39,7 @@ export declare class AddressRepository extends BaseRepository<Address, CreateAdd
     /**
      * Get user's default address by type
      */
-    findDefaultAddress(userId: string, type?: "shipping" | "billing"): Promise<Address | null>;
+    findDefaultAddress(userId: string, type?: AddressType): Promise<Address | null>;
     /**
      * Create new address
      */
@@ -70,6 +71,10 @@ export declare class AddressRepository extends BaseRepository<Address, CreateAdd
      * Helper: Validate Nigerian phone number
      */
     private isValidNigerianPhone;
+    /**
+     * Alias for setAsDefault (for backward compatibility)
+     */
+    setDefaultAddress(addressId: string, userId: string): Promise<Address>;
 }
 export {};
 //# sourceMappingURL=AddressRepository.d.ts.map

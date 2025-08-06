@@ -1,3 +1,4 @@
+import { PaginationMeta } from '../types/common.types';
 /**
  * Base service class providing common functionality
  */
@@ -19,5 +20,9 @@ export declare abstract class BaseService {
      * Sanitize input data
      */
     protected sanitizeInput(data: any): any;
+    /**
+     * Create pagination metadata
+     */
+    protected createPagination(page: number, limit: number, total: number): PaginationMeta;
 }
 //# sourceMappingURL=BaseService.d.ts.map

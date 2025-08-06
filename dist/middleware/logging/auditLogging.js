@@ -583,7 +583,7 @@ const auditLogger = (req, res, next) => {
             // Additional metadata
             metadata: {
                 ...auditEvent.metadata,
-                environment: environment_1.environment.NODE_ENV,
+                environment: environment_1.config.nodeEnv,
                 timestamp: new Date().toISOString(),
                 timezone: "Africa/Lagos",
                 serverHostname: require("os").hostname(),
@@ -592,13 +592,13 @@ const auditLogger = (req, res, next) => {
             },
             // Nigerian market context
             nigerianContext: {
-                detectedState: detectStateFromIP(req.ip),
+                detectedState: req.ip ? detectStateFromIP(req.ip) : null,
                 isMobileDevice: /Mobile|Android|iPhone|iPad/i.test(req.get("User-Agent") || ""),
                 networkProvider: req.user?.phoneNumber
-                    ? nigerian_1.PhoneUtils.getProvider(req.user.phoneNumber)
+                    ? nigerian_1.NigerianPhoneUtils.detectNetwork(req.user.phoneNumber)
                     : null,
-                isNigerianIP: isNigerianIP(req.ip),
-                isPeakHour: nigerian_1.MarketUtils.isPeakTime(),
+                isNigerianIP: req.ip ? isNigerianIP(req.ip) : false,
+                isPeakHour: nigerian_1.NigerianMarketplaceUtils.getPeakTrafficTimes().dailyPeaks.some(peak => peak.hour === new Date().getHours()),
                 currency: "NGN",
             },
             // Security context
@@ -675,7 +675,7 @@ const auditLogger = (req, res, next) => {
             auditLog.security.threats.length > 0) {
             setImmediate(() => triggerSecurityAlert(auditLog));
         }
-        originalEnd.call(this, chunk, ...args);
+        return originalEnd.call(this, chunk, ...args);
     };
     next();
 };
@@ -732,7 +732,7 @@ const financialAuditLogger = (req, res, next) => {
             },
         };
         winston_1.logger.info("FINANCIAL_AUDIT", financialLog);
-        originalEnd.call(this, chunk, ...args);
+        return originalEnd.call(this, chunk, ...args);
     };
     next();
 };
@@ -789,7 +789,7 @@ const adminAuditLogger = (req, res, next) => {
             },
         };
         winston_1.logger.info("ADMIN_AUDIT", adminLog);
-        originalEnd.call(this, chunk, ...args);
+        return originalEnd.call(this, chunk, ...args);
     };
     next();
 };
@@ -801,7 +801,7 @@ const authenticationAuditLogger = (req, res, next) => {
     }
     const originalEnd = res.end;
     res.end = function (chunk, ...args) {
-        const authAction = req.path.split("/").pop();
+        const authAction = req.path.split("/").pop() || "unknown";
         const isSuccess = res.statusCode >= 200 && res.statusCode < 300;
         const authLog = {
             eventType: "AUTHENTICATION_EVENT",
@@ -825,8 +825,8 @@ const authenticationAuditLogger = (req, res, next) => {
                 location: {
                     ip: req.ip,
                     country: "NG",
-                    state: detectStateFromIP(req.ip),
-                    isNigerianIP: isNigerianIP(req.ip),
+                    state: req.ip ? detectStateFromIP(req.ip) : null,
+                    isNigerianIP: req.ip ? isNigerianIP(req.ip) : false,
                 },
             },
             security: {
@@ -853,7 +853,7 @@ const authenticationAuditLogger = (req, res, next) => {
         };
         const logLevel = !isSuccess && authAction === "login" ? "warn" : "info";
         winston_1.logger[logLevel]("AUTH_AUDIT", authLog);
-        originalEnd.call(this, chunk, ...args);
+        return originalEnd.call(this, chunk, ...args);
     };
     next();
 };
@@ -909,7 +909,7 @@ const dataAccessAuditLogger = (req, res, next) => {
             },
         };
         winston_1.logger.info("DATA_ACCESS_AUDIT", dataLog);
-        originalEnd.call(this, chunk, ...args);
+        return originalEnd.call(this, chunk, ...args);
     };
     next();
 };
@@ -954,13 +954,13 @@ const performanceAuditLogger = (threshold = 1000) => {
                     context: {
                         timestamp: new Date().toISOString(),
                         requestId: req.id,
-                        environment: environment_1.environment.NODE_ENV,
+                        environment: environment_1.config.nodeEnv,
                         nodeVersion: process.version,
                     },
                 };
                 winston_1.logger.warn("PERFORMANCE_AUDIT", performanceLog);
             }
-            originalEnd.call(this, chunk, ...args);
+            return originalEnd.call(this, chunk, ...args);
         };
         next();
     };
@@ -1058,7 +1058,7 @@ const calculateAuthRiskLevel = (req, action, success) => {
     let risk = 0;
     if (!success && action === "login")
         risk += 2;
-    if (!isNigerianIP(req.ip))
+    if (req.ip && !isNigerianIP(req.ip))
         risk += 1;
     if (action === "signup")
         risk += 1;
@@ -1075,7 +1075,7 @@ const detectAuthThreats = (req, action, success) => {
     const threats = [];
     if (!success && action === "login")
         threats.push("failed_login");
-    if (!isNigerianIP(req.ip))
+    if (req.ip && !isNigerianIP(req.ip))
         threats.push("foreign_ip");
     const userAgent = req.get("User-Agent") || "";
     if (/bot|crawler|automated/i.test(userAgent))
@@ -1171,7 +1171,7 @@ const generateAuditSummary = (timeframe = "daily") => {
             context: {
                 timestamp: new Date().toISOString(),
                 generatedBy: "system",
-                environment: environment_1.environment.NODE_ENV,
+                environment: environment_1.config.nodeEnv,
             },
         };
         winston_1.logger.info("AUDIT_SUMMARY", summaryLog);

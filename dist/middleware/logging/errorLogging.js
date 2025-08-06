@@ -4,6 +4,46 @@ exports.errorLogger = void 0;
 const winston_1 = require("../../utils/logger/winston");
 const environment_1 = require("../../config/environment");
 /**
+ * 🧹 Sanitize sensitive data for logging
+ */
+const sanitizeForLogging = (data) => {
+    if (!data || typeof data !== "object")
+        return data;
+    const sensitiveFields = [
+        "password",
+        "token",
+        "authorization",
+        "cookie",
+        "session",
+        "secret",
+        "key",
+        "otp",
+        "pin",
+        "cvv",
+        "cardNumber",
+        "accountNumber",
+    ];
+    const sanitized = JSON.parse(JSON.stringify(data));
+    const recursiveSanitize = (obj) => {
+        if (Array.isArray(obj)) {
+            return obj.map(recursiveSanitize);
+        }
+        if (obj && typeof obj === "object") {
+            for (const [key, value] of Object.entries(obj)) {
+                const lowerKey = key.toLowerCase();
+                if (sensitiveFields.some((field) => lowerKey.includes(field))) {
+                    obj[key] = "[REDACTED]";
+                }
+                else if (typeof value === "object") {
+                    obj[key] = recursiveSanitize(value);
+                }
+            }
+        }
+        return obj;
+    };
+    return recursiveSanitize(sanitized);
+};
+/**
  * 🎯 Classify error for appropriate handling
  */
 const classifyError = (error, req) => {
@@ -78,7 +118,7 @@ const classifyError = (error, req) => {
  * 📧 Send alert for critical errors
  */
 const sendErrorAlert = async (error, req, context) => {
-    if (!context.shouldAlert || environment_1.environment.NODE_ENV !== "production") {
+    if (!context.shouldAlert || environment_1.config.nodeEnv !== "production") {
         return;
     }
     // This would integrate with your alerting system
@@ -116,7 +156,7 @@ const errorLogger = (error, req, res, next) => {
             name: error.name,
             code: error.errorCode || error.code,
             statusCode: error.statusCode || 500,
-            stack: environment_1.environment.NODE_ENV === "development" ? error.stack : undefined,
+            stack: environment_1.config.nodeEnv === "development" ? error.stack : undefined,
             details: error.details,
             isOperational: error.isOperational,
         },

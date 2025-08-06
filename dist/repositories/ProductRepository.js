@@ -151,22 +151,21 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
             if (inStock || availability) {
                 switch (availability) {
                     case "in_stock":
-                        where.inventory = { quantity: { gt: 0 } };
+                        where.stock = { gt: 0 };
                         break;
                     case "out_of_stock":
-                        where.inventory = { quantity: { lte: 0 } };
+                        where.stock = { lte: 0 };
                         break;
                     case "low_stock":
-                        where.inventory = {
-                            quantity: {
-                                gt: 0,
-                                lte: { path: ["lowStockThreshold"] },
-                            },
-                        };
+                        // For now, consider products with stock <= 10 as low stock
+                        where.AND = [
+                            { stock: { gt: 0 } },
+                            { stock: { lte: 10 } }
+                        ];
                         break;
                     default:
                         if (inStock) {
-                            where.inventory = { quantity: { gt: 0 } };
+                            where.stock = { gt: 0 };
                         }
                 }
             }
@@ -254,9 +253,9 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
                 isActive: true,
                 ...filters,
             };
-            // Add inventory filter for stock
+            // Add stock filter
             if (filters.inStock) {
-                where.inventory = { quantity: { gt: 0 } };
+                where.stock = { gt: 0 };
                 delete where.inStock;
             }
             return await this.search(searchTerm, searchFields, where, {
@@ -288,7 +287,7 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
             const result = await this.findMany({
                 isActive: true,
                 isFeatured: true,
-                inventory: { quantity: { gt: 0 } },
+                stock: { gt: 0 },
             }, {
                 include: {
                     category: true,
@@ -296,7 +295,6 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
                         where: { isPrimary: true },
                         take: 1,
                     },
-                    inventory: true,
                     reviews: {
                         select: { rating: true },
                     },
@@ -326,7 +324,6 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
                         where: { isPrimary: true },
                         take: 1,
                     },
-                    inventory: true,
                     reviews: {
                         select: { rating: true },
                     },
@@ -354,7 +351,7 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
                 categoryId: currentProduct.categoryId,
                 isActive: true,
                 id: { not: productId },
-                inventory: { quantity: { gt: 0 } },
+                stock: { gt: 0 },
             }, {
                 include: {
                     category: true,
@@ -362,7 +359,6 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
                         where: { isPrimary: true },
                         take: 1,
                     },
-                    inventory: true,
                     reviews: {
                         select: { rating: true },
                     },
@@ -393,15 +389,12 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
                 include: {
                     category: true,
                     images: {
-                        where: { isPrimary: true },
+                        orderBy: { position: "asc" },
                         take: 1,
                     },
-                    inventory: true,
                     orderItems: {
                         include: {
-                            order: {
-                                where: { status: "DELIVERED" },
-                            },
+                            order: true,
                         },
                     },
                     reviews: {
@@ -414,7 +407,7 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
                 .map((product) => ({
                 ...product,
                 salesCount: product.orderItems
-                    .filter((item) => item.order.status === "DELIVERED")
+                    .filter((item) => item.order?.status === "DELIVERED")
                     .reduce((sum, item) => sum + item.quantity, 0),
             }))
                 .sort((a, b) => b.salesCount - a.salesCount)
@@ -433,24 +426,21 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
         try {
             const result = await this.findMany({
                 isActive: true,
-                inventory: {
-                    quantity: {
-                        gt: 0,
-                        lte: { path: ["lowStockThreshold"] },
-                    },
+                stock: {
+                    gt: 0,
+                    lte: 10, // Consider products with stock <= 10 as low stock
                 },
             }, {
                 include: {
                     category: true,
-                    inventory: true,
                 },
-                orderBy: [{ inventory: { quantity: "asc" } }],
+                orderBy: [{ stock: "asc" }],
                 pagination: limit ? { page: 1, limit } : undefined,
             });
             return result.data.map((product) => ({
                 ...product,
-                currentStock: product.inventory?.quantity || 0,
-                threshold: product.inventory?.lowStockThreshold || 0,
+                currentStock: product.stock || 0,
+                threshold: product.lowStockThreshold || 0,
             }));
         }
         catch (error) {
@@ -465,11 +455,10 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
         try {
             const result = await this.findMany({
                 isActive: true,
-                inventory: { quantity: { lte: 0 } },
+                stock: { lte: 0 },
             }, {
                 include: {
                     category: true,
-                    inventory: true,
                 },
                 orderBy: { updatedAt: "desc" },
                 pagination: limit ? { page: 1, limit } : undefined,
@@ -492,19 +481,17 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
                 this.count({ isActive: false }),
                 this.count({
                     isActive: true,
-                    inventory: { quantity: { gt: 0 } },
+                    stock: { gt: 0 },
                 }),
                 this.count({
                     isActive: true,
-                    inventory: { quantity: { lte: 0 } },
+                    stock: { lte: 0 },
                 }),
                 this.count({
                     isActive: true,
-                    inventory: {
-                        quantity: {
-                            gt: 0,
-                            lte: { path: ["lowStockThreshold"] },
-                        },
+                    stock: {
+                        gt: 0,
+                        lte: 10, // Consider stock <= 10 as low stock
                     },
                 }),
                 this.count({ isFeatured: true }),
@@ -512,13 +499,13 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
                 this.getBrandAnalytics(),
                 this.getPriceAnalytics(),
             ]);
-            // Calculate total inventory value
-            const inventoryValue = await this.prisma.inventory.aggregate({
+            // Calculate total inventory value from product stock
+            const inventoryValue = await this.prisma.product.aggregate({
                 _sum: {
-                    quantity: true,
+                    stock: true,
                 },
                 where: {
-                    product: { isActive: true },
+                    isActive: true,
                 },
             });
             const avgPriceResult = await this.aggregate({ isActive: true }, { _avg: { price: true } });
@@ -625,11 +612,11 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
                 this.count(baseWhere),
                 this.count({
                     ...baseWhere,
-                    inventory: { quantity: { gt: 0 } },
+                    stock: { gt: 0 },
                 }),
                 this.count({
                     ...baseWhere,
-                    inventory: { quantity: { lte: 0 } },
+                    stock: { lte: 0 },
                 }),
                 this.count({
                     ...baseWhere,
@@ -672,9 +659,9 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
             ...product,
             averageRating: Math.round(averageRating * 10) / 10,
             totalReviews: product._count?.reviews || 0,
-            isInStock: product.inventory?.quantity > 0,
+            isInStock: product.stock > 0,
             discountPercentage,
-            primaryImage: product.images?.[0]?.imageUrl || null,
+            primaryImage: product.images?.[0]?.url || null,
         };
     }
     async getCategoryAnalytics() {

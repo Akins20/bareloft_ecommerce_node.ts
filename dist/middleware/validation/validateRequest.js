@@ -212,13 +212,14 @@ const validateRequest = (options) => {
                     ip: req.ip,
                     userAgent: req.get("User-Agent"),
                 });
-                return res.status(400).json({
+                res.status(400).json({
                     success: false,
                     error: "VALIDATION_ERROR",
                     message: "Request validation failed",
                     details: errors,
                     code: "VAL_001",
                 });
+                return;
             }
             next();
         }
@@ -237,6 +238,7 @@ const validateRequest = (options) => {
                 message: "Validation service temporarily unavailable",
                 code: "VAL_500",
             });
+            return;
         }
     };
 };

@@ -32,9 +32,17 @@ export declare class RedisService extends BaseService {
      */
     setex(key: string, seconds: number, value: string): Promise<string>;
     /**
+     * Set a JSON object with expiration
+     */
+    setexJSON<T>(key: string, seconds: number, value: T): Promise<string>;
+    /**
      * Get a value by key
      */
     get(key: string): Promise<string | null>;
+    /**
+     * Get a parsed JSON value by key
+     */
+    getJSON<T>(key: string): Promise<T | null>;
     /**
      * Delete one or more keys
      */
@@ -146,7 +154,7 @@ export declare class RedisService extends BaseService {
     /**
      * Create a pipeline for batch operations
      */
-    pipeline(): Redis.Pipeline;
+    pipeline(): any;
     /**
      * Publish message to channel
      */

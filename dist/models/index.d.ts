@@ -26,14 +26,14 @@ export declare const ProductModels: {
     WishlistItem: import(".prisma/client").Prisma.WishlistItemDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
 };
 export declare const ShoppingModels: {
-    Cart: any;
+    Cart: import(".prisma/client").Prisma.CartItemDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     CartItem: import(".prisma/client").Prisma.CartItemDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     Order: import(".prisma/client").Prisma.OrderDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     OrderItem: import(".prisma/client").Prisma.OrderItemDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     OrderTimelineEvent: import(".prisma/client").Prisma.OrderTimelineEventDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
 };
 export declare const InventoryModels: {
-    Inventory: any;
+    Inventory: import(".prisma/client").Prisma.ProductDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     InventoryMovement: import(".prisma/client").Prisma.InventoryMovementDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     StockReservation: import(".prisma/client").Prisma.StockReservationDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
 };
@@ -60,12 +60,12 @@ export declare const AllModels: {
     ProductImage: import(".prisma/client").Prisma.ProductImageDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     ProductReview: import(".prisma/client").Prisma.ProductReviewDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     WishlistItem: import(".prisma/client").Prisma.WishlistItemDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
-    Cart: any;
+    Cart: import(".prisma/client").Prisma.CartItemDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     CartItem: import(".prisma/client").Prisma.CartItemDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     Order: import(".prisma/client").Prisma.OrderDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     OrderItem: import(".prisma/client").Prisma.OrderItemDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     OrderTimelineEvent: import(".prisma/client").Prisma.OrderTimelineEventDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
-    Inventory: any;
+    Inventory: import(".prisma/client").Prisma.ProductDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     InventoryMovement: import(".prisma/client").Prisma.InventoryMovementDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     StockReservation: import(".prisma/client").Prisma.StockReservationDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     PaymentTransaction: import(".prisma/client").Prisma.PaymentTransactionDelegate<import("@prisma/client/runtime/library").DefaultArgs>;

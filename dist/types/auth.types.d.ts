@@ -1,7 +1,8 @@
 import { BaseEntity, NigerianPhoneNumber } from './common.types';
 import { PublicUser } from './user.types';
 import { Request } from 'express';
-export type UserRole = 'customer' | 'admin' | 'super_admin';
+export { PublicUser };
+export type UserRole = 'CUSTOMER' | 'ADMIN' | 'SUPER_ADMIN';
 export type OTPPurpose = 'login' | 'signup' | 'password_reset' | 'phone_verification';
 export interface OTPCode extends BaseEntity {
     phoneNumber: NigerianPhoneNumber;
@@ -11,6 +12,10 @@ export interface OTPCode extends BaseEntity {
     isUsed: boolean;
     attempts: number;
     maxAttempts: number;
+}
+export interface OTPRequest {
+    phoneNumber: NigerianPhoneNumber;
+    purpose: OTPPurpose;
 }
 export interface RequestOTPRequest {
     phoneNumber: NigerianPhoneNumber;
@@ -24,6 +29,11 @@ export interface RequestOTPResponse {
         expiresIn: number;
         canRetryAt: Date;
     };
+}
+export interface OTPVerificationRequest {
+    phoneNumber: NigerianPhoneNumber;
+    code: string;
+    purpose: OTPPurpose;
 }
 export interface VerifyOTPRequest {
     phoneNumber: NigerianPhoneNumber;
@@ -80,6 +90,11 @@ export interface AuthenticatedRequest extends Request {
     user?: PublicUser;
     userId?: string;
     sessionId?: string;
+}
+export interface TokenPair {
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
 }
 export interface JWTPayload {
     userId: string;

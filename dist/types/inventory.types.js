@@ -4,38 +4,42 @@ exports.StockAlert = exports.InventoryStatus = exports.InventoryMovementType = v
 var InventoryMovementType;
 (function (InventoryMovementType) {
     // Inbound
-    InventoryMovementType["INITIAL_STOCK"] = "initial_stock";
-    InventoryMovementType["RESTOCK"] = "restock";
-    InventoryMovementType["PURCHASE"] = "purchase";
-    InventoryMovementType["RETURN"] = "return";
-    InventoryMovementType["TRANSFER_IN"] = "transfer_in";
-    InventoryMovementType["ADJUSTMENT_IN"] = "adjustment_in";
-    // Outbound
-    InventoryMovementType["SALE"] = "sale";
-    InventoryMovementType["TRANSFER_OUT"] = "transfer_out";
-    InventoryMovementType["DAMAGE"] = "damage";
-    InventoryMovementType["THEFT"] = "theft";
-    InventoryMovementType["EXPIRED"] = "expired";
-    InventoryMovementType["ADJUSTMENT_OUT"] = "adjustment_out";
-    // Reservations
-    InventoryMovementType["RESERVE"] = "reserve";
-    InventoryMovementType["RELEASE_RESERVE"] = "release_reserve";
+    InventoryMovementType["IN"] = "IN";
+    // Outbound  
+    InventoryMovementType["OUT"] = "OUT";
+    // Adjustments
+    InventoryMovementType["ADJUSTMENT"] = "ADJUSTMENT";
+    // Backwards compatibility aliases
+    InventoryMovementType["INITIAL_STOCK"] = "IN";
+    InventoryMovementType["RESTOCK"] = "IN";
+    InventoryMovementType["PURCHASE"] = "IN";
+    InventoryMovementType["RETURN"] = "IN";
+    InventoryMovementType["TRANSFER_IN"] = "IN";
+    InventoryMovementType["ADJUSTMENT_IN"] = "ADJUSTMENT";
+    InventoryMovementType["SALE"] = "OUT";
+    InventoryMovementType["TRANSFER_OUT"] = "OUT";
+    InventoryMovementType["DAMAGE"] = "OUT";
+    InventoryMovementType["THEFT"] = "OUT";
+    InventoryMovementType["EXPIRED"] = "OUT";
+    InventoryMovementType["ADJUSTMENT_OUT"] = "ADJUSTMENT";
+    InventoryMovementType["RESERVE"] = "OUT";
+    InventoryMovementType["RELEASE_RESERVE"] = "IN";
 })(InventoryMovementType || (exports.InventoryMovementType = InventoryMovementType = {}));
 var InventoryStatus;
 (function (InventoryStatus) {
-    InventoryStatus["ACTIVE"] = "active";
-    InventoryStatus["INACTIVE"] = "inactive";
-    InventoryStatus["DISCONTINUED"] = "discontinued";
-    InventoryStatus["OUT_OF_STOCK"] = "out_of_stock";
-    InventoryStatus["LOW_STOCK"] = "low_stock";
-    InventoryStatus["OVERSTOCKED"] = "overstocked";
+    InventoryStatus["ACTIVE"] = "ACTIVE";
+    InventoryStatus["INACTIVE"] = "INACTIVE";
+    InventoryStatus["DISCONTINUED"] = "DISCONTINUED";
+    InventoryStatus["OUT_OF_STOCK"] = "OUT_OF_STOCK";
+    InventoryStatus["LOW_STOCK"] = "LOW_STOCK";
+    InventoryStatus["OVERSTOCKED"] = "OVERSTOCKED";
 })(InventoryStatus || (exports.InventoryStatus = InventoryStatus = {}));
 var StockAlert;
 (function (StockAlert) {
-    StockAlert["LOW_STOCK"] = "low_stock";
-    StockAlert["OUT_OF_STOCK"] = "out_of_stock";
-    StockAlert["OVERSTOCK"] = "overstock";
-    StockAlert["NEGATIVE_STOCK"] = "negative_stock";
-    StockAlert["RESERVATION_EXPIRED"] = "reservation_expired";
+    StockAlert["LOW_STOCK"] = "LOW_STOCK";
+    StockAlert["OUT_OF_STOCK"] = "OUT_OF_STOCK";
+    StockAlert["OVERSTOCK"] = "OVERSTOCK";
+    StockAlert["NEGATIVE_STOCK"] = "NEGATIVE_STOCK";
+    StockAlert["RESERVATION_EXPIRED"] = "RESERVATION_EXPIRED";
 })(StockAlert || (exports.StockAlert = StockAlert = {}));
 //# sourceMappingURL=inventory.types.js.map

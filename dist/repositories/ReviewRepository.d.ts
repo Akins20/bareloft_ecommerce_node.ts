@@ -88,9 +88,9 @@ export declare class ReviewRepository extends BaseRepository<ProductReview, Crea
      */
     private updateProductRating;
     /**
-     * Private: Build order by clause for reviews
+     * Protected: Build order by clause for reviews
      */
-    private buildOrderBy;
+    protected buildOrderBy(sortBy?: string, sortOrder?: "asc" | "desc"): any;
 }
 export {};
 //# sourceMappingURL=ReviewRepository.d.ts.map

@@ -1,33 +1,15 @@
 import { PrismaClient } from "@prisma/client";
 import { BaseRepository } from "./BaseRepository";
 import { Cart, CartItem, CartValidationResult } from "../types";
-export interface CreateCartData {
-    userId?: string;
-    sessionId?: string;
-    subtotal?: number;
-    estimatedTax?: number;
-    estimatedShipping?: number;
-    estimatedTotal?: number;
-    currency?: string;
-    appliedCoupon?: any;
-    shippingAddress?: any;
-    expiresAt?: Date;
-}
-export interface UpdateCartData {
-    subtotal?: number;
-    estimatedTax?: number;
-    estimatedShipping?: number;
-    estimatedTotal?: number;
-    appliedCoupon?: any;
-    shippingAddress?: any;
-    expiresAt?: Date;
-}
 export interface CreateCartItemData {
-    cartId: string;
     productId: string;
+    userId: string;
     quantity: number;
-    unitPrice: number;
-    totalPrice: number;
+    price: number;
+}
+export interface UpdateCartItemData {
+    quantity?: number;
+    price?: number;
 }
 export interface CartWithDetails extends Cart {
     items: Array<CartItem & {
@@ -52,66 +34,72 @@ export interface CartWithDetails extends Cart {
     hasPriceChanges: boolean;
     isValid: boolean;
 }
-export declare class CartRepository extends BaseRepository<Cart, CreateCartData, UpdateCartData> {
+export declare class CartRepository extends BaseRepository<CartItem, CreateCartItemData, UpdateCartItemData> {
     constructor(prisma?: PrismaClient);
     /**
      * Find cart items by user ID
      */
-    findByUserId(userId: string): Promise<CartItem[]>;
+    findByUserId(userId: string): Promise<any[]>;
     /**
      * Find cart item by user and product
      */
-    findByUserAndProduct(userId: string, productId: string): Promise<CartItem | null>;
+    findByUserAndProduct(userId: string, productId: string): Promise<any | null>;
     /**
      * Find cart item by ID and user
      */
-    findByIdAndUser(itemId: string, userId: string): Promise<CartItem | null>;
+    findByIdAndUser(itemId: string, userId: string): Promise<any | null>;
     /**
      * Update cart item quantity
      */
-    updateQuantity(itemId: string, quantity: number): Promise<CartItem>;
+    updateQuantity(itemId: string, quantity: number): Promise<any>;
     /**
      * Delete cart items by user ID
      */
     deleteByUserId(userId: string): Promise<void>;
     /**
-     * Get or create cart for user
+     * Get cart for user (virtual cart from cart items)
      */
     getOrCreateUserCart(userId: string): Promise<CartWithDetails>;
     /**
-     * Get or create cart for guest session
+     * Get guest cart (returns empty cart since guests need authentication)
      */
     getOrCreateGuestCart(sessionId: string): Promise<CartWithDetails>;
     /**
-     * Add item to cart
+     * Add item to cart for user
      */
-    addItemToCart(cartId: string, productId: string, quantity: number): Promise<CartWithDetails>;
+    addItemToCart(userId: string, productId: string, quantity: number): Promise<CartWithDetails>;
     /**
      * Update cart item quantity
      */
-    updateCartItem(cartId: string, productId: string, quantity: number): Promise<CartWithDetails>;
+    updateCartItem(userId: string, productId: string, quantity: number): Promise<CartWithDetails>;
     /**
      * Remove item from cart
      */
-    removeItemFromCart(cartId: string, productId: string): Promise<CartWithDetails>;
+    removeItemFromCart(userId: string, productId: string): Promise<CartWithDetails>;
     /**
      * Clear entire cart
      */
-    clearCart(cartId: string): Promise<CartWithDetails>;
+    clearCart(userId: string): Promise<CartWithDetails>;
     /**
      * Validate cart before checkout
      */
-    validateCart(cartId: string): Promise<CartValidationResult>;
+    validateCart(userId: string): Promise<CartValidationResult>;
     /**
-     * Merge guest cart with user cart
+     * Merge guest cart with user cart (since guest carts are session-based)
      */
-    mergeGuestCartToUser(guestSessionId: string, userId: string, strategy?: "replace" | "merge" | "keep_authenticated"): Promise<CartWithDetails>;
+    mergeGuestCartToUser(guestCartItems: Array<{
+        productId: string;
+        quantity: number;
+    }>, userId: string, strategy?: "replace" | "merge" | "keep_authenticated"): Promise<CartWithDetails>;
     /**
-     * Apply coupon to cart
+     * Apply coupon to cart (virtual calculation since no cart table)
      */
-    applyCoupon(cartId: string, couponCode: string): Promise<CartWithDetails>;
+    applyCoupon(userId: string, couponCode: string): Promise<{
+        cart: CartWithDetails;
+        discountAmount: number;
+    }>;
     /**
-     * Get abandoned carts for marketing
+     * Get abandoned carts for marketing (based on cart items)
      */
     getAbandonedCarts(abandonedAfterHours?: number, limit?: number): Promise<Array<CartWithDetails & {
         abandonedAt: Date;
@@ -119,12 +107,12 @@ export declare class CartRepository extends BaseRepository<Cart, CreateCartData,
         customerPhone?: string;
     }>>;
     /**
-     * Clean up expired guest carts
+     * Clean up old cart items (since no guest carts in database)
      */
     cleanupExpiredCarts(): Promise<{
         deletedCount: number;
     }>;
-    private recalculateCartTotals;
+    private calculateCartTotals;
     private transformCartWithDetails;
 }
 //# sourceMappingURL=CartRepository.d.ts.map

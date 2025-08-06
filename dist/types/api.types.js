@@ -31,7 +31,7 @@ const createErrorResponse = (message, code, details) => ({
     message,
     error: {
         code,
-        details
+        ...(details && { details })
     },
     meta: {
         timestamp: new Date().toISOString()
@@ -76,6 +76,7 @@ exports.ERROR_CODES = {
     // Business logic errors
     INSUFFICIENT_STOCK: 'INSUFFICIENT_STOCK',
     ORDER_CANNOT_BE_CANCELLED: 'ORDER_CANNOT_BE_CANCELLED',
+    INVALID_ORDER_STATUS: 'INVALID_ORDER_STATUS',
     PAYMENT_FAILED: 'PAYMENT_FAILED',
     INVALID_COUPON: 'INVALID_COUPON',
     // System errors

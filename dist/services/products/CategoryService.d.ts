@@ -1,6 +1,6 @@
 import { BaseService } from '../BaseService';
-import { Category, CreateCategoryRequest, UpdateCategoryRequest, CategoryQueryParams } from '@/types';
-export declare class CategoryService extends BaseService<Category> {
+import { Category, CreateCategoryRequest, UpdateCategoryRequest, CategoryQueryParams } from '../../types';
+export declare class CategoryService extends BaseService {
     private categoryRepository;
     constructor();
     /**
@@ -12,9 +12,17 @@ export declare class CategoryService extends BaseService<Category> {
      */
     updateCategory(id: string, data: UpdateCategoryRequest): Promise<Category>;
     /**
+     * Get category by ID
+     */
+    getCategoryById(id: string, includeProducts?: boolean): Promise<Category>;
+    /**
      * Get category by slug
      */
     getCategoryBySlug(slug: string): Promise<Category>;
+    /**
+     * Get category tree (alias for hierarchy)
+     */
+    getCategoryTree(): Promise<Category[]>;
     /**
      * Get category hierarchy (nested structure)
      */
@@ -23,6 +31,10 @@ export declare class CategoryService extends BaseService<Category> {
      * Get root categories (no parent)
      */
     getRootCategories(): Promise<Category[]>;
+    /**
+     * Get child categories (alias for subcategories)
+     */
+    getChildCategories(parentId: string): Promise<Category[]>;
     /**
      * Get subcategories of a parent
      */
@@ -69,6 +81,36 @@ export declare class CategoryService extends BaseService<Category> {
     toggleActiveStatus(categoryId: string): Promise<Category>;
     protected validateCreateData(data: CreateCategoryRequest): Promise<void>;
     protected validateUpdateData(data: UpdateCategoryRequest): Promise<void>;
+    /**
+     * Get category breadcrumb
+     */
+    getCategoryBreadcrumb(categoryId: string): Promise<Category[]>;
+    /**
+     * Get featured categories
+     */
+    getFeaturedCategories(limit?: number): Promise<Category[]>;
+    /**
+     * Search categories
+     */
+    searchCategories(query: string, limit?: number): Promise<Category[]>;
+    /**
+     * Get popular categories (alias for top categories)
+     */
+    getPopularCategories(limit?: number): Promise<Array<Category & {
+        productCount: number;
+    }>>;
+    /**
+     * Get category stats
+     */
+    getCategoryStats(categoryId: string): Promise<any>;
+    /**
+     * Get flat category list
+     */
+    getFlatCategoryList(): Promise<Category[]>;
+    /**
+     * Check if category has products
+     */
+    checkCategoryHasProducts(categoryId: string): Promise<boolean>;
     private enrichCategory;
     private generateUniqueSlug;
 }

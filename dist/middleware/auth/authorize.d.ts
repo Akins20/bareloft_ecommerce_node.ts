@@ -23,6 +23,6 @@ export declare const authPresets: {
     customer: (req: Request, res: Response, next: NextFunction) => void;
     admin: (req: Request, res: Response, next: NextFunction) => void;
     superAdmin: (req: Request, res: Response, next: NextFunction) => void;
-    adminOrOwner: (resourceField?: string) => any[];
+    adminOrOwner: (resourceField?: string) => ((req: Request, res: Response, next: NextFunction) => void)[];
 };
 //# sourceMappingURL=authorize.d.ts.map

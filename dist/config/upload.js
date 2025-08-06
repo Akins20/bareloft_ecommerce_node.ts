@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.uploadConfig = void 0;
 exports.uploadConfig = {
+    provider: process.env.UPLOAD_PROVIDER || "cloudinary",
+    baseUrl: process.env.UPLOAD_BASE_URL || "https://res.cloudinary.com",
     cloudinary: {
         cloudName: process.env.CLOUDINARY_CLOUD_NAME,
         apiKey: process.env.CLOUDINARY_API_KEY,
@@ -13,6 +15,15 @@ exports.uploadConfig = {
             categories: "bareloft/categories",
             temp: "bareloft/temp",
         },
+    },
+    aws: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+        region: process.env.AWS_REGION || "us-east-1",
+        bucket: process.env.AWS_S3_BUCKET || "",
+    },
+    local: {
+        basePath: process.env.LOCAL_UPLOAD_PATH || "./uploads",
     },
     limits: {
         fileSize: 10 * 1024 * 1024, // 10MB

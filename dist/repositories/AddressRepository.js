@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AddressRepository = void 0;
 const client_1 = require("@prisma/client");
 const BaseRepository_1 = require("./BaseRepository");
-const types_1 = require("../types");
+const api_types_1 = require("../types/api.types");
 class AddressRepository extends BaseRepository_1.BaseRepository {
     constructor(prisma) {
         super(prisma || new client_1.PrismaClient(), "Address");
@@ -19,7 +19,7 @@ class AddressRepository extends BaseRepository_1.BaseRepository {
             return result.data;
         }
         catch (error) {
-            throw new types_1.AppError("Error fetching user addresses", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
+            throw new api_types_1.AppError("Error fetching user addresses", api_types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, api_types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
     /**
@@ -37,7 +37,7 @@ class AddressRepository extends BaseRepository_1.BaseRepository {
             return await this.findFirst(where);
         }
         catch (error) {
-            throw new types_1.AppError("Error fetching default address", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
+            throw new api_types_1.AppError("Error fetching default address", api_types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, api_types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
     /**
@@ -45,7 +45,7 @@ class AddressRepository extends BaseRepository_1.BaseRepository {
      */
     async createAddress(userId, data) {
         try {
-            return await this.transaction(async (prisma) => {
+            const result = await this.transaction(async (prisma) => {
                 // If setting as default, unset other default addresses of same type
                 if (data.isDefault) {
                     await prisma.address.updateMany({
@@ -68,12 +68,12 @@ class AddressRepository extends BaseRepository_1.BaseRepository {
                     type: data.type,
                     firstName: data.firstName,
                     lastName: data.lastName,
-                    company: data.company,
+                    ...(data.company !== undefined && { company: data.company }),
                     addressLine1: data.addressLine1,
-                    addressLine2: data.addressLine2,
+                    ...(data.addressLine2 !== undefined && { addressLine2: data.addressLine2 }),
                     city: data.city,
                     state: data.state,
-                    postalCode: data.postalCode,
+                    ...(data.postalCode !== undefined && { postalCode: data.postalCode }),
                     country: "NG", // Always Nigeria
                     phoneNumber: data.phoneNumber,
                     isDefault: data.isDefault ?? existingAddresses === 0,
@@ -91,9 +91,25 @@ class AddressRepository extends BaseRepository_1.BaseRepository {
                     },
                 });
             });
+            // Transform the result to match our Address interface
+            return {
+                id: result.id,
+                firstName: result.firstName,
+                lastName: result.lastName,
+                ...(result.company && { company: result.company }),
+                addressLine1: result.addressLine1,
+                ...(result.addressLine2 && { addressLine2: result.addressLine2 }),
+                city: result.city,
+                state: result.state,
+                ...(result.postalCode && { postalCode: result.postalCode }),
+                country: result.country,
+                phoneNumber: result.phoneNumber,
+                isDefault: result.isDefault,
+                type: result.type,
+            };
         }
         catch (error) {
-            throw new types_1.AppError("Error creating address", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
+            throw new api_types_1.AppError("Error creating address", api_types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, api_types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
     /**
@@ -101,13 +117,13 @@ class AddressRepository extends BaseRepository_1.BaseRepository {
      */
     async updateAddress(addressId, userId, data) {
         try {
-            return await this.transaction(async (prisma) => {
+            const result = await this.transaction(async (prisma) => {
                 // Verify address belongs to user
                 const existingAddress = await prisma.address.findFirst({
                     where: { id: addressId, userId },
                 });
                 if (!existingAddress) {
-                    throw new types_1.AppError("Address not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+                    throw new api_types_1.AppError("Address not found", api_types_1.HTTP_STATUS.NOT_FOUND, api_types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
                 }
                 // If setting as default, unset other default addresses of same type
                 if (data.isDefault) {
@@ -123,17 +139,56 @@ class AddressRepository extends BaseRepository_1.BaseRepository {
                         },
                     });
                 }
+                const updateData = {};
+                if (data.type !== undefined)
+                    updateData.type = data.type;
+                if (data.firstName !== undefined)
+                    updateData.firstName = data.firstName;
+                if (data.lastName !== undefined)
+                    updateData.lastName = data.lastName;
+                if (data.company !== undefined)
+                    updateData.company = data.company;
+                if (data.addressLine1 !== undefined)
+                    updateData.addressLine1 = data.addressLine1;
+                if (data.addressLine2 !== undefined)
+                    updateData.addressLine2 = data.addressLine2;
+                if (data.city !== undefined)
+                    updateData.city = data.city;
+                if (data.state !== undefined)
+                    updateData.state = data.state;
+                if (data.postalCode !== undefined)
+                    updateData.postalCode = data.postalCode;
+                if (data.phoneNumber !== undefined)
+                    updateData.phoneNumber = data.phoneNumber;
+                if (data.isDefault !== undefined)
+                    updateData.isDefault = data.isDefault;
                 return await prisma.address.update({
                     where: { id: addressId },
-                    data,
+                    data: updateData,
                 });
             });
+            // Transform the result to match our Address interface
+            return {
+                id: result.id,
+                firstName: result.firstName,
+                lastName: result.lastName,
+                ...(result.company && { company: result.company }),
+                addressLine1: result.addressLine1,
+                ...(result.addressLine2 && { addressLine2: result.addressLine2 }),
+                city: result.city,
+                state: result.state,
+                ...(result.postalCode && { postalCode: result.postalCode }),
+                country: result.country,
+                phoneNumber: result.phoneNumber,
+                isDefault: result.isDefault,
+                type: result.type,
+            };
         }
         catch (error) {
-            if (error instanceof types_1.AppError) {
+            if (error instanceof api_types_1.AppError) {
                 throw error;
             }
-            throw new types_1.AppError("Error updating address", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
+            throw new api_types_1.AppError("Error updating address", api_types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, api_types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
     /**
@@ -147,7 +202,7 @@ class AddressRepository extends BaseRepository_1.BaseRepository {
                     where: { id: addressId, userId },
                 });
                 if (!existingAddress) {
-                    throw new types_1.AppError("Address not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+                    throw new api_types_1.AppError("Address not found", api_types_1.HTTP_STATUS.NOT_FOUND, api_types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
                 }
                 // Delete the address
                 await prisma.address.delete({
@@ -173,10 +228,10 @@ class AddressRepository extends BaseRepository_1.BaseRepository {
             });
         }
         catch (error) {
-            if (error instanceof types_1.AppError) {
+            if (error instanceof api_types_1.AppError) {
                 throw error;
             }
-            throw new types_1.AppError("Error deleting address", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
+            throw new api_types_1.AppError("Error deleting address", api_types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, api_types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
     /**
@@ -184,13 +239,13 @@ class AddressRepository extends BaseRepository_1.BaseRepository {
      */
     async setAsDefault(addressId, userId) {
         try {
-            return await this.transaction(async (prisma) => {
+            const result = await this.transaction(async (prisma) => {
                 // Get the address to be set as default
                 const address = await prisma.address.findFirst({
                     where: { id: addressId, userId },
                 });
                 if (!address) {
-                    throw new types_1.AppError("Address not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+                    throw new api_types_1.AppError("Address not found", api_types_1.HTTP_STATUS.NOT_FOUND, api_types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
                 }
                 // Unset other default addresses of same type
                 await prisma.address.updateMany({
@@ -210,12 +265,28 @@ class AddressRepository extends BaseRepository_1.BaseRepository {
                     data: { isDefault: true },
                 });
             });
+            // Transform the result to match our Address interface
+            return {
+                id: result.id,
+                firstName: result.firstName,
+                lastName: result.lastName,
+                ...(result.company && { company: result.company }),
+                addressLine1: result.addressLine1,
+                ...(result.addressLine2 && { addressLine2: result.addressLine2 }),
+                city: result.city,
+                state: result.state,
+                ...(result.postalCode && { postalCode: result.postalCode }),
+                country: result.country,
+                phoneNumber: result.phoneNumber,
+                isDefault: result.isDefault,
+                type: result.type,
+            };
         }
         catch (error) {
-            if (error instanceof types_1.AppError) {
+            if (error instanceof api_types_1.AppError) {
                 throw error;
             }
-            throw new types_1.AppError("Error setting default address", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
+            throw new api_types_1.AppError("Error setting default address", api_types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, api_types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
     /**
@@ -229,7 +300,7 @@ class AddressRepository extends BaseRepository_1.BaseRepository {
             return result.data;
         }
         catch (error) {
-            throw new types_1.AppError("Error fetching addresses by state", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
+            throw new api_types_1.AppError("Error fetching addresses by state", api_types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, api_types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
     /**
@@ -314,6 +385,12 @@ class AddressRepository extends BaseRepository_1.BaseRepository {
     isValidNigerianPhone(phone) {
         const nigerianPhoneRegex = /^(\+234)[789][01][0-9]{8}$/;
         return nigerianPhoneRegex.test(phone);
+    }
+    /**
+     * Alias for setAsDefault (for backward compatibility)
+     */
+    async setDefaultAddress(addressId, userId) {
+        return this.setAsDefault(addressId, userId);
     }
 }
 exports.AddressRepository = AddressRepository;

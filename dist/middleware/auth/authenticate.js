@@ -23,26 +23,28 @@ const authenticate = async (req, res, next) => {
         // Extract token from Authorization header
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
-            return res.status(401).json({
+            res.status(401).json({
                 success: false,
                 error: "AUTHENTICATION_REQUIRED",
                 message: "Please log in to access this resource",
                 code: "AUTH_001",
             });
+            return;
         }
         const token = authHeader.substring(7); // Remove 'Bearer ' prefix
         if (!token) {
-            return res.status(401).json({
+            res.status(401).json({
                 success: false,
                 error: "INVALID_TOKEN",
                 message: "Authentication token is missing",
                 code: "AUTH_002",
             });
+            return;
         }
         // Verify JWT token
         let decoded;
         try {
-            decoded = jsonwebtoken_1.default.verify(token, environment_1.config.JWT_SECRET);
+            decoded = jsonwebtoken_1.default.verify(token, environment_1.config.jwt.secret);
         }
         catch (jwtError) {
             winston_1.logger.warn("Invalid JWT token", {
@@ -52,28 +54,31 @@ const authenticate = async (req, res, next) => {
                 error: jwtError instanceof Error ? jwtError.message : "Unknown JWT error",
             });
             if (jwtError instanceof jsonwebtoken_1.default.TokenExpiredError) {
-                return res.status(401).json({
+                res.status(401).json({
                     success: false,
                     error: "TOKEN_EXPIRED",
                     message: "Your session has expired. Please log in again",
                     code: "AUTH_003",
                 });
+                return;
             }
-            return res.status(401).json({
+            res.status(401).json({
                 success: false,
                 error: "INVALID_TOKEN",
                 message: "Invalid authentication token",
                 code: "AUTH_004",
             });
+            return;
         }
         // Validate token type
         if (decoded.type !== "access") {
-            return res.status(401).json({
+            res.status(401).json({
                 success: false,
                 error: "INVALID_TOKEN_TYPE",
                 message: "Invalid token type for this request",
                 code: "AUTH_005",
             });
+            return;
         }
         // Check if session exists and is valid
         const sessionRepo = new SessionRepository_1.SessionRepository();
@@ -84,12 +89,13 @@ const authenticate = async (req, res, next) => {
                 userId: decoded.userId,
                 ip: req.ip,
             });
-            return res.status(401).json({
+            res.status(401).json({
                 success: false,
                 error: "SESSION_EXPIRED",
                 message: "Your session has expired. Please log in again",
                 code: "AUTH_006",
             });
+            return;
         }
         // Get user details
         const userRepo = new UserRepository_1.UserRepository();
@@ -99,35 +105,40 @@ const authenticate = async (req, res, next) => {
                 userId: decoded.userId,
                 sessionId: decoded.sessionId,
             });
-            return res.status(401).json({
+            res.status(401).json({
                 success: false,
                 error: "USER_NOT_FOUND",
                 message: "User account not found",
                 code: "AUTH_007",
             });
+            return;
         }
         // Check if user account is active
         if (!user.isVerified) {
-            return res.status(401).json({
+            res.status(401).json({
                 success: false,
                 error: "ACCOUNT_NOT_VERIFIED",
                 message: "Please verify your account to continue",
                 code: "AUTH_008",
             });
+            return;
         }
         // Set user context in request
         req.user = {
             id: user.id,
             phoneNumber: user.phoneNumber,
-            email: user.email,
             firstName: user.firstName,
             lastName: user.lastName,
             role: user.role,
             isVerified: user.isVerified,
             sessionId: session.id,
         };
+        // Only include email if it exists
+        if (user.email) {
+            req.user.email = user.email;
+        }
         // Update session last activity
-        await sessionRepo.updateLastActivity(session.id);
+        await sessionRepo.updateLastUsed(session.id);
         winston_1.logger.debug("User authenticated successfully", {
             userId: user.id,
             sessionId: session.id,
@@ -160,12 +171,23 @@ const optionalAuthenticate = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     // If no token provided, continue without authentication
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return next();
+        next();
+        return;
     }
     // If token is provided, try to authenticate
     // But don't fail if authentication fails
     try {
-        await (0, exports.authenticate)(req, res, next);
+        await (0, exports.authenticate)(req, res, (error) => {
+            if (error) {
+                // Log the error but continue without authentication
+                winston_1.logger.warn("Optional authentication failed", {
+                    error: error instanceof Error ? error.message : "Unknown error",
+                    path: req.path,
+                    ip: req.ip,
+                });
+            }
+            next();
+        });
     }
     catch (error) {
         // Log the error but continue without authentication

@@ -20,12 +20,13 @@ const validateToken = (options = {}) => {
             // Handle missing token
             if (!authHeader || !authHeader.startsWith("Bearer ")) {
                 if (required) {
-                    return res.status(401).json({
+                    res.status(401).json({
                         success: false,
                         error: "TOKEN_REQUIRED",
                         message: "Authentication token is required",
                         code: "TOKEN_001",
                     });
+                    return;
                 }
                 return next();
             }
@@ -33,7 +34,7 @@ const validateToken = (options = {}) => {
             // Verify token structure and signature
             let decoded;
             try {
-                decoded = jsonwebtoken_1.default.verify(token, environment_1.environment.JWT_SECRET, {
+                decoded = jsonwebtoken_1.default.verify(token, environment_1.config.jwt.secret, {
                     ignoreExpiration: skipExpiredCheck,
                 });
             }
@@ -44,7 +45,7 @@ const validateToken = (options = {}) => {
                     path: req.path,
                     error: jwtError instanceof Error ? jwtError.message : "Unknown error",
                 });
-                return res.status(401).json({
+                res.status(401).json({
                     success: false,
                     error: `TOKEN_${errorType}`,
                     message: errorType === "EXPIRED"
@@ -52,27 +53,30 @@ const validateToken = (options = {}) => {
                         : "Invalid token format",
                     code: errorType === "EXPIRED" ? "TOKEN_002" : "TOKEN_003",
                 });
+                return;
             }
             // Validate token type
             if (!allowRefreshToken && decoded.type === "refresh") {
-                return res.status(401).json({
+                res.status(401).json({
                     success: false,
                     error: "INVALID_TOKEN_TYPE",
                     message: "Refresh token cannot be used for API access",
                     code: "TOKEN_004",
                 });
+                return;
             }
             // Check session validity if required
             if (checkSession && decoded.sessionId) {
                 const sessionRepo = new SessionRepository_1.SessionRepository();
                 const session = await sessionRepo.findById(decoded.sessionId);
                 if (!session || session.expiresAt < new Date()) {
-                    return res.status(401).json({
+                    res.status(401).json({
                         success: false,
                         error: "SESSION_INVALID",
                         message: "Session is no longer valid",
                         code: "TOKEN_005",
                     });
+                    return;
                 }
             }
             // Attach decoded token to request
@@ -112,27 +116,29 @@ exports.validateRefreshToken = (0, exports.validateToken)({
 const validateApiKey = (req, res, next) => {
     const apiKey = req.headers["x-api-key"];
     if (!apiKey) {
-        return res.status(401).json({
+        res.status(401).json({
             success: false,
             error: "API_KEY_REQUIRED",
             message: "API key is required",
             code: "API_001",
         });
+        return;
     }
     // Validate API key format and existence
-    const validApiKeys = environment_1.environment.VALID_API_KEYS?.split(",") || [];
+    const validApiKeys = process.env.VALID_API_KEYS?.split(",") || [];
     if (!validApiKeys.includes(apiKey)) {
         winston_1.logger.warn("Invalid API key used", {
             apiKey: apiKey.substring(0, 8) + "...", // Log partial key for security
             ip: req.ip,
             path: req.path,
         });
-        return res.status(401).json({
+        res.status(401).json({
             success: false,
             error: "INVALID_API_KEY",
             message: "Invalid API key",
             code: "API_002",
         });
+        return;
     }
     // Set API key info in request
     req.apiKey = apiKey;

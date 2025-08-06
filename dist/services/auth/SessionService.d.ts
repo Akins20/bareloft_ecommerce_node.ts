@@ -106,8 +106,8 @@ export declare class SessionService extends BaseService {
      */
     validateSessionAndGetUser(accessToken: string): Promise<{
         session: SessionInfo;
-        user: import("../../types").PublicUser | undefined;
-    } | null>;
+        user: import("../../types").PublicUser;
+    }>;
     /**
      * Extend session expiry
      */
@@ -127,7 +127,7 @@ export declare class SessionService extends BaseService {
     /**
      * Handle service errors
      */
-    private handleError;
+    protected handleError(message: string, error: any): void;
     /**
      * Invalidate all user sessions
      */

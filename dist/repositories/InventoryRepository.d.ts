@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { BaseRepository } from "./BaseRepository";
-import { Inventory, InventoryMovement, StockReservation, InventoryMovementType, InventoryStatus, BulkInventoryUpdateRequest, ReserveStockRequest, ReleaseReservationRequest, InventoryListResponse, InventoryAlert, PaginationParams } from "../types";
+import { InventoryMovement, StockReservation, InventoryMovementType, InventoryStatus, BulkInventoryUpdateRequest, ReserveStockRequest, ReleaseReservationRequest, InventoryListResponse, InventoryAlert, PaginationParams } from "../types";
 export interface CreateInventoryData {
     productId: string;
     quantity?: number;
@@ -16,6 +16,7 @@ export interface CreateInventoryData {
     lastRestockedAt?: Date;
 }
 export interface UpdateInventoryData {
+    stock?: number;
     quantity?: number;
     reservedQuantity?: number;
     lowStockThreshold?: number;
@@ -23,6 +24,7 @@ export interface UpdateInventoryData {
     reorderQuantity?: number;
     status?: InventoryStatus;
     trackInventory?: boolean;
+    trackQuantity?: boolean;
     allowBackorder?: boolean;
     averageCost?: number;
     lastCost?: number;
@@ -46,11 +48,27 @@ export interface CreateMovementData {
     createdBy: string;
     batchId?: string;
 }
-export interface InventoryWithDetails extends Inventory {
+export interface InventoryWithDetails {
+    id: string;
+    productId: string;
+    quantity: number;
+    reservedQuantity: number;
+    lowStockThreshold: number;
+    reorderPoint: number;
+    reorderQuantity: number;
+    status: InventoryStatus;
+    trackInventory: boolean;
+    allowBackorder: boolean;
+    averageCost: number;
+    lastCost: number;
+    lastRestockedAt?: Date;
+    lastSoldAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
     product: {
         id: string;
         name: string;
-        sku: string;
+        sku?: string;
         price: number;
         isActive: boolean;
     };
@@ -60,7 +78,7 @@ export interface InventoryWithDetails extends Inventory {
     lastMovement?: Date;
     totalValue: number;
 }
-export declare class InventoryRepository extends BaseRepository<Inventory, CreateInventoryData, UpdateInventoryData> {
+export declare class InventoryRepository extends BaseRepository<any, CreateInventoryData, UpdateInventoryData> {
     constructor(prisma: PrismaClient);
     /**
      * Find inventory by product ID
@@ -141,6 +159,8 @@ export declare class InventoryRepository extends BaseRepository<Inventory, Creat
     private calculateAverageCost;
     private calculateInventoryStatus;
     private transformInventoryWithDetails;
+    private transformProductToInventoryWithDetails;
+    private mapToSchemaMovementType;
     private getInventorySummary;
 }
 //# sourceMappingURL=InventoryRepository.d.ts.map

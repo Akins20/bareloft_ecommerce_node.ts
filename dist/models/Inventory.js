@@ -3,8 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.InventorySchema = exports.InventoryModel = void 0;
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
-// Inventory Model Schema
-exports.InventoryModel = prisma.inventory;
+// Inventory Model Schema (maps to Product table since no separate inventory table exists)
+exports.InventoryModel = prisma.product;
 // Inventory Schema Definition for Prisma
 exports.InventorySchema = `
 model Inventory {

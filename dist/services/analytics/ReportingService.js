@@ -1,20 +1,18 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ReportingService = void 0;
 const BaseService_1 = require("../BaseService");
 const models_1 = require("../../models");
-const exceljs_1 = __importDefault(require("exceljs"));
-const pdfkit_1 = __importDefault(require("pdfkit"));
+// Import types as any to avoid module not found errors
+const ExcelJS = require('exceljs');
+const PDFDocument = require('pdfkit');
 class ReportingService extends BaseService_1.BaseService {
     analytics;
     cache;
     constructor(analyticsService, cacheService) {
         super();
-        this.analytics = analyticsService;
-        this.cache = cacheService;
+        this.analytics = analyticsService || {};
+        this.cache = cacheService || {};
     }
     /**
      * Generate report
@@ -40,7 +38,9 @@ class ReportingService extends BaseService_1.BaseService {
                 },
             };
             // Store initial report status
-            await this.cache.set(`report:${reportId}`, report, { ttl: 86400 });
+            if (this.cache.set) {
+                await this.cache.set(`report:${reportId}`, report, { ttl: 86400 });
+            }
             // Generate report asynchronously
             this.generateReportAsync(reportId, request).catch(error => {
                 this.handleError("Async report generation failed", error);
@@ -57,7 +57,10 @@ class ReportingService extends BaseService_1.BaseService {
      */
     async getReportStatus(reportId) {
         try {
-            return await this.cache.get(`report:${reportId}`);
+            if (this.cache.get) {
+                return await this.cache.get(`report:${reportId}`);
+            }
+            return null;
         }
         catch (error) {
             this.handleError("Error getting report status", error);
@@ -174,12 +177,12 @@ class ReportingService extends BaseService_1.BaseService {
             }),
         ]);
         // Calculate totals
-        const revenue = orders.reduce((sum, order) => sum + Number(order.totalAmount), 0);
+        const revenue = orders.reduce((sum, order) => sum + Number(order.total), 0);
         const orderCount = orders.length;
         const uniqueCustomers = new Set(orders.map(o => o.userId)).size;
         const averageOrderValue = orderCount > 0 ? revenue / orderCount : 0;
         // Calculate growth
-        const previousRevenue = previousPeriodOrders.reduce((sum, order) => sum + Number(order.totalAmount), 0);
+        const previousRevenue = previousPeriodOrders.reduce((sum, order) => sum + Number(order.total), 0);
         const revenueGrowth = previousRevenue > 0 ? ((revenue - previousRevenue) / previousRevenue) * 100 : 0;
         const orderGrowth = previousPeriodOrders.length > 0 ?
             ((orderCount - previousPeriodOrders.length) / previousPeriodOrders.length) * 100 : 0;
@@ -187,7 +190,7 @@ class ReportingService extends BaseService_1.BaseService {
         const productSales = new Map();
         orderItems.forEach(item => {
             const existing = productSales.get(item.productId) || { revenue: 0, quantity: 0, product: item.product };
-            existing.revenue += Number(item.totalPrice);
+            existing.revenue += Number(item.total);
             existing.quantity += item.quantity;
             productSales.set(item.productId, existing);
         });
@@ -206,7 +209,7 @@ class ReportingService extends BaseService_1.BaseService {
         orders.forEach(order => {
             const date = order.createdAt.toISOString().split('T')[0];
             const existing = dailyMap.get(date) || { revenue: 0, orders: 0, customers: new Set() };
-            existing.revenue += Number(order.totalAmount);
+            existing.revenue += Number(order.total);
             existing.orders += 1;
             existing.customers.add(order.userId);
             dailyMap.set(date, existing);
@@ -241,7 +244,6 @@ class ReportingService extends BaseService_1.BaseService {
             models_1.ProductModel.findMany({
                 include: {
                     category: true,
-                    inventory: true,
                     reviews: true,
                 },
             }),
@@ -259,13 +261,13 @@ class ReportingService extends BaseService_1.BaseService {
         const productSales = new Map();
         orderItems.forEach(item => {
             const existing = productSales.get(item.productId) || { revenue: 0, quantity: 0 };
-            existing.revenue += Number(item.totalPrice);
+            existing.revenue += Number(item.total);
             existing.quantity += item.quantity;
             productSales.set(item.productId, existing);
         });
         const productPerformance = products.map(product => {
             const sales = productSales.get(product.id) || { revenue: 0, quantity: 0 };
-            const averageRating = product.reviews.length > 0
+            const averageRating = product.reviews && product.reviews.length > 0
                 ? product.reviews.reduce((sum, review) => sum + review.rating, 0) / product.reviews.length
                 : 0;
             let performance = 'poor';
@@ -279,11 +281,11 @@ class ReportingService extends BaseService_1.BaseService {
                 id: product.id,
                 name: product.name,
                 sku: product.sku,
-                category: product.category.name,
+                category: product.category?.name || 'Unknown',
                 revenue: sales.revenue,
                 quantitySold: sales.quantity,
                 averageRating,
-                stockLevel: product.inventory?.quantity || 0,
+                stockLevel: product.stock || 0,
                 margin: sales.revenue * 0.3, // Simplified
                 performance,
             };
@@ -300,9 +302,9 @@ class ReportingService extends BaseService_1.BaseService {
         };
     }
     async getInventoryReportData() {
-        const [inventory, movements] = await Promise.all([
-            models_1.InventoryModel.findMany({
-                include: { product: true },
+        const [products, movements] = await Promise.all([
+            models_1.ProductModel.findMany({
+                where: { isActive: true },
             }),
             models_1.InventoryMovementModel.findMany({
                 include: { product: true },
@@ -310,41 +312,43 @@ class ReportingService extends BaseService_1.BaseService {
                 take: 1000,
             }),
         ]);
-        const totalValue = inventory.reduce((sum, item) => {
-            return sum + (item.quantity * Number(item.averageCost));
+        const totalValue = products.reduce((sum, item) => {
+            return sum + ((item.stock || 0) * Number(item.price));
         }, 0);
-        const items = inventory.map(item => {
+        const items = products.map(item => {
+            const stock = item.stock || 0;
+            const lowThreshold = item.lowStockThreshold || 10;
             let status = 'in_stock';
-            if (item.quantity <= 0)
+            if (stock <= 0)
                 status = 'out_of_stock';
-            else if (item.quantity <= item.lowStockThreshold)
+            else if (stock <= lowThreshold)
                 status = 'low_stock';
             return {
-                productId: item.productId,
-                productName: item.product.name,
-                sku: item.product.sku,
-                currentStock: item.quantity,
-                reservedStock: item.reservedQuantity,
-                availableStock: item.quantity - item.reservedQuantity,
-                reorderLevel: item.reorderPoint,
-                averageCost: Number(item.averageCost),
-                totalValue: item.quantity * Number(item.averageCost),
+                productId: item.id,
+                productName: item.name,
+                sku: item.sku,
+                currentStock: stock,
+                reservedStock: 0, // Default since reservedQuantity field doesn't exist
+                availableStock: stock,
+                reorderLevel: lowThreshold,
+                averageCost: Number(item.price),
+                totalValue: stock * Number(item.price),
                 status,
                 lastMovement: item.updatedAt,
             };
         });
         const movementData = movements.map(movement => ({
             date: movement.createdAt,
-            productName: movement.product.name,
+            productName: movement.product?.name || 'Unknown Product',
             type: movement.type,
             quantity: movement.quantity,
             reason: movement.reason || '',
-            cost: Number(movement.totalCost) || 0,
+            cost: 0, // Default since totalCost field doesn't exist
         }));
         return {
             summary: {
                 totalValue,
-                totalProducts: inventory.length,
+                totalProducts: products.length,
                 lowStockItems: items.filter(i => i.status === 'low_stock').length,
                 outOfStockItems: items.filter(i => i.status === 'out_of_stock').length,
                 turnoverRate: 0, // Would calculate from sales data
@@ -355,7 +359,7 @@ class ReportingService extends BaseService_1.BaseService {
     }
     // Private report generation methods
     async generateSalesSummaryExcel(data) {
-        const workbook = new exceljs_1.default.Workbook();
+        const workbook = new ExcelJS.Workbook();
         // Summary sheet
         const summarySheet = workbook.addWorksheet('Sales Summary');
         // Header
@@ -395,7 +399,7 @@ class ReportingService extends BaseService_1.BaseService {
     }
     async generateSalesSummaryPDF(data) {
         return new Promise((resolve, reject) => {
-            const doc = new pdfkit_1.default();
+            const doc = new PDFDocument();
             const chunks = [];
             doc.on('data', chunk => chunks.push(chunk));
             doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -422,7 +426,7 @@ class ReportingService extends BaseService_1.BaseService {
         });
     }
     async generateProductPerformanceExcel(data) {
-        const workbook = new exceljs_1.default.Workbook();
+        const workbook = new ExcelJS.Workbook();
         const sheet = workbook.addWorksheet('Product Performance');
         // Header
         sheet.addRow(['Product Performance Report']);
@@ -456,7 +460,7 @@ class ReportingService extends BaseService_1.BaseService {
     }
     async generateProductPerformancePDF(data) {
         return new Promise((resolve, reject) => {
-            const doc = new pdfkit_1.default();
+            const doc = new PDFDocument();
             const chunks = [];
             doc.on('data', chunk => chunks.push(chunk));
             doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -482,7 +486,7 @@ class ReportingService extends BaseService_1.BaseService {
         });
     }
     async generateInventoryExcel(data) {
-        const workbook = new exceljs_1.default.Workbook();
+        const workbook = new ExcelJS.Workbook();
         // Summary sheet
         const summarySheet = workbook.addWorksheet('Inventory Summary');
         summarySheet.addRow(['Inventory Report']);
@@ -514,7 +518,7 @@ class ReportingService extends BaseService_1.BaseService {
     }
     async generateInventoryPDF(data) {
         return new Promise((resolve, reject) => {
-            const doc = new pdfkit_1.default();
+            const doc = new PDFDocument();
             const chunks = [];
             doc.on('data', chunk => chunks.push(chunk));
             doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -545,8 +549,11 @@ class ReportingService extends BaseService_1.BaseService {
     async generateReportAsync(reportId, request) {
         try {
             // Update status to generating
-            const report = await this.cache.get(`report:${reportId}`);
-            if (report) {
+            let report = null;
+            if (this.cache.get) {
+                report = await this.cache.get(`report:${reportId}`);
+            }
+            if (report && this.cache.set) {
                 report.status = 'generating';
                 await this.cache.set(`report:${reportId}`, report, { ttl: 86400 });
             }
@@ -555,7 +562,7 @@ class ReportingService extends BaseService_1.BaseService {
             // Save to storage (would implement actual file storage)
             const downloadUrl = `/api/reports/${reportId}/download`;
             // Update report with completion
-            if (report) {
+            if (report && this.cache.set) {
                 report.status = 'completed';
                 report.size = buffer.length;
                 report.downloadUrl = downloadUrl;
@@ -564,8 +571,11 @@ class ReportingService extends BaseService_1.BaseService {
         }
         catch (error) {
             // Update status to failed
-            const report = await this.cache.get(`report:${reportId}`);
-            if (report) {
+            let report = null;
+            if (this.cache.get) {
+                report = await this.cache.get(`report:${reportId}`);
+            }
+            if (report && this.cache.set) {
                 report.status = 'failed';
                 await this.cache.set(`report:${reportId}`, report, { ttl: 86400 });
             }

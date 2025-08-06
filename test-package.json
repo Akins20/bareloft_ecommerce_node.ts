@@ -1,0 +1,16 @@
+{
+  "name": "bareloft-api-tests",
+  "version": "1.0.0",
+  "description": "Comprehensive API testing for Bareloft E-commerce Platform",
+  "scripts": {
+    "test": "node api-test-script.js",
+    "test-health": "curl -s http://localhost:3000/health | json_pp",
+    "test-auth": "node -e \"require('./api-test-script.js').testAuthenticationFlow()\"",
+    "install-deps": "npm install axios"
+  },
+  "dependencies": {
+    "axios": "^1.6.2"
+  },
+  "keywords": ["api", "testing", "ecommerce", "nigeria"],
+  "author": "Bareloft Development Team"
+}

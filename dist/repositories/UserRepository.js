@@ -9,6 +9,23 @@ class UserRepository extends BaseRepository_1.BaseRepository {
         super(prisma || new client_1.PrismaClient(), "User");
     }
     /**
+     * Transform User to PublicUser
+     */
+    transformToPublicUser(user) {
+        return {
+            id: user.id,
+            userId: user.id,
+            phoneNumber: user.phoneNumber,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            avatar: user.avatar || '',
+            role: user.role,
+            isVerified: user.isVerified,
+            createdAt: user.createdAt,
+        };
+    }
+    /**
      * Find user by phone number
      */
     async findByPhoneNumber(phoneNumber) {
@@ -276,7 +293,7 @@ class UserRepository extends BaseRepository_1.BaseRepository {
                 verifiedUsers,
                 activeUsers,
                 usersByRole: roleStats,
-                recentUsers: recentUsers.data,
+                recentUsers: recentUsers.data.map(user => this.transformToPublicUser(user)),
             };
         }
         catch (error) {
@@ -289,7 +306,7 @@ class UserRepository extends BaseRepository_1.BaseRepository {
      */
     async findCustomersWithOrders(pagination) {
         try {
-            return await this.findMany({ role: "CUSTOMER" }, {
+            const findOptions = {
                 include: {
                     orders: {
                         orderBy: { createdAt: "desc" },
@@ -306,8 +323,11 @@ class UserRepository extends BaseRepository_1.BaseRepository {
                     },
                 },
                 orderBy: { createdAt: "desc" },
-                pagination,
-            });
+            };
+            if (pagination) {
+                findOptions.pagination = pagination;
+            }
+            return await this.findMany({ role: "CUSTOMER" }, findOptions);
         }
         catch (error) {
             this.handleError("Error finding customers with orders", error);
@@ -347,7 +367,8 @@ class UserRepository extends BaseRepository_1.BaseRepository {
                     orders: {
                         where: { status: "DELIVERED" },
                         select: {
-                            totalAmount: true,
+                            id: true,
+                            total: true,
                             createdAt: true,
                         },
                     },
@@ -356,7 +377,7 @@ class UserRepository extends BaseRepository_1.BaseRepository {
             });
             const customerStats = customers
                 .map((customer) => {
-                const totalSpent = customer.orders.reduce((sum, order) => sum + Number(order.totalAmount), 0);
+                const totalSpent = customer.orders.reduce((sum, order) => sum + Number(order.total), 0);
                 const orderCount = customer.orders.length;
                 const lastOrderDate = customer.orders.length > 0
                     ? new Date(Math.max(...customer.orders.map((o) => o.createdAt.getTime())))
@@ -385,13 +406,16 @@ class UserRepository extends BaseRepository_1.BaseRepository {
         try {
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - daysSinceLastLogin);
+            const findOptions = {
+                orderBy: { lastLoginAt: "asc" },
+            };
+            if (pagination) {
+                findOptions.pagination = pagination;
+            }
             return await this.findMany({
                 OR: [{ lastLoginAt: { lt: cutoffDate } }, { lastLoginAt: null }],
                 status: "ACTIVE",
-            }, {
-                orderBy: { lastLoginAt: "asc" },
-                pagination,
-            });
+            }, findOptions);
         }
         catch (error) {
             this.handleError("Error finding inactive users", error);
@@ -414,7 +438,7 @@ class UserRepository extends BaseRepository_1.BaseRepository {
                 };
                 delete where.state; // Remove from top level
             }
-            return await this.search(searchTerm, searchFields, where, {
+            const searchOptions = {
                 include: {
                     addresses: true,
                     _count: {
@@ -424,8 +448,11 @@ class UserRepository extends BaseRepository_1.BaseRepository {
                         },
                     },
                 },
-                pagination,
-            });
+            };
+            if (pagination) {
+                searchOptions.pagination = pagination;
+            }
+            return await this.search(searchTerm, searchFields, where, searchOptions);
         }
         catch (error) {
             this.handleError("Error searching users", error);
@@ -459,7 +486,7 @@ class UserRepository extends BaseRepository_1.BaseRepository {
                 throw new types_1.AppError("User not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
             }
             const orderCount = user.orders.length;
-            const totalSpent = user.orders.reduce((sum, order) => sum + Number(order.totalAmount), 0);
+            const totalSpent = user.orders.reduce((sum, order) => sum + Number(order.total), 0);
             const reviewCount = user.reviews.length;
             const averageRating = reviewCount > 0
                 ? user.reviews.reduce((sum, review) => sum + review.rating, 0) /

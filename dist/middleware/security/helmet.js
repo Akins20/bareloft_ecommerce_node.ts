@@ -18,7 +18,7 @@ exports.helmetConfig = (0, helmet_1.default)({
                 "https://js.paystack.co", // Paystack payment
                 "https://www.googletagmanager.com", // Google Analytics
                 "https://connect.facebook.net", // Facebook Pixel
-                ...(environment_1.environment.NODE_ENV === "development" ? ["'unsafe-eval'"] : []),
+                ...(environment_1.config.nodeEnv === "development" ? ["'unsafe-eval'"] : []),
             ],
             // Stylesheets
             styleSrc: [
@@ -41,7 +41,7 @@ exports.helmetConfig = (0, helmet_1.default)({
                 "https://api.paystack.co", // Paystack API
                 "https://standard.paystack.co", // Paystack Standard
                 "https://www.google-analytics.com",
-                ...(environment_1.environment.NODE_ENV === "development" ? ["ws:", "wss:"] : []),
+                ...(environment_1.config.nodeEnv === "development" ? ["ws:", "wss:"] : []),
             ],
             // Frames - payment widgets
             frameSrc: ["'self'", "https://js.paystack.co"],

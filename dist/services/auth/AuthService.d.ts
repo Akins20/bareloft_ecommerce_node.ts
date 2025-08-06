@@ -1,17 +1,19 @@
-import { User, RequestOTPRequest, RequestOTPResponse, VerifyOTPRequest, SignupRequest, LoginRequest, AuthResponse, RefreshTokenRequest, RefreshTokenResponse, NigerianPhoneNumber } from "@/types";
-export declare class AuthService {
+import { BaseService } from "../BaseService";
+import { User, RequestOTPRequest, VerifyOTPRequest, SignupRequest, LoginRequest, RefreshTokenRequest, NigerianPhoneNumber } from "../../types";
+import { RefreshTokenResponse } from "@/types/auth.types";
+export declare class AuthService extends BaseService {
     private userRepository;
     private otpRepository;
     private sessionRepository;
     private jwtService;
     private otpService;
     private smsService;
-    constructor();
+    constructor(userRepository?: any, otpRepository?: any, sessionRepository?: any, jwtService?: any, otpService?: any, smsService?: any);
     /**
      * Request OTP for phone number verification
      * Implements rate limiting and Nigerian phone validation
      */
-    requestOTP(data: RequestOTPRequest): Promise<RequestOTPResponse>;
+    requestOTP(data: RequestOTPRequest): Promise<any>;
     /**
      * Verify OTP code
      */
@@ -22,11 +24,11 @@ export declare class AuthService {
     /**
      * User signup with OTP verification
      */
-    signup(data: SignupRequest): Promise<AuthResponse>;
+    signup(data: SignupRequest): Promise<any>;
     /**
      * User login with OTP verification
      */
-    login(data: LoginRequest): Promise<AuthResponse>;
+    login(data: LoginRequest): Promise<any>;
     /**
      * Refresh access token
      */

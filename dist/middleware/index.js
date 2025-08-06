@@ -64,7 +64,7 @@ exports.createMiddlewareStack = {
         requestLogger_1.requestLogger,
         rateLimiter_1.rateLimiter.admin,
         authenticate_1.authenticate,
-        (0, AuthMiddleware_1.authorize)(["admin", "super_admin"]),
+        (0, AuthMiddleware_1.authorize)(["ADMIN", "SUPER_ADMIN"]),
         sanitizeInput_1.sanitizeInput,
         xss_1.xssProtection,
         auditLogging_1.auditLogger,

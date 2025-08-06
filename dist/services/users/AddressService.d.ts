@@ -1,32 +1,6 @@
 import { BaseService } from "../BaseService";
-import { Address } from "@/types";
-export interface CreateAddressRequest {
-    firstName: string;
-    lastName: string;
-    company?: string;
-    addressLine1: string;
-    addressLine2?: string;
-    city: string;
-    state: string;
-    postalCode?: string;
-    country: string;
-    phoneNumber: string;
-    isDefault?: boolean;
-    type: 'shipping' | 'billing';
-}
-export interface UpdateAddressRequest {
-    firstName?: string;
-    lastName?: string;
-    company?: string;
-    addressLine1?: string;
-    addressLine2?: string;
-    city?: string;
-    state?: string;
-    postalCode?: string;
-    phoneNumber?: string;
-    isDefault?: boolean;
-    type?: 'shipping' | 'billing';
-}
+import { Address } from "../../types/common.types";
+import { CreateAddressRequest, UpdateAddressRequest } from "../../types/user.types";
 export declare class AddressService extends BaseService {
     private addressRepository;
     constructor();
@@ -35,24 +9,57 @@ export declare class AddressService extends BaseService {
      */
     getUserAddresses(userId: string): Promise<Address[]>;
     /**
+     * Get address by ID
+     */
+    getAddressById(addressId: string, userId: string): Promise<Address | null>;
+    /**
      * Create new address
      */
     createAddress(userId: string, data: CreateAddressRequest): Promise<Address>;
     /**
      * Update address
      */
-    updateAddress(userId: string, addressId: string, data: UpdateAddressRequest): Promise<Address>;
+    updateAddress(addressId: string, userId: string, data: UpdateAddressRequest): Promise<Address>;
     /**
      * Delete address
      */
-    deleteAddress(userId: string, addressId: string): Promise<void>;
+    deleteAddress(addressId: string, userId: string): Promise<{
+        success: boolean;
+        message: string;
+    }>;
     /**
      * Set default address
      */
-    setDefaultAddress(userId: string, addressId: string): Promise<Address>;
+    setDefaultAddress(addressId: string, userId: string, type?: 'SHIPPING' | 'BILLING'): Promise<Address>;
+    /**
+     * Get default addresses
+     */
+    getDefaultAddresses(userId: string): Promise<{
+        shipping?: Address;
+        billing?: Address;
+    }>;
+    /**
+     * Validate Nigerian address
+     */
+    validateAddress(addressData: any): Promise<{
+        isValid: boolean;
+        errors: string[];
+        suggestions?: any;
+    }>;
+    /**
+     * Get Nigerian locations (states and cities)
+     */
+    getNigerianLocations(state?: string): Promise<any>;
+    /**
+     * Calculate shipping cost to address
+     */
+    calculateShippingCost(addressId: string, userId: string, options: {
+        items?: any[];
+        weight?: number;
+    }): Promise<any>;
     /**
      * Handle service errors
      */
-    private handleError;
+    protected handleError(message: string, error: any): never;
 }
 //# sourceMappingURL=AddressService.d.ts.map

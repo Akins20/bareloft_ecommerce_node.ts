@@ -70,6 +70,13 @@ class CartController extends BaseController_1.BaseController {
                 });
                 return;
             }
+            if (!userId) {
+                res.status(401).json({
+                    success: false,
+                    message: "Authentication required",
+                });
+                return;
+            }
             const cartItem = await this.cartService.addToCart(userId, {
                 productId,
                 quantity,
@@ -79,10 +86,10 @@ class CartController extends BaseController_1.BaseController {
                 id: `cart_${userId}`,
                 userId,
                 items: [cartItem],
-                subtotal: cartItem.price * cartItem.quantity,
+                subtotal: cartItem.unitPrice * cartItem.quantity,
                 estimatedTax: 0,
                 estimatedShipping: 0,
-                estimatedTotal: cartItem.price * cartItem.quantity,
+                estimatedTotal: cartItem.unitPrice * cartItem.quantity,
                 currency: "NGN",
                 createdAt: new Date(),
                 updatedAt: new Date(),
@@ -110,10 +117,18 @@ class CartController extends BaseController_1.BaseController {
         try {
             const userId = req.user?.userId;
             const sessionId = req.sessionId || req.headers["x-session-id"];
-            const { quantity } = req.body;
+            const { productId, quantity } = req.body;
             const { itemId } = req.params;
+            if (!userId) {
+                res.status(401).json({
+                    success: false,
+                    message: "Authentication required",
+                });
+                return;
+            }
             // Validate input
             const validationErrors = this.validateUpdateCartRequest({
+                productId,
                 quantity,
             });
             if (validationErrors.length > 0) {
@@ -157,6 +172,18 @@ class CartController extends BaseController_1.BaseController {
                 });
                 return;
             }
+            if (!userId) {
+                const response = {
+                    success: false,
+                    message: "Authentication required",
+                    error: {
+                        code: "AUTHENTICATION_REQUIRED",
+                        details: "User must be authenticated to perform this action"
+                    }
+                };
+                res.status(401).json(response);
+                return;
+            }
             const result = await this.cartService.removeFromCart(userId, sessionId, {
                 productId,
             });
@@ -181,6 +208,18 @@ class CartController extends BaseController_1.BaseController {
         try {
             const userId = req.user?.userId;
             const sessionId = req.sessionId || req.headers["x-session-id"];
+            if (!userId) {
+                const response = {
+                    success: false,
+                    message: "Authentication required",
+                    error: {
+                        code: "AUTHENTICATION_REQUIRED",
+                        details: "User must be authenticated to perform this action"
+                    }
+                };
+                res.status(401).json(response);
+                return;
+            }
             const result = await this.cartService.clearCart(userId, sessionId);
             const response = {
                 success: true,
@@ -202,6 +241,18 @@ class CartController extends BaseController_1.BaseController {
             const userId = req.user?.userId;
             const sessionId = req.sessionId || req.headers["x-session-id"];
             const { couponCode } = req.body;
+            if (!userId) {
+                const response = {
+                    success: false,
+                    message: "Authentication required",
+                    error: {
+                        code: "AUTHENTICATION_REQUIRED",
+                        details: "User must be authenticated to perform this action"
+                    }
+                };
+                res.status(401).json(response);
+                return;
+            }
             if (!couponCode || couponCode.trim().length === 0) {
                 res.status(400).json({
                     success: false,
@@ -233,6 +284,18 @@ class CartController extends BaseController_1.BaseController {
         try {
             const userId = req.user?.userId;
             const sessionId = req.sessionId || req.headers["x-session-id"];
+            if (!userId) {
+                const response = {
+                    success: false,
+                    message: "Authentication required",
+                    error: {
+                        code: "AUTHENTICATION_REQUIRED",
+                        details: "User must be authenticated to perform this action"
+                    }
+                };
+                res.status(401).json(response);
+                return;
+            }
             const result = await this.cartService.removeCoupon(userId, sessionId);
             const response = {
                 success: true,
@@ -255,11 +318,14 @@ class CartController extends BaseController_1.BaseController {
             const sessionId = req.sessionId || req.headers["x-session-id"];
             const { state, city, postalCode } = req.body;
             // Validate Nigerian states
-            const validationErrors = this.validateShippingAddress({
+            const validationData = {
                 state,
                 city,
-                postalCode,
-            });
+            };
+            if (postalCode) {
+                validationData.postalCode = postalCode;
+            }
+            const validationErrors = this.validateShippingAddress(validationData);
             if (validationErrors.length > 0) {
                 res.status(400).json({
                     success: false,
@@ -268,11 +334,26 @@ class CartController extends BaseController_1.BaseController {
                 });
                 return;
             }
-            const result = await this.cartService.updateShipping(userId, sessionId, {
+            if (!userId) {
+                const response = {
+                    success: false,
+                    message: "Authentication required",
+                    error: {
+                        code: "AUTHENTICATION_REQUIRED",
+                        details: "User must be authenticated to perform this action"
+                    }
+                };
+                res.status(401).json(response);
+                return;
+            }
+            const shippingData = {
                 state,
                 city,
-                postalCode,
-            });
+            };
+            if (postalCode) {
+                shippingData.postalCode = postalCode;
+            }
+            const result = await this.cartService.updateShipping(userId, sessionId, shippingData);
             const response = {
                 success: true,
                 message: "Shipping address updated successfully",
@@ -292,6 +373,18 @@ class CartController extends BaseController_1.BaseController {
         try {
             const userId = req.user?.userId;
             const sessionId = req.sessionId || req.headers["x-session-id"];
+            if (!userId) {
+                const response = {
+                    success: false,
+                    message: "Authentication required",
+                    error: {
+                        code: "AUTHENTICATION_REQUIRED",
+                        details: "User must be authenticated to perform this action"
+                    }
+                };
+                res.status(401).json(response);
+                return;
+            }
             const validation = await this.cartService.validateCart(userId, sessionId);
             const response = {
                 success: true,
@@ -312,11 +405,23 @@ class CartController extends BaseController_1.BaseController {
         try {
             const userId = req.user?.userId;
             const sessionId = req.sessionId || req.headers["x-session-id"];
-            const count = await this.cartService.getCartItemCount(userId, sessionId);
+            if (!userId) {
+                const response = {
+                    success: false,
+                    message: "Authentication required",
+                    error: {
+                        code: "AUTHENTICATION_REQUIRED",
+                        details: "User must be authenticated to perform this action"
+                    }
+                };
+                res.status(401).json(response);
+                return;
+            }
+            const countResult = await this.cartService.getCartItemCount(userId, sessionId);
             const response = {
                 success: true,
                 message: "Cart item count retrieved successfully",
-                data: { count },
+                data: countResult,
             };
             res.json(response);
         }
@@ -346,7 +451,10 @@ class CartController extends BaseController_1.BaseController {
                 });
                 return;
             }
-            const result = await this.cartService.mergeCart(userId, guestSessionId, strategy || "merge");
+            const result = await this.cartService.mergeCart(userId, req.sessionId || "current", {
+                guestSessionId,
+                strategy: strategy || "merge"
+            });
             const response = {
                 success: true,
                 message: "Cart merged successfully",
@@ -374,7 +482,19 @@ class CartController extends BaseController_1.BaseController {
                 });
                 return;
             }
-            const shippingOptions = await this.cartService.calculateShipping(userId, sessionId, { state, city, postalCode });
+            if (!userId) {
+                const response = {
+                    success: false,
+                    message: "Authentication required",
+                    error: {
+                        code: "AUTHENTICATION_REQUIRED",
+                        details: "User must be authenticated to perform this action"
+                    }
+                };
+                res.status(401).json(response);
+                return;
+            }
+            const shippingOptions = await this.cartService.calculateShipping(userId, { state, city, postalCode });
             const response = {
                 success: true,
                 message: "Shipping options calculated successfully",
@@ -398,6 +518,13 @@ class CartController extends BaseController_1.BaseController {
                 res.status(401).json({
                     success: false,
                     message: "User authentication required",
+                });
+                return;
+            }
+            if (!productId) {
+                res.status(400).json({
+                    success: false,
+                    message: "Product ID is required",
                 });
                 return;
             }
@@ -431,7 +558,14 @@ class CartController extends BaseController_1.BaseController {
                 });
                 return;
             }
-            const result = await this.cartService.moveToCart(userId, productId, quantity || 1);
+            if (!productId) {
+                res.status(400).json({
+                    success: false,
+                    message: "Product ID is required",
+                });
+                return;
+            }
+            const result = await this.cartService.moveToCart(userId, productId);
             const response = {
                 success: true,
                 message: result.success

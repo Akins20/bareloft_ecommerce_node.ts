@@ -29,7 +29,10 @@ export declare class ProductService extends BaseService {
     /**
      * 🗑️ Delete product (soft delete)
      */
-    deleteProduct(productId: string, adminId: string): Promise<void>;
+    deleteProduct(productId: string, adminId: string): Promise<{
+        success: boolean;
+        message: string;
+    }>;
     /**
      * 🔍 Search products with advanced filters
      */
@@ -45,7 +48,7 @@ export declare class ProductService extends BaseService {
     /**
      * 🔗 Get related products
      */
-    private getRelatedProducts;
+    getRelatedProducts(productId: string, categoryId: string, limit?: number): Promise<Product[]>;
     /**
      * 🎯 Format product for API response
      */
@@ -86,5 +89,32 @@ export declare class ProductService extends BaseService {
      * 💰 Get price range for filters
      */
     private getPriceRange;
+    /**
+     * 📦 Get product stock information
+     */
+    getProductStock(productId: string): Promise<any>;
+    /**
+     * 📦 Check stock for multiple products
+     */
+    checkMultipleStock(productIds: string[]): Promise<any[]>;
+    /**
+     * ⭐ Get product reviews summary
+     */
+    getProductReviewsSummary(productId: string): Promise<any>;
+    /**
+     * 📈 Get product price history
+     */
+    getProductPriceHistory(productId: string, days?: number): Promise<any[]>;
+    /**
+     * ⚠️ Get products with low stock
+     */
+    getLowStockProducts(pagination: {
+        page: number;
+        limit: number;
+    }): Promise<any>;
+    /**
+     * 📊 Get product analytics
+     */
+    getProductAnalytics(productId: string, days?: number): Promise<any>;
 }
 //# sourceMappingURL=ProductService.d.ts.map

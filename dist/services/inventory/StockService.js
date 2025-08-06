@@ -1,9 +1,43 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.StockService = void 0;
 const BaseService_1 = require("../BaseService");
 const models_1 = require("../../models");
 const types_1 = require("../../types");
+const client_1 = require("@prisma/client");
 class StockService extends BaseService_1.BaseService {
     inventoryRepository;
     cacheService;
@@ -19,20 +53,18 @@ class StockService extends BaseService_1.BaseService {
      */
     async checkStockAvailability(productId, requestedQuantity = 1) {
         try {
-            const inventory = await models_1.InventoryModel.findUnique({
-                where: { productId },
-                include: {
-                    product: {
-                        select: {
-                            name: true,
-                            isActive: true,
-                        },
-                    },
+            const product = await models_1.ProductModel.findUnique({
+                where: { id: productId },
+                select: {
+                    id: true,
+                    name: true,
+                    isActive: true,
+                    stock: true,
+                    lowStockThreshold: true,
+                    trackQuantity: true,
                 },
             });
-            if (!inventory) {
-                // Create default inventory record if not exists
-                await this.createDefaultInventory(productId);
+            if (!product) {
                 return {
                     productId,
                     available: false,
@@ -43,14 +75,16 @@ class StockService extends BaseService_1.BaseService {
                     isOutOfStock: true,
                 };
             }
-            const availableStock = inventory.quantity - inventory.reservedQuantity;
-            const isLowStock = inventory.quantity <= inventory.lowStockThreshold;
-            const isOutOfStock = inventory.quantity === 0;
+            // Calculate reserved stock from active reservations
+            const reservedStock = await this.getReservedStock(productId);
+            const availableStock = product.stock - reservedStock;
+            const isLowStock = product.stock <= product.lowStockThreshold;
+            const isOutOfStock = product.stock === 0;
             return {
                 productId,
-                available: availableStock >= requestedQuantity && inventory.product.isActive,
-                currentStock: inventory.quantity,
-                reservedStock: inventory.reservedQuantity,
+                available: availableStock >= requestedQuantity && product.isActive && product.trackQuantity,
+                currentStock: product.stock,
+                reservedStock,
                 availableStock,
                 isLowStock,
                 isOutOfStock,
@@ -67,22 +101,21 @@ class StockService extends BaseService_1.BaseService {
     async bulkCheckStockAvailability(requests) {
         try {
             const productIds = requests.map((req) => req.productId);
-            const inventories = await models_1.InventoryModel.findMany({
+            const products = await models_1.ProductModel.findMany({
                 where: {
-                    productId: { in: productIds },
+                    id: { in: productIds },
                 },
-                include: {
-                    product: {
-                        select: {
-                            isActive: true,
-                        },
-                    },
+                select: {
+                    id: true,
+                    isActive: true,
+                    stock: true,
+                    trackQuantity: true,
                 },
             });
-            const inventoryMap = new Map(inventories.map((inv) => [inv.productId, inv]));
-            return requests.map((request) => {
-                const inventory = inventoryMap.get(request.productId);
-                if (!inventory) {
+            const productMap = new Map(products.map((product) => [product.id, product]));
+            return await Promise.all(requests.map(async (request) => {
+                const product = productMap.get(request.productId);
+                if (!product) {
                     return {
                         productId: request.productId,
                         available: false,
@@ -91,9 +124,11 @@ class StockService extends BaseService_1.BaseService {
                         shortfall: request.requestedQuantity,
                     };
                 }
-                const availableQuantity = inventory.quantity - inventory.reservedQuantity;
+                const reservedStock = await this.getReservedStock(request.productId);
+                const availableQuantity = product.stock - reservedStock;
                 const available = availableQuantity >= request.requestedQuantity &&
-                    inventory.product.isActive;
+                    product.isActive &&
+                    product.trackQuantity;
                 const result = {
                     productId: request.productId,
                     available,
@@ -104,7 +139,7 @@ class StockService extends BaseService_1.BaseService {
                     result.shortfall = request.requestedQuantity - availableQuantity;
                 }
                 return result;
-            });
+            }));
         }
         catch (error) {
             this.handleError("Error in bulk stock availability check", error);
@@ -116,13 +151,20 @@ class StockService extends BaseService_1.BaseService {
      */
     async updateStock(data) {
         try {
-            const inventory = await models_1.InventoryModel.findUnique({
-                where: { productId: data.productId },
+            const product = await models_1.ProductModel.findUnique({
+                where: { id: data.productId },
+                select: {
+                    id: true,
+                    stock: true,
+                    costPrice: true,
+                    trackQuantity: true,
+                    lowStockThreshold: true,
+                },
             });
-            if (!inventory) {
-                throw new types_1.AppError("Inventory record not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+            if (!product) {
+                throw new types_1.AppError("Product not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
             }
-            const previousQuantity = inventory.quantity;
+            const previousQuantity = product.stock;
             let newQuantity;
             // Calculate new quantity based on movement type
             if (this.isInboundMovement(data.type)) {
@@ -131,7 +173,8 @@ class StockService extends BaseService_1.BaseService {
             else if (this.isOutboundMovement(data.type)) {
                 newQuantity = Math.max(0, previousQuantity - data.quantity);
                 // Check if we have enough stock
-                const availableStock = inventory.quantity - inventory.reservedQuantity;
+                const reservedStock = await this.getReservedStock(data.productId);
+                const availableStock = product.stock - reservedStock;
                 if (availableStock < data.quantity) {
                     throw new types_1.AppError("Insufficient stock available", types_1.HTTP_STATUS.BAD_REQUEST, types_1.ERROR_CODES.INSUFFICIENT_STOCK);
                 }
@@ -140,42 +183,31 @@ class StockService extends BaseService_1.BaseService {
                 // For adjustments, set directly
                 newQuantity = data.quantity;
             }
-            // Update inventory
-            const updatedInventory = await models_1.InventoryModel.update({
-                where: { productId: data.productId },
+            // Update product stock
+            const updatedProduct = await models_1.ProductModel.update({
+                where: { id: data.productId },
                 data: {
-                    quantity: newQuantity,
-                    lastCost: data.unitCost || inventory.lastCost,
-                    lastSoldAt: this.isOutboundMovement(data.type)
-                        ? new Date()
-                        : inventory.lastSoldAt,
-                    lastRestockedAt: this.isInboundMovement(data.type)
-                        ? new Date()
-                        : inventory.lastRestockedAt,
+                    stock: newQuantity,
+                    costPrice: data.unitCost || product.costPrice,
                     updatedAt: new Date(),
                 },
             });
             // Create movement record
             await models_1.InventoryMovementModel.create({
                 data: {
-                    inventoryId: inventory.id,
                     productId: data.productId,
                     type: data.type,
                     quantity: data.quantity,
-                    previousQuantity,
-                    newQuantity,
-                    unitCost: data.unitCost,
-                    totalCost: data.unitCost ? data.unitCost * data.quantity : undefined,
-                    referenceType: data.reference,
-                    referenceId: data.referenceId,
+                    reference: data.reference,
                     reason: data.reason,
-                    createdBy: data.userId,
                 },
             });
-            // Update inventory status based on new quantity
-            await this.updateInventoryStatus(data.productId, newQuantity, updatedInventory.lowStockThreshold);
             // Check for alerts
-            await this.checkStockAlerts(updatedInventory);
+            await this.checkStockAlerts({
+                productId: data.productId,
+                stock: newQuantity,
+                lowStockThreshold: product.lowStockThreshold,
+            });
             // Clear cache
             await this.clearStockCache(data.productId);
         }
@@ -189,21 +221,21 @@ class StockService extends BaseService_1.BaseService {
      */
     async getCurrentStockLevels(productIds) {
         try {
-            const inventories = await models_1.InventoryModel.findMany({
+            const products = await models_1.ProductModel.findMany({
                 where: {
-                    productId: { in: productIds },
+                    id: { in: productIds },
                 },
                 select: {
-                    productId: true,
-                    quantity: true,
-                    reservedQuantity: true,
+                    id: true,
+                    stock: true,
                 },
             });
             const stockLevels = new Map();
-            inventories.forEach((inventory) => {
-                const availableStock = inventory.quantity - inventory.reservedQuantity;
-                stockLevels.set(inventory.productId, availableStock);
-            });
+            for (const product of products) {
+                const reservedStock = await this.getReservedStock(product.id);
+                const availableStock = product.stock - reservedStock;
+                stockLevels.set(product.id, availableStock);
+            }
             // For products not found, set stock to 0
             productIds.forEach((productId) => {
                 if (!stockLevels.has(productId)) {
@@ -224,7 +256,7 @@ class StockService extends BaseService_1.BaseService {
         await this.updateStock({
             productId,
             quantity,
-            type: "SALE",
+            type: client_1.MovementType.OUT,
             reason: "Product sold",
             reference: "order",
             referenceId: orderId,
@@ -238,7 +270,7 @@ class StockService extends BaseService_1.BaseService {
         await this.updateStock({
             productId,
             quantity,
-            type: "RESTOCK",
+            type: client_1.MovementType.IN,
             reason,
             unitCost,
             userId,
@@ -251,7 +283,7 @@ class StockService extends BaseService_1.BaseService {
         await this.updateStock({
             productId,
             quantity,
-            type: "RETURN",
+            type: client_1.MovementType.IN,
             reason: "Customer return",
             reference: "order",
             referenceId: orderId,
@@ -265,7 +297,7 @@ class StockService extends BaseService_1.BaseService {
         await this.updateStock({
             productId,
             quantity,
-            type: "DAMAGE",
+            type: client_1.MovementType.OUT,
             reason,
             userId,
         });
@@ -279,7 +311,7 @@ class StockService extends BaseService_1.BaseService {
         await this.updateStock({
             productId,
             quantity,
-            type: "TRANSFER_OUT",
+            type: client_1.MovementType.OUT,
             reason: `Transfer from ${fromLocation} to ${toLocation}`,
             userId,
         });
@@ -298,15 +330,9 @@ class StockService extends BaseService_1.BaseService {
                 id: movement.id,
                 type: movement.type,
                 quantity: movement.quantity,
-                previousQuantity: movement.previousQuantity,
-                newQuantity: movement.newQuantity,
-                unitCost: movement.unitCost ? Number(movement.unitCost) : null,
-                totalCost: movement.totalCost ? Number(movement.totalCost) : null,
                 reason: movement.reason,
-                referenceType: movement.referenceType,
-                referenceId: movement.referenceId,
+                reference: movement.reference,
                 createdAt: movement.createdAt,
-                createdBy: movement.createdBy,
             }));
         }
         catch (error) {
@@ -323,45 +349,37 @@ class StockService extends BaseService_1.BaseService {
             const cached = await this.cacheService.get(cacheKey);
             if (cached)
                 return cached;
-            const lowStockInventories = await models_1.InventoryModel.findMany({
+            const lowStockProducts = await models_1.ProductModel.findMany({
                 where: {
                     AND: [
-                        { trackInventory: true },
-                        { status: "ACTIVE" },
-                        // Use a raw query for complex comparison
-                        { quantity: { lte: { ref: "lowStockThreshold" } } },
-                        { quantity: { gt: 0 } },
+                        { trackQuantity: true },
+                        { isActive: true },
+                        { stock: { gt: 0 } },
                     ],
                 },
                 include: {
-                    product: {
-                        select: {
-                            id: true,
-                            name: true,
-                            sku: true,
-                            price: true,
-                            category: {
-                                select: { name: true },
-                            },
-                        },
+                    category: {
+                        select: { name: true },
                     },
                 },
                 orderBy: {
-                    quantity: "asc",
+                    stock: "asc",
                 },
             });
-            const result = lowStockInventories.map((inventory) => ({
-                productId: inventory.productId,
-                productName: inventory.product.name,
-                sku: inventory.product.sku,
-                currentStock: inventory.quantity,
-                threshold: inventory.lowStockThreshold,
-                category: inventory.product.category.name,
-                stockPercentage: Math.round((inventory.quantity / inventory.lowStockThreshold) * 100),
-                urgency: this.calculateUrgency(inventory.quantity, inventory.lowStockThreshold),
+            // Filter products where stock <= lowStockThreshold
+            const lowStockFiltered = lowStockProducts.filter(product => product.stock <= product.lowStockThreshold);
+            const result = lowStockFiltered.map((product) => ({
+                productId: product.id,
+                productName: product.name,
+                sku: product.sku,
+                currentStock: product.stock,
+                threshold: product.lowStockThreshold,
+                category: product.category.name,
+                stockPercentage: Math.round((product.stock / product.lowStockThreshold) * 100),
+                urgency: this.calculateUrgency(product.stock, product.lowStockThreshold),
             }));
             // Cache for 15 minutes
-            await this.cacheService.set(cacheKey, result, 900);
+            await this.cacheService.set(cacheKey, result, { ttl: 900 });
             return result;
         }
         catch (error) {
@@ -374,33 +392,26 @@ class StockService extends BaseService_1.BaseService {
      */
     async getOutOfStockProducts() {
         try {
-            const outOfStockInventories = await models_1.InventoryModel.findMany({
+            const outOfStockProducts = await models_1.ProductModel.findMany({
                 where: {
-                    quantity: 0,
-                    trackInventory: true,
-                    status: "ACTIVE",
+                    stock: 0,
+                    trackQuantity: true,
+                    isActive: true,
                 },
                 include: {
-                    product: {
-                        select: {
-                            id: true,
-                            name: true,
-                            sku: true,
-                            price: true,
-                            category: {
-                                select: { name: true },
-                            },
-                        },
+                    category: {
+                        select: { name: true },
                     },
                 },
             });
-            return outOfStockInventories.map((inventory) => ({
-                productId: inventory.productId,
-                productName: inventory.product.name,
-                sku: inventory.product.sku,
-                category: inventory.product.category.name,
-                lastRestockedAt: inventory.lastRestockedAt,
-                lastSoldAt: inventory.lastSoldAt,
+            return outOfStockProducts.map((product) => ({
+                productId: product.id,
+                productName: product.name,
+                sku: product.sku,
+                category: product.category.name,
+                // Note: These fields don't exist in Product model
+                lastRestockedAt: null,
+                lastSoldAt: null,
             }));
         }
         catch (error) {
@@ -409,110 +420,60 @@ class StockService extends BaseService_1.BaseService {
         }
     }
     // Private helper methods
-    async createDefaultInventory(productId) {
-        await models_1.InventoryModel.create({
-            data: {
+    async getReservedStock(productId) {
+        // Import StockReservationModel locally to avoid circular imports
+        const { StockReservationModel } = await Promise.resolve().then(() => __importStar(require("../../models")));
+        const reservations = await StockReservationModel.findMany({
+            where: {
                 productId,
-                quantity: 0,
-                reservedQuantity: 0,
-                lowStockThreshold: 10,
-                reorderPoint: 5,
-                reorderQuantity: 50,
-                status: "ACTIVE",
-                trackInventory: true,
-                allowBackorder: false,
-                averageCost: 0,
-                lastCost: 0,
+                expiresAt: { gt: new Date() },
+            },
+            select: {
+                quantity: true,
             },
         });
+        return reservations.reduce((total, reservation) => total + reservation.quantity, 0);
     }
     isInboundMovement(type) {
-        return [
-            "INITIAL_STOCK",
-            "RESTOCK",
-            "PURCHASE",
-            "RETURN",
-            "TRANSFER_IN",
-            "ADJUSTMENT_IN",
-            "RELEASE_RESERVE",
-        ].includes(type);
+        return type === client_1.MovementType.IN;
     }
     isOutboundMovement(type) {
-        return [
-            "SALE",
-            "TRANSFER_OUT",
-            "DAMAGE",
-            "THEFT",
-            "EXPIRED",
-            "ADJUSTMENT_OUT",
-            "RESERVE",
-        ].includes(type);
+        return type === client_1.MovementType.OUT;
     }
-    async updateInventoryStatus(productId, quantity, lowStockThreshold) {
-        let status = "ACTIVE";
-        if (quantity === 0) {
-            status = "OUT_OF_STOCK";
-        }
-        else if (quantity <= lowStockThreshold) {
-            status = "LOW_STOCK";
-        }
-        await models_1.InventoryModel.update({
-            where: { productId },
-            data: { status },
-        });
-    }
-    async checkStockAlerts(inventory) {
+    async checkStockAlerts(product) {
         // Low stock alert
-        if (inventory.quantity <= inventory.lowStockThreshold &&
-            inventory.quantity > 0) {
-            await this.sendLowStockAlert(inventory);
+        if (product.stock <= product.lowStockThreshold &&
+            product.stock > 0) {
+            await this.sendLowStockAlert(product);
         }
         // Out of stock alert
-        if (inventory.quantity === 0) {
-            await this.sendOutOfStockAlert(inventory);
-        }
-        // Reorder point alert
-        if (inventory.quantity <= inventory.reorderPoint) {
-            await this.sendReorderAlert(inventory);
+        if (product.stock === 0) {
+            await this.sendOutOfStockAlert(product);
         }
     }
-    async sendLowStockAlert(inventory) {
+    async sendLowStockAlert(product) {
         await this.notificationService.sendNotification({
-            type: "LOW_STOCK_ALERT",
+            type: "PRODUCT_ALERT",
             channel: "EMAIL",
             recipient: {
                 email: "inventory@bareloft.com",
             },
             variables: {
-                productId: inventory.productId,
-                currentStock: inventory.quantity,
-                threshold: inventory.lowStockThreshold,
+                productId: product.productId,
+                currentStock: product.stock,
+                threshold: product.lowStockThreshold,
             },
         });
     }
-    async sendOutOfStockAlert(inventory) {
+    async sendOutOfStockAlert(product) {
         await this.notificationService.sendNotification({
-            type: "OUT_OF_STOCK_ALERT",
+            type: "PRODUCT_ALERT",
             channel: "EMAIL",
             recipient: {
                 email: "inventory@bareloft.com",
             },
             variables: {
-                productId: inventory.productId,
-            },
-        });
-    }
-    async sendReorderAlert(inventory) {
-        await this.notificationService.sendNotification({
-            type: "RESTOCK_NEEDED",
-            channel: "EMAIL",
-            recipient: {
-                email: "purchasing@bareloft.com",
-            },
-            variables: {
-                productId: inventory.productId,
-                reorderQuantity: inventory.reorderQuantity,
-                currentStock: inventory.quantity,
+                productId: product.productId,
             },
         });
     }
@@ -530,8 +491,6 @@ class StockService extends BaseService_1.BaseService {
         await Promise.all([
             this.cacheService.delete(`stock:${productId}`),
             this.cacheService.delete("low-stock-products"),
-            this.cacheService.deletePattern("stock-check:*"),
-            this.cacheService.deletePattern("inventory:*"),
         ]);
     }
 }

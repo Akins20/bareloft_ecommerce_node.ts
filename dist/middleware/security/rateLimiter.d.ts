@@ -4,6 +4,7 @@
  * Nigerian market optimized with mobile-friendly limits
  */
 import { Request } from "express";
+import "../auth/authenticate";
 declare const createRateLimiter: (options: {
     windowMs: number;
     max: number;

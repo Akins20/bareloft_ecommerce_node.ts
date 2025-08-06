@@ -11,6 +11,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.corsConfig = exports.createRateLimiter = exports.rateLimiter = void 0;
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const winston_1 = require("../../utils/logger/winston");
+// Import to ensure extended Request type is available
+require("../auth/authenticate");
 // 🇳🇬 Nigerian-optimized rate limiting
 // Accounts for slower mobile networks and data costs
 const createRateLimiter = (options) => {
@@ -28,7 +30,7 @@ const createRateLimiter = (options) => {
         keyGenerator: options.keyGenerator ||
             ((req) => {
                 // Prefer user ID for authenticated requests, fallback to IP
-                return req.user?.id || req.ip;
+                return req.user?.id || req.ip || 'anonymous';
             }),
         // Custom handler for rate limit exceeded
         handler: (req, res) => {
@@ -49,7 +51,7 @@ const createRateLimiter = (options) => {
         // Skip certain IPs (admin, health checks)
         skip: (req) => {
             const skipIPs = process.env.RATE_LIMIT_SKIP_IPS?.split(",") || [];
-            return skipIPs.includes(req.ip);
+            return req.ip ? skipIPs.includes(req.ip) : false;
         },
     });
 };
@@ -120,7 +122,7 @@ const allowedOrigins = [
     "ionic://localhost",
 ];
 // 🇳🇬 Add Nigerian CDN and development origins
-if (environment_1.environment.NODE_ENV === "development") {
+if (environment_1.config.nodeEnv === "development") {
     allowedOrigins.push("http://localhost:8080", "http://127.0.0.1:3000", "http://192.168.1.*" // Local network for mobile testing
     );
 }

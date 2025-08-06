@@ -14,8 +14,9 @@ export interface UpdateUserData {
     lastName?: string;
     email?: string;
     avatar?: string;
-    dateOfBirth?: Date;
-    gender?: string;
+    phoneNumber?: string;
+    dateOfBirth?: string;
+    gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
     role?: "CUSTOMER" | "ADMIN" | "SUPER_ADMIN";
     status?: "ACTIVE" | "INACTIVE" | "SUSPENDED" | "PENDING_VERIFICATION";
     isVerified?: boolean;
@@ -23,6 +24,10 @@ export interface UpdateUserData {
 }
 export declare class UserRepository extends BaseRepository<User, CreateUserData, UpdateUserData> {
     constructor(prisma?: PrismaClient);
+    /**
+     * Transform User to PublicUser
+     */
+    private transformToPublicUser;
     /**
      * Find user by phone number
      */

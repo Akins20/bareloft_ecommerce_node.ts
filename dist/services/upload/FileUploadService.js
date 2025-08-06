@@ -39,7 +39,7 @@ class FileUploadService extends BaseService_1.BaseService {
             if (isImage && (options.resize || options.generateThumbnail)) {
                 // Process image
                 const processedImage = await this.imageProcessor.processImage(file.buffer, {
-                    resize: options.resize,
+                    ...(options.resize ? { resize: options.resize } : {}),
                     format: "webp",
                     quality: options.resize?.quality || 80,
                 });
@@ -89,14 +89,17 @@ class FileUploadService extends BaseService_1.BaseService {
                 folder: "products",
                 resize: { width: 1200, height: 1200, quality: 85 },
                 generateThumbnail: true,
-                allowedTypes: types_1.CONSTANTS.ALLOWED_IMAGE_FORMATS,
+                allowedTypes: [...types_1.CONSTANTS.ALLOWED_IMAGE_FORMATS],
                 maxSize: types_1.CONSTANTS.MAX_FILE_SIZE,
             };
             const images = await this.uploadMultipleFiles(files, uploadOptions);
-            return {
+            const result = {
                 images,
-                primaryImage: images[0], // First image is primary
             };
+            if (images[0]) {
+                result.primaryImage = images[0];
+            }
+            return result;
         }
         catch (error) {
             this.handleError("Error uploading product images", error);
@@ -131,7 +134,7 @@ class FileUploadService extends BaseService_1.BaseService {
                 folder: "categories",
                 resize: { width: 800, height: 600, quality: 80 },
                 generateThumbnail: true,
-                allowedTypes: types_1.CONSTANTS.ALLOWED_IMAGE_FORMATS,
+                allowedTypes: [...types_1.CONSTANTS.ALLOWED_IMAGE_FORMATS],
             };
             const result = await this.uploadFile(file, options);
             return result.original;

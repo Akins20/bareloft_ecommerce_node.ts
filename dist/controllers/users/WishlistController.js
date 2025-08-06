@@ -26,7 +26,14 @@ class WishlistController extends BaseController_1.BaseController {
                 limit,
                 includeOutOfStock,
             });
-            this.sendPaginatedResponse(res, result.items, result.pagination, "Wishlist retrieved successfully");
+            this.sendPaginatedResponse(res, result.items, {
+                page: result.pagination.currentPage,
+                limit: result.pagination.itemsPerPage,
+                total: result.pagination.totalItems,
+                totalPages: result.pagination.totalPages,
+                hasNext: result.pagination.hasNextPage,
+                hasPrev: result.pagination.hasPreviousPage,
+            }, "Wishlist retrieved successfully");
         }
         catch (error) {
             this.handleError(error, req, res);
@@ -104,6 +111,10 @@ class WishlistController extends BaseController_1.BaseController {
                 this.sendError(res, "Authentication required", 401, "UNAUTHORIZED");
                 return;
             }
+            if (!productId) {
+                this.sendError(res, "Product ID is required", 400, "VALIDATION_ERROR");
+                return;
+            }
             const isInWishlist = await this.wishlistService.isProductInWishlist(userId, productId);
             this.sendSuccess(res, {
                 productId,
@@ -171,6 +182,10 @@ class WishlistController extends BaseController_1.BaseController {
             }
             const qty = quantity && quantity > 0 ? quantity : 1;
             const shouldRemove = removeFromWishlist !== false; // Default to true
+            if (!productId) {
+                this.sendError(res, "Product ID is required", 400, "VALIDATION_ERROR");
+                return;
+            }
             const result = await this.wishlistService.moveToCart(userId, productId, qty, shouldRemove);
             if (!result.success) {
                 this.sendError(res, result.message, 400, "MOVE_TO_CART_FAILED");
@@ -218,7 +233,8 @@ class WishlistController extends BaseController_1.BaseController {
                 removedFromWishlist: shouldRemove,
             });
             if (result.successCount === 0) {
-                this.sendError(res, "No items could be moved to cart", 400, "MOVE_TO_CART_FAILED", result.failures);
+                const errorDetails = result.failures?.map(f => `${f.productId}: ${f.reason}`) || [];
+                this.sendError(res, "No items could be moved to cart", 400, "MOVE_TO_CART_FAILED", errorDetails);
                 return;
             }
             this.sendSuccess(res, result, `${result.successCount} item(s) moved to cart successfully`);
@@ -290,7 +306,14 @@ class WishlistController extends BaseController_1.BaseController {
                 this.sendError(res, "Shared wishlist not found or expired", 404, "SHARED_WISHLIST_NOT_FOUND");
                 return;
             }
-            this.sendPaginatedResponse(res, result.items, result.pagination, "Shared wishlist retrieved successfully");
+            this.sendPaginatedResponse(res, result.items, {
+                page: result.pagination.currentPage,
+                limit: result.pagination.itemsPerPage,
+                total: result.pagination.totalItems,
+                totalPages: result.pagination.totalPages,
+                hasNext: result.pagination.hasNextPage,
+                hasPrev: result.pagination.hasPreviousPage,
+            }, "Shared wishlist retrieved successfully");
         }
         catch (error) {
             this.handleError(error, req, res);

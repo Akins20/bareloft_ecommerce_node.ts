@@ -161,7 +161,7 @@ class DataEncryption {
         const salt = crypto_1.default.randomBytes(32);
         const key = this.deriveKey(password, salt);
         const iv = crypto_1.default.randomBytes(this.IV_LENGTH);
-        const cipher = crypto_1.default.createCipherGCM(this.ALGORITHM, key, iv);
+        const cipher = crypto_1.default.createCipher(this.ALGORITHM, key);
         let encrypted = cipher.update(text, "utf8", "hex");
         encrypted += cipher.final("hex");
         const tag = cipher.getAuthTag();
@@ -184,8 +184,7 @@ class DataEncryption {
         const tag = data.subarray(32 + this.IV_LENGTH, 32 + this.IV_LENGTH + this.TAG_LENGTH);
         const encrypted = data.subarray(32 + this.IV_LENGTH + this.TAG_LENGTH);
         const key = this.deriveKey(password, salt);
-        const decipher = crypto_1.default.createDecipherGCM(this.ALGORITHM, key, iv);
-        decipher.setAuthTag(tag);
+        const decipher = crypto_1.default.createDecipher(this.ALGORITHM, key);
         let decrypted = decipher.update(encrypted, undefined, "utf8");
         decrypted += decipher.final("utf8");
         return decrypted;

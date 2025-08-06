@@ -1,7 +1,5 @@
 import { BaseService } from "../BaseService";
 import { PaymentTransaction, InitializePaymentRequest, InitializePaymentResponse, VerifyPaymentRequest, VerifyPaymentResponse } from "../../types";
-import { PaystackService } from "./PaystackService";
-import { NotificationService } from "../notifications/NotificationService";
 interface PaymentSummary {
     totalTransactions: number;
     totalVolume: number;
@@ -13,7 +11,7 @@ interface PaymentSummary {
 export declare class PaymentService extends BaseService {
     private paystackService;
     private notificationService;
-    constructor(paystackService: PaystackService, notificationService: NotificationService);
+    constructor(paystackService?: any, notificationService?: any);
     /**
      * Initialize payment for an order
      */

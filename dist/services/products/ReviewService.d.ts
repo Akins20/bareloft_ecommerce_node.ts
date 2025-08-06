@@ -13,10 +13,17 @@ export declare class ReviewService extends BaseService {
     private notificationService;
     constructor(userRepository: UserRepository, productRepository: ProductRepository, orderRepository: OrderRepository, cacheService: CacheService, notificationService: NotificationService);
     /**
+     * Check if user can review a product
+     */
+    canUserReview(userId: string, productId: string): Promise<{
+        allowed: boolean;
+        reason?: string;
+    }>;
+    /**
      * Create a new product review
      * Validates purchase history for verification
      */
-    createReview(userId: string, request: CreateReviewRequest): Promise<{
+    createReview(request: CreateReviewRequest): Promise<{
         review: ProductReview;
         isVerifiedPurchase: boolean;
     }>;
@@ -35,15 +42,20 @@ export declare class ReviewService extends BaseService {
     /**
      * Update an existing review
      */
-    updateReview(userId: string, reviewId: string, request: UpdateReviewRequest): Promise<ProductReview>;
+    updateReview(reviewId: string, userId: string, request: UpdateReviewRequest): Promise<ProductReview>;
     /**
      * Delete a review
      */
-    deleteReview(userId: string, reviewId: string): Promise<void>;
+    deleteReview(reviewId: string, userId: string): Promise<{
+        success: boolean;
+        message: string;
+    }>;
     /**
      * Mark review as helpful
      */
-    markReviewHelpful(reviewId: string): Promise<{
+    markReviewHelpful(reviewId: string, userId: string): Promise<{
+        success: boolean;
+        message?: string;
         helpfulVotes: number;
     }>;
     /**
@@ -61,6 +73,48 @@ export declare class ReviewService extends BaseService {
      * Admin: Moderate review (approve/reject)
      */
     moderateReview(reviewId: string, action: "approve" | "reject", adminId: string, reason?: string): Promise<ProductReview>;
+    /**
+     * Remove helpful mark from review
+     */
+    removeHelpfulMark(reviewId: string, userId: string): Promise<{
+        success: boolean;
+        message?: string;
+        helpfulVotes: number;
+    }>;
+    /**
+     * Report inappropriate review
+     */
+    reportReview(reviewId: string, userId: string, report: {
+        reason: string;
+        description?: string;
+    }): Promise<{
+        success: boolean;
+        message?: string;
+    }>;
+    /**
+     * Get review by ID
+     */
+    getReviewById(reviewId: string): Promise<ProductReview | null>;
+    /**
+     * Get reviews by rating
+     */
+    getReviewsByRating(productId: string, rating: number, params: {
+        page: number;
+        limit: number;
+    }): Promise<{
+        reviews: ProductReview[];
+        pagination: PaginationMeta;
+    }>;
+    /**
+     * Get verified reviews only
+     */
+    getVerifiedReviews(productId: string, params: {
+        page: number;
+        limit: number;
+    }): Promise<{
+        reviews: ProductReview[];
+        pagination: PaginationMeta;
+    }>;
     private checkVerifiedPurchase;
     private clearProductCache;
     private transformReview;

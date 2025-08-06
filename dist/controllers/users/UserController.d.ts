@@ -83,13 +83,5 @@ export declare class UserController extends BaseController {
      * Validate password change request
      */
     private validatePasswordChangeRequest;
-    /**
-     * Validate email format
-     */
-    private isValidEmail;
-    /**
-     * Validate Nigerian phone number format
-     */
-    private isValidNigerianPhoneNumber;
 }
 //# sourceMappingURL=UserController.d.ts.map

@@ -6,7 +6,7 @@ export declare class RefundService extends BaseService {
     private paystackService;
     private notificationService;
     private refunds;
-    constructor(paystackService: PaystackService, notificationService: NotificationService);
+    constructor(paystackService?: PaystackService, notificationService?: NotificationService);
     /**
      * Process a refund request
      */

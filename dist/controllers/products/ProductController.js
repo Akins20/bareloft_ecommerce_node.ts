@@ -14,31 +14,31 @@ class ProductController extends BaseController_1.BaseController {
      */
     getProducts = async (req, res) => {
         try {
-            const query = {
+            const filters = {
                 page: parseInt(req.query.page) || 1,
                 limit: Math.min(parseInt(req.query.limit) || 20, 100),
-                categoryId: req.query.categoryId,
-                search: req.query.search,
-                minPrice: req.query.minPrice
-                    ? parseFloat(req.query.minPrice)
-                    : undefined,
-                maxPrice: req.query.maxPrice
-                    ? parseFloat(req.query.maxPrice)
-                    : undefined,
-                brand: req.query.brand,
-                isActive: req.query.isActive !== undefined
-                    ? req.query.isActive === "true"
-                    : undefined,
-                isFeatured: req.query.isFeatured !== undefined
-                    ? req.query.isFeatured === "true"
-                    : undefined,
                 sortBy: req.query.sortBy || "createdAt",
                 sortOrder: req.query.sortOrder || "desc",
-                inStock: req.query.inStock !== undefined
-                    ? req.query.inStock === "true"
-                    : undefined,
             };
-            const result = await this.productService.getProducts(query);
+            if (req.query.search) {
+                filters.search = req.query.search;
+            }
+            if (req.query.categoryId) {
+                filters.categoryId = req.query.categoryId;
+            }
+            if (req.query.priceMin) {
+                filters.priceMin = parseFloat(req.query.priceMin);
+            }
+            if (req.query.priceMax) {
+                filters.priceMax = parseFloat(req.query.priceMax);
+            }
+            if (req.query.featured !== undefined) {
+                filters.featured = req.query.featured === "true";
+            }
+            if (req.query.inStock !== undefined) {
+                filters.inStock = req.query.inStock === "true";
+            }
+            const result = await this.productService.getProducts(filters);
             const response = {
                 success: true,
                 message: "Products retrieved successfully",
@@ -57,7 +57,11 @@ class ProductController extends BaseController_1.BaseController {
     getProductById = async (req, res) => {
         try {
             const { id } = req.params;
-            const product = await this.productService.getProductById(id);
+            if (!id) {
+                this.sendError(res, "Product ID is required", 400, "INVALID_REQUEST");
+                return;
+            }
+            const product = await this.productService.getProduct(id);
             if (!product) {
                 this.sendError(res, "Product not found", 404, "PRODUCT_NOT_FOUND");
                 return;
@@ -65,7 +69,7 @@ class ProductController extends BaseController_1.BaseController {
             const response = {
                 success: true,
                 message: "Product retrieved successfully",
-                data: product,
+                data: { product },
             };
             res.json(response);
         }
@@ -80,7 +84,11 @@ class ProductController extends BaseController_1.BaseController {
     getProductBySlug = async (req, res) => {
         try {
             const { slug } = req.params;
-            const product = await this.productService.getProductBySlug(slug);
+            if (!slug) {
+                this.sendError(res, "Product slug is required", 400, "INVALID_REQUEST");
+                return;
+            }
+            const product = await this.productService.getProduct(slug);
             if (!product) {
                 this.sendError(res, "Product not found", 404, "PRODUCT_NOT_FOUND");
                 return;
@@ -88,7 +96,7 @@ class ProductController extends BaseController_1.BaseController {
             const response = {
                 success: true,
                 message: "Product retrieved successfully",
-                data: product,
+                data: { product },
             };
             res.json(response);
         }
@@ -126,13 +134,17 @@ class ProductController extends BaseController_1.BaseController {
                 page: parseInt(req.query.page) || 1,
                 limit: Math.min(parseInt(req.query.limit) || 20, 100),
             };
-            const query = {
+            if (!categoryId) {
+                this.sendError(res, "Category ID is required", 400, "INVALID_REQUEST");
+                return;
+            }
+            const filters = {
                 ...pagination,
                 categoryId,
                 sortBy: req.query.sortBy || "name",
                 sortOrder: req.query.sortOrder || "asc",
             };
-            const result = await this.productService.getProducts(query);
+            const result = await this.productService.getProducts(filters);
             const response = {
                 success: true,
                 message: "Products retrieved successfully",
@@ -152,7 +164,17 @@ class ProductController extends BaseController_1.BaseController {
         try {
             const { id } = req.params;
             const limit = Math.min(parseInt(req.query.limit) || 8, 20);
-            const products = await this.productService.getRelatedProducts(id, limit);
+            if (!id) {
+                this.sendError(res, "Product ID is required", 400, "INVALID_REQUEST");
+                return;
+            }
+            // First get the product to get its categoryId
+            const product = await this.productService.getProduct(id);
+            if (!product) {
+                this.sendError(res, "Product not found", 404, "PRODUCT_NOT_FOUND");
+                return;
+            }
+            const products = await this.productService.getRelatedProducts(id, product.categoryId, limit);
             const response = {
                 success: true,
                 message: "Related products retrieved successfully",
@@ -170,29 +192,52 @@ class ProductController extends BaseController_1.BaseController {
      */
     searchProducts = async (req, res) => {
         try {
+            const search = req.query.q || req.query.search;
+            const categoryId = req.query.categoryId;
+            const brand = req.query.brand;
+            const minPrice = req.query.minPrice ? parseFloat(req.query.minPrice) : undefined;
+            const maxPrice = req.query.maxPrice ? parseFloat(req.query.maxPrice) : undefined;
+            const inStock = req.query.inStock !== undefined ? req.query.inStock === "true" : undefined;
             const query = {
                 page: parseInt(req.query.page) || 1,
                 limit: Math.min(parseInt(req.query.limit) || 20, 100),
-                search: req.query.q || req.query.search,
-                categoryId: req.query.categoryId,
-                minPrice: req.query.minPrice
-                    ? parseFloat(req.query.minPrice)
-                    : undefined,
-                maxPrice: req.query.maxPrice
-                    ? parseFloat(req.query.maxPrice)
-                    : undefined,
-                brand: req.query.brand,
+                search,
                 sortBy: req.query.sortBy || "relevance",
                 sortOrder: req.query.sortOrder || "desc",
-                inStock: req.query.inStock !== undefined
-                    ? req.query.inStock === "true"
-                    : undefined,
             };
+            // Only add defined values to avoid undefined assignment issues
+            if (categoryId)
+                query.categoryId = categoryId;
+            if (brand)
+                query.brand = brand;
+            if (minPrice !== undefined)
+                query.minPrice = minPrice;
+            if (maxPrice !== undefined)
+                query.maxPrice = maxPrice;
+            if (inStock !== undefined)
+                query.inStock = inStock;
             if (!query.search) {
                 this.sendError(res, "Search query is required", 400, "SEARCH_QUERY_REQUIRED");
                 return;
             }
-            const result = await this.productService.searchProducts(query);
+            const searchFilters = {};
+            if (query.page !== undefined)
+                searchFilters.page = query.page;
+            if (query.limit !== undefined)
+                searchFilters.limit = query.limit;
+            if (query.categoryId !== undefined)
+                searchFilters.categoryId = query.categoryId;
+            if (query.minPrice !== undefined)
+                searchFilters.priceMin = query.minPrice;
+            if (query.maxPrice !== undefined)
+                searchFilters.priceMax = query.maxPrice;
+            if (query.sortBy !== undefined)
+                searchFilters.sortBy = query.sortBy;
+            if (query.sortOrder !== undefined)
+                searchFilters.sortOrder = query.sortOrder;
+            if (query.inStock !== undefined)
+                searchFilters.inStock = query.inStock;
+            const result = await this.productService.searchProducts(query.search || "", searchFilters);
             const response = {
                 success: true,
                 message: "Search completed successfully",
@@ -211,6 +256,10 @@ class ProductController extends BaseController_1.BaseController {
     getProductStock = async (req, res) => {
         try {
             const { id } = req.params;
+            if (!id) {
+                this.sendError(res, "Product ID is required", 400, "INVALID_REQUEST");
+                return;
+            }
             const stock = await this.productService.getProductStock(id);
             if (stock === null) {
                 this.sendError(res, "Product not found", 404, "PRODUCT_NOT_FOUND");
@@ -265,6 +314,10 @@ class ProductController extends BaseController_1.BaseController {
     getProductReviewsSummary = async (req, res) => {
         try {
             const { id } = req.params;
+            if (!id) {
+                this.sendError(res, "Product ID is required", 400, "INVALID_REQUEST");
+                return;
+            }
             const summary = await this.productService.getProductReviewsSummary(id);
             const response = {
                 success: true,
@@ -285,6 +338,10 @@ class ProductController extends BaseController_1.BaseController {
         try {
             const { id } = req.params;
             const days = parseInt(req.query.days) || 30;
+            if (!id) {
+                this.sendError(res, "Product ID is required", 400, "INVALID_REQUEST");
+                return;
+            }
             const history = await this.productService.getProductPriceHistory(id, days);
             const response = {
                 success: true,
@@ -327,6 +384,10 @@ class ProductController extends BaseController_1.BaseController {
         try {
             const { id } = req.params;
             const days = parseInt(req.query.days) || 30;
+            if (!id) {
+                this.sendError(res, "Product ID is required", 400, "INVALID_REQUEST");
+                return;
+            }
             const analytics = await this.productService.getProductAnalytics(id, days);
             const response = {
                 success: true,
@@ -388,6 +449,10 @@ class ProductController extends BaseController_1.BaseController {
                 this.sendError(res, "Validation failed", 400, "VALIDATION_ERROR", validationErrors);
                 return;
             }
+            if (!id) {
+                this.sendError(res, "Product ID is required", 400, "INVALID_REQUEST");
+                return;
+            }
             const product = await this.productService.updateProduct(id, updateData, userId);
             if (!product) {
                 this.sendError(res, "Product not found", 404, "PRODUCT_NOT_FOUND");
@@ -410,6 +475,10 @@ class ProductController extends BaseController_1.BaseController {
             const { id } = req.params;
             if (!userId || !this.hasRole(req, "admin")) {
                 this.sendError(res, "Admin access required", 403, "FORBIDDEN");
+                return;
+            }
+            if (!id) {
+                this.sendError(res, "Product ID is required", 400, "INVALID_REQUEST");
                 return;
             }
             const result = await this.productService.deleteProduct(id, userId);

@@ -3,21 +3,22 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PaymentMethod = exports.PaymentStatus = exports.OrderStatus = void 0;
 var OrderStatus;
 (function (OrderStatus) {
-    OrderStatus["PENDING"] = "pending";
-    OrderStatus["CONFIRMED"] = "confirmed";
-    OrderStatus["PROCESSING"] = "processing";
-    OrderStatus["SHIPPED"] = "shipped";
-    OrderStatus["DELIVERED"] = "delivered";
-    OrderStatus["CANCELLED"] = "cancelled";
-    OrderStatus["REFUNDED"] = "refunded";
+    OrderStatus[OrderStatus["PENDING"] = 0] = "PENDING";
+    OrderStatus[OrderStatus["CONFIRMED"] = 1] = "CONFIRMED";
+    OrderStatus[OrderStatus["PROCESSING"] = 2] = "PROCESSING";
+    OrderStatus[OrderStatus["SHIPPED"] = 3] = "SHIPPED";
+    OrderStatus[OrderStatus["DELIVERED"] = 4] = "DELIVERED";
+    OrderStatus[OrderStatus["CANCELLED"] = 5] = "CANCELLED";
+    OrderStatus[OrderStatus["REFUNDED"] = 6] = "REFUNDED";
 })(OrderStatus || (exports.OrderStatus = OrderStatus = {}));
 var PaymentStatus;
 (function (PaymentStatus) {
-    PaymentStatus["PENDING"] = "pending";
-    PaymentStatus["PAID"] = "paid";
-    PaymentStatus["FAILED"] = "failed";
-    PaymentStatus["REFUNDED"] = "refunded";
-    PaymentStatus["PARTIAL_REFUND"] = "partial_refund";
+    PaymentStatus[PaymentStatus["PENDING"] = 0] = "PENDING";
+    PaymentStatus[PaymentStatus["PROCESSING"] = 1] = "PROCESSING";
+    PaymentStatus[PaymentStatus["COMPLETED"] = 2] = "COMPLETED";
+    PaymentStatus[PaymentStatus["FAILED"] = 3] = "FAILED";
+    PaymentStatus[PaymentStatus["CANCELLED"] = 4] = "CANCELLED";
+    PaymentStatus[PaymentStatus["REFUNDED"] = 5] = "REFUNDED";
 })(PaymentStatus || (exports.PaymentStatus = PaymentStatus = {}));
 var PaymentMethod;
 (function (PaymentMethod) {

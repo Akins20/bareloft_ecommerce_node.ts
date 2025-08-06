@@ -32,20 +32,17 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CloudStorageService = void 0;
 const BaseService_1 = require("../BaseService");
 const types_1 = require("../../types");
 const config_1 = require("../../config");
 const cloudinary_1 = require("cloudinary");
-const aws_sdk_1 = __importDefault(require("aws-sdk"));
 class CloudStorageService extends BaseService_1.BaseService {
     provider;
     constructor() {
         super();
+        this.provider = new CloudinaryProvider(); // Default initialization
         this.initializeProvider();
     }
     /**
@@ -57,7 +54,8 @@ class CloudStorageService extends BaseService_1.BaseService {
                 this.provider = new CloudinaryProvider();
                 break;
             case "aws-s3":
-                this.provider = new S3Provider();
+                // this.provider = new S3Provider(); // Requires AWS SDK
+                this.provider = new CloudinaryProvider(); // Fallback to Cloudinary
                 break;
             case "local":
                 this.provider = new LocalStorageProvider();
@@ -235,93 +233,116 @@ class CloudinaryProvider {
     }
 }
 /**
- * AWS S3 Storage Provider
+ * AWS S3 Storage Provider (Commented out - requires AWS SDK)
  */
-class S3Provider {
-    name = "aws-s3";
-    s3;
-    bucket;
-    constructor() {
-        aws_sdk_1.default.config.update({
-            accessKeyId: config_1.uploadConfig.aws.accessKeyId,
-            secretAccessKey: config_1.uploadConfig.aws.secretAccessKey,
-            region: config_1.uploadConfig.aws.region,
-        });
-        this.s3 = new aws_sdk_1.default.S3();
-        this.bucket = config_1.uploadConfig.aws.bucket;
+/* class S3Provider implements StorageProvider {
+  name = "aws-s3";
+  private s3: AWS.S3;
+  private bucket: string;
+
+  constructor() {
+    AWS.config.update({
+      accessKeyId: uploadConfig.aws.accessKeyId,
+      secretAccessKey: uploadConfig.aws.secretAccessKey,
+      region: uploadConfig.aws.region,
+    });
+
+    this.s3 = new AWS.S3();
+    this.bucket = uploadConfig.aws.bucket;
+  }
+
+  async uploadBuffer(
+    buffer: Buffer,
+    path: string,
+    mimetype: string
+  ): Promise<UploadedFile> {
+    try {
+      const key = path.startsWith("/") ? path.slice(1) : path;
+
+      const params: AWS.S3.PutObjectRequest = {
+        Bucket: this.bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: mimetype,
+        ACL: "public-read",
+        CacheControl: "max-age=31536000", // 1 year
+      };
+
+      const result = await this.s3.upload(params).promise();
+
+      return {
+        url: result.Location,
+        publicId: key,
+        format: this.extractFormat(mimetype),
+        size: buffer.length,
+      };
+    } catch (error) {
+      throw new AppError(
+        "Failed to upload to S3",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.EXTERNAL_SERVICE_ERROR
+      );
     }
-    async uploadBuffer(buffer, path, mimetype) {
-        try {
-            const key = path.startsWith("/") ? path.slice(1) : path;
-            const params = {
-                Bucket: this.bucket,
-                Key: key,
-                Body: buffer,
-                ContentType: mimetype,
-                ACL: "public-read",
-                CacheControl: "max-age=31536000", // 1 year
-            };
-            const result = await this.s3.upload(params).promise();
-            return {
-                url: result.Location,
-                publicId: key,
-                format: this.extractFormat(mimetype),
-                size: buffer.length,
-            };
-        }
-        catch (error) {
-            throw new types_1.AppError("Failed to upload to S3", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.EXTERNAL_SERVICE_ERROR);
-        }
+  }
+
+  async deleteFile(publicId: string): Promise<boolean> {
+    try {
+      await this.s3
+        .deleteObject({
+          Bucket: this.bucket,
+          Key: publicId,
+        })
+        .promise();
+
+      return true;
+    } catch (error) {
+      return false;
     }
-    async deleteFile(publicId) {
-        try {
-            await this.s3
-                .deleteObject({
-                Bucket: this.bucket,
-                Key: publicId,
-            })
-                .promise();
-            return true;
-        }
-        catch (error) {
-            return false;
-        }
+  }
+
+  async getFileInfo(publicId: string): Promise<any> {
+    try {
+      const result = await this.s3
+        .headObject({
+          Bucket: this.bucket,
+          Key: publicId,
+        })
+        .promise();
+
+      return {
+        url: `https://${this.bucket}.s3.amazonaws.com/${publicId}`,
+        size: result.ContentLength || 0,
+        format: this.extractFormat(result.ContentType || ""),
+        createdAt: result.LastModified || new Date(),
+      };
+    } catch (error) {
+      return null;
     }
-    async getFileInfo(publicId) {
-        try {
-            const result = await this.s3
-                .headObject({
-                Bucket: this.bucket,
-                Key: publicId,
-            })
-                .promise();
-            return {
-                url: `https://${this.bucket}.s3.amazonaws.com/${publicId}`,
-                size: result.ContentLength || 0,
-                format: this.extractFormat(result.ContentType || ""),
-                createdAt: result.LastModified || new Date(),
-            };
-        }
-        catch (error) {
-            return null;
-        }
+  }
+
+  async getSignedUrl(
+    publicId: string,
+    expiresIn: number = 3600
+  ): Promise<string> {
+    try {
+      return this.s3.getSignedUrl("getObject", {
+        Bucket: this.bucket,
+        Key: publicId,
+        Expires: expiresIn,
+      });
+    } catch (error) {
+      throw new AppError(
+        "Failed to generate signed URL",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.EXTERNAL_SERVICE_ERROR
+      );
     }
-    async getSignedUrl(publicId, expiresIn = 3600) {
-        try {
-            return this.s3.getSignedUrl("getObject", {
-                Bucket: this.bucket,
-                Key: publicId,
-                Expires: expiresIn,
-            });
-        }
-        catch (error) {
-            throw new types_1.AppError("Failed to generate signed URL", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.EXTERNAL_SERVICE_ERROR);
-        }
-    }
-    extractFormat(mimetype) {
-        return mimetype.split("/")[1] || "unknown";
-    }
-}
+  }
+
+  private extractFormat(mimetype: string): string {
+    return mimetype.split("/")[1] || "unknown";
+  }
+} */
 /**
  * Local Storage Provider (for development)
  */

@@ -23,7 +23,6 @@ export interface Product extends BaseEntity {
     seoDescription?: string;
     category: Category;
     images: ProductImage[];
-    inventory: Inventory;
     reviews: ProductReview[];
     averageRating?: number;
     totalReviews?: number;
@@ -67,33 +66,8 @@ export interface ProductReview extends BaseEntity {
     helpfulVotes: number;
     product: Product;
     user: PublicUser;
+    order?: any;
 }
-export interface Inventory extends BaseEntity {
-    productId: string;
-    quantity: number;
-    reservedQuantity: number;
-    lowStockThreshold: number;
-    trackInventory: boolean;
-    lastRestockedAt?: Date;
-    product: Product;
-    movements: InventoryMovement[];
-    availableQuantity: number;
-    isLowStock: boolean;
-    isOutOfStock: boolean;
-}
-export interface InventoryMovement extends BaseEntity {
-    productId: string;
-    type: InventoryMovementType;
-    quantity: number;
-    previousQuantity: number;
-    newQuantity: number;
-    reason?: string;
-    reference?: string;
-    userId?: string;
-    product: Product;
-    user?: PublicUser;
-}
-export type InventoryMovementType = "restock" | "sale" | "adjustment" | "damaged" | "returned" | "reserved" | "unreserved" | "transfer" | "loss";
 export interface CreateProductRequest {
     name: string;
     description: string;
@@ -195,8 +169,19 @@ export interface CategoryQueryParams extends PaginationParams {
     hasProducts?: boolean;
     sortBy?: "name" | "sortOrder" | "productCount" | "created";
 }
+export interface CategoryListQuery extends PaginationParams {
+    parentId?: string;
+    isActive?: boolean;
+    hasProducts?: boolean;
+    sortBy?: "name" | "sortOrder" | "productCount" | "created";
+    includeProductCount?: boolean;
+}
+export interface CategoryWithProductCount extends Category {
+    productCount: number;
+}
 export interface CreateReviewRequest {
     productId: string;
+    userId: string;
     rating: number;
     title?: string;
     comment?: string;
@@ -211,27 +196,6 @@ export interface ReviewQueryParams extends PaginationParams {
     isVerified?: boolean;
     isApproved?: boolean;
     sortBy?: "rating" | "helpful" | "created";
-}
-export interface UpdateInventoryRequest {
-    productId: string;
-    quantity?: number;
-    lowStockThreshold?: number;
-    trackInventory?: boolean;
-    reason?: string;
-}
-export interface BulkInventoryUpdateRequest {
-    updates: {
-        productId: string;
-        quantity: number;
-        reason?: string;
-    }[];
-}
-export interface InventoryMovementRequest {
-    productId: string;
-    type: InventoryMovementType;
-    quantity: number;
-    reason?: string;
-    reference?: string;
 }
 export interface ProductSearchRequest extends PaginationParams {
     query?: string;
@@ -257,6 +221,29 @@ export interface ProductSearchResponse extends ProductListResponse {
         suggestions?: string[];
         didYouMean?: string;
     };
+}
+export interface SearchAnalytics {
+    totalSearches: number;
+    uniqueSearches: number;
+    avgSearchTime: number;
+    topQueries: PopularSearch[];
+    noResultsQueries: {
+        query: string;
+        count: number;
+    }[];
+    searchIntent: {
+        product: number;
+        category: number;
+        brand: number;
+        price: number;
+    };
+    conversionRate: number;
+    avgResultsPerSearch: number;
+    mobileSearchPercentage: number;
+    peakSearchHours: {
+        hour: number;
+        searches: number;
+    }[];
 }
 export interface ProductAnalytics {
     totalProducts: number;
@@ -285,15 +272,6 @@ export interface ProductAnalytics {
     recentlyAdded: Product[];
     mostViewed: Product[];
     bestRated: Product[];
-}
-export interface WishlistItem extends BaseEntity {
-    userId: string;
-    productId: string;
-    user: PublicUser;
-    product: Product;
-}
-export interface WishlistRequest {
-    productId: string;
 }
 export interface ProductComparison {
     products: Product[];
@@ -404,5 +382,259 @@ export interface ProductExportOptions {
         from: Date;
         to: Date;
     };
+}
+export interface ProductListQuery extends PaginationParams {
+    categoryId?: string;
+    categorySlug?: string;
+    brand?: string;
+    priceMin?: number;
+    priceMax?: number;
+    minPrice?: number;
+    maxPrice?: number;
+    search?: string;
+    isActive?: boolean;
+    isFeatured?: boolean;
+    inStock?: boolean;
+    hasDiscount?: boolean;
+    rating?: number;
+    sortBy?: "name" | "price" | "rating" | "created" | "popularity" | "discount";
+    availability?: "all" | "in_stock" | "out_of_stock" | "low_stock";
+}
+export interface SearchQuery {
+    query: string;
+    categoryId?: string | undefined;
+    brand?: string | undefined;
+    minPrice?: number | undefined;
+    maxPrice?: number | undefined;
+    inStock?: boolean | undefined;
+    rating?: number | undefined;
+    sortBy?: "relevance" | "price" | "name" | "rating" | "created" | "popularity" | "discount" | string | undefined;
+    sortOrder?: "asc" | "desc" | undefined;
+    page?: number | undefined;
+    limit?: number | undefined;
+    filters?: SearchFilters | undefined;
+}
+export interface SearchResult {
+    products: Product[];
+    categories: Category[];
+    totalResults: number;
+    searchTime: number;
+    suggestions: SearchSuggestion[];
+    filters: SearchFilters;
+    facets: {
+        brands: {
+            name: string;
+            count: number;
+        }[];
+        categories: {
+            id: string;
+            name: string;
+            count: number;
+        }[];
+        priceRanges: {
+            min: number;
+            max: number;
+            count: number;
+        }[];
+    };
+}
+export interface SearchSuggestion {
+    text: string;
+    type: "product" | "category" | "brand" | "query" | "suggestion";
+    relevance?: number;
+    count?: number;
+    category?: string;
+    highlight?: string;
+}
+export interface SearchFilters {
+    categoryId?: string | undefined;
+    categoryIds?: string[] | undefined;
+    brand?: string | undefined;
+    brands?: string[] | undefined;
+    minPrice?: number | undefined;
+    maxPrice?: number | undefined;
+    priceRange?: {
+        min: number;
+        max: number;
+    } | undefined;
+    rating?: number | undefined;
+    inStock?: boolean | undefined;
+    availability?: "all" | "in_stock" | "out_of_stock" | undefined;
+    hasDiscount?: boolean | undefined;
+    onSale?: boolean | undefined;
+    discountPercentage?: number | undefined;
+    isFeatured?: boolean | undefined;
+    features?: string[] | undefined;
+    colors?: string[] | undefined;
+    sizes?: string[] | undefined;
+    location?: string | undefined;
+    urgency?: "low" | "medium" | "high" | undefined;
+    qualityFocus?: boolean | undefined;
+    preferredLocation?: string | undefined;
+}
+export interface PopularSearch {
+    query: string;
+    count: number;
+    category?: string;
+    trend: "rising" | "stable" | "falling" | "up" | "down";
+    lastSearched?: Date;
+}
+export interface SearchAnalytics {
+    topQueries: PopularSearch[];
+    noResultQueries: string[];
+    searchVolume: {
+        total: number;
+        unique: number;
+        period: string;
+    };
+    conversionRate: number;
+    averageResultsPerQuery: number;
+    popularFilters: {
+        filter: string;
+        usage: number;
+    }[];
+}
+export interface ProductDetailResponse {
+    product: Product;
+    relatedProducts?: Product[];
+    additionalReviews?: ProductReview[];
+    variants?: ProductVariant[];
+    similarProducts?: Product[];
+}
+export interface SearchResponse {
+    products: Product[];
+    pagination: {
+        currentPage: number;
+        totalPages: number;
+        total: number;
+        hasNext?: boolean;
+        hasPrev?: boolean;
+    };
+    suggestions?: SearchSuggestion[];
+    facets?: {
+        brands: {
+            name: string;
+            count: number;
+        }[];
+        categories: {
+            id: string;
+            name: string;
+            count: number;
+        }[];
+        priceRanges: {
+            min: number;
+            max: number;
+            count: number;
+        }[];
+    };
+    appliedFilters?: SearchFilters;
+    searchTime?: number;
+}
+export interface AutocompleteResponse {
+    suggestions: SearchSuggestion[];
+}
+export interface SearchHistoryItem {
+    query: string;
+    filters?: SearchFilters;
+    resultCount: number;
+    timestamp: Date;
+}
+export interface SearchHistoryResponse {
+    searches: SearchHistoryItem[];
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+        hasNext?: boolean;
+        hasPrev?: boolean;
+    };
+}
+export interface ClearHistoryResult {
+    clearedCount: number;
+}
+export interface TrendingSearch {
+    query: string;
+    count: number;
+    trend: "rising" | "stable" | "falling";
+    category?: string;
+}
+export interface ReviewListQuery extends PaginationParams {
+    productId?: string;
+    userId?: string;
+    rating?: number;
+    isVerified?: boolean;
+    isApproved?: boolean;
+    sortBy?: "rating" | "helpful" | "created";
+}
+export interface ReviewResponse extends ProductReview {
+}
+export interface ReviewListResponse {
+    reviews: ReviewResponse[];
+    pagination: {
+        currentPage: number;
+        totalPages: number;
+        totalItems: number;
+        itemsPerPage: number;
+        hasNextPage: boolean;
+        hasPreviousPage: boolean;
+    };
+    summary: ReviewSummary;
+}
+export interface ReviewSummary {
+    totalReviews: number;
+    averageRating: number;
+    ratingDistribution: {
+        rating: number;
+        count: number;
+        percentage: number;
+    }[];
+    verifiedReviews: number;
+    mostHelpfulReview?: ProductReview;
+}
+export interface ProductFilters {
+    page?: number;
+    limit?: number;
+    search?: string;
+    categoryId?: string;
+    priceMin?: number;
+    priceMax?: number;
+    inStock?: boolean;
+    featured?: boolean;
+    sortBy?: string;
+    sortOrder?: string;
+}
+export interface ProductCreateInput {
+    name: string;
+    description: string;
+    shortDescription?: string;
+    sku: string;
+    price: number;
+    comparePrice?: number;
+    categoryId: string;
+    brand?: string;
+    weight?: number;
+    dimensions?: {
+        length?: number;
+        width?: number;
+        height?: number;
+    };
+    isActive?: boolean;
+    isFeatured?: boolean;
+    seoTitle?: string;
+    seoDescription?: string;
+    inventory: {
+        quantity: number;
+        lowStockThreshold?: number;
+        trackInventory?: boolean;
+    };
+    images?: {
+        imageUrl: string;
+        altText?: string;
+        isPrimary?: boolean;
+    }[];
+}
+export interface ProductUpdateInput extends Partial<ProductCreateInput> {
+    id: string;
 }
 //# sourceMappingURL=product.types.d.ts.map

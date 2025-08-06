@@ -7,7 +7,7 @@ export declare class NotificationService extends BaseService {
     private emailService;
     private smsService;
     private pushService;
-    constructor(emailService: EmailService, smsService: SMSService, pushService: PushService);
+    constructor(emailService?: EmailService, smsService?: SMSService, pushService?: PushService);
     /**
      * Send a single notification
      */

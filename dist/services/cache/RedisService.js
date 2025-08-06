@@ -1,12 +1,42 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RedisService = void 0;
 const BaseService_1 = require("../BaseService");
-const ioredis_1 = __importDefault(require("ioredis"));
-const config_1 = require("../../config");
+const Redis = __importStar(require("ioredis"));
+// import { redisConfig } from "../../config";
 class RedisService extends BaseService_1.BaseService {
     client;
     isConnected = false;
@@ -19,11 +49,11 @@ class RedisService extends BaseService_1.BaseService {
      */
     initializeRedis() {
         try {
-            this.client = new ioredis_1.default({
-                host: config_1.redisConfig.host,
-                port: config_1.redisConfig.port,
-                password: config_1.redisConfig.password,
-                db: config_1.redisConfig.database || 0,
+            this.client = new Redis.Redis({
+                host: process.env.REDIS_HOST || 'localhost',
+                port: parseInt(process.env.REDIS_PORT || '6379'),
+                password: process.env.REDIS_PASSWORD,
+                db: parseInt(process.env.REDIS_DATABASE || '0'),
                 retryDelayOnFailover: 100,
                 maxRetriesPerRequest: 3,
                 lazyConnect: true,
@@ -128,6 +158,18 @@ class RedisService extends BaseService_1.BaseService {
         }
     }
     /**
+     * Set a JSON object with expiration
+     */
+    async setexJSON(key, seconds, value) {
+        try {
+            return await this.client.setex(key, seconds, JSON.stringify(value));
+        }
+        catch (error) {
+            this.handleError("Error setting Redis JSON key with expiration", error);
+            throw error;
+        }
+    }
+    /**
      * Get a value by key
      */
     async get(key) {
@@ -136,6 +178,21 @@ class RedisService extends BaseService_1.BaseService {
         }
         catch (error) {
             this.handleError("Error getting Redis key", error);
+            return null;
+        }
+    }
+    /**
+     * Get a parsed JSON value by key
+     */
+    async getJSON(key) {
+        try {
+            const value = await this.client.get(key);
+            if (value === null)
+                return null;
+            return JSON.parse(value);
+        }
+        catch (error) {
+            this.handleError("Error getting and parsing Redis JSON key", error);
             return null;
         }
     }

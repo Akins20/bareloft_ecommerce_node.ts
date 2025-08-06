@@ -1,41 +1,33 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, OrderStatus as PrismaOrderStatus, PaymentStatus as PrismaPaymentStatus } from "@prisma/client";
 import { BaseRepository } from "./BaseRepository";
 import { Order, OrderItem, OrderTimelineEvent, OrderListQuery, OrderSummary, OrderListResponse, OrderAnalytics, PaginationParams } from "../types";
 export interface CreateOrderData {
     orderNumber: string;
     userId: string;
-    status?: "PENDING" | "CONFIRMED" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED" | "REFUNDED";
+    status?: PrismaOrderStatus;
     subtotal: number;
-    taxAmount?: number;
-    shippingAmount?: number;
-    discountAmount?: number;
-    totalAmount: number;
+    tax?: number;
+    shippingCost?: number;
+    discount?: number;
+    total: number;
     currency?: string;
-    paymentStatus?: "PENDING" | "PAID" | "FAILED" | "REFUNDED" | "PARTIAL_REFUND";
-    paymentMethod?: "CARD" | "BANK_TRANSFER" | "USSD" | "WALLET";
+    paymentStatus?: PrismaPaymentStatus;
+    paymentMethod?: string;
     paymentReference?: string;
-    shippingAddress: any;
-    billingAddress: any;
-    customerNotes?: string;
-    adminNotes?: string;
-    trackingNumber?: string;
-    estimatedDelivery?: Date;
+    notes?: string;
+    shippingAddressId?: string;
+    billingAddressId?: string;
 }
 export interface UpdateOrderData {
-    status?: "PENDING" | "CONFIRMED" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED" | "REFUNDED";
-    paymentStatus?: "PENDING" | "PAID" | "FAILED" | "REFUNDED" | "PARTIAL_REFUND";
-    paymentMethod?: "CARD" | "BANK_TRANSFER" | "USSD" | "WALLET";
+    status?: PrismaOrderStatus;
+    paymentStatus?: PrismaPaymentStatus;
+    paymentMethod?: string;
     paymentReference?: string;
-    adminNotes?: string;
-    trackingNumber?: string;
-    estimatedDelivery?: Date;
-    paidAt?: Date;
-    shippedAt?: Date;
-    deliveredAt?: Date;
+    notes?: string;
 }
 export interface OrderWithDetails extends Order {
-    items: OrderItem[];
-    timeline: OrderTimelineEvent[];
+    items?: OrderItem[];
+    timeline?: OrderTimelineEvent[];
     customer: {
         id: string;
         firstName: string;
@@ -57,12 +49,9 @@ export declare class OrderRepository extends BaseRepository<Order, CreateOrderDa
      */
     createOrderWithItems(orderData: CreateOrderData, items: Array<{
         productId: string;
-        productName: string;
-        productSku: string;
-        productImage?: string;
         quantity: number;
-        unitPrice: number;
-        totalPrice: number;
+        price: number;
+        total: number;
     }>): Promise<OrderWithDetails>;
     /**
      * Update order status with timeline
@@ -70,8 +59,6 @@ export declare class OrderRepository extends BaseRepository<Order, CreateOrderDa
     updateOrderStatus(orderId: string, statusData: {
         status: UpdateOrderData["status"];
         adminNotes?: string;
-        trackingNumber?: string;
-        estimatedDelivery?: Date;
         updatedBy?: string;
     }): Promise<OrderWithDetails>;
     /**
@@ -106,6 +93,12 @@ export declare class OrderRepository extends BaseRepository<Order, CreateOrderDa
      * Cancel order
      */
     cancelOrder(orderId: string, reason: string, cancelledBy?: string): Promise<OrderWithDetails>;
+    /**
+     * Find verified purchase for review
+     */
+    findVerifiedPurchase(userId: string, productId: string): Promise<{
+        orderId: string;
+    } | null>;
     /**
      * Generate unique order number
      */

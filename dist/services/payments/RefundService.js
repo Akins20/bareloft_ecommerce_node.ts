@@ -10,8 +10,8 @@ class RefundService extends BaseService_1.BaseService {
     refunds = new Map(); // In-memory store for demo
     constructor(paystackService, notificationService) {
         super();
-        this.paystackService = paystackService;
-        this.notificationService = notificationService;
+        this.paystackService = paystackService || {};
+        this.notificationService = notificationService || {};
     }
     /**
      * Process a refund request
@@ -39,12 +39,12 @@ class RefundService extends BaseService_1.BaseService {
             if (!transaction) {
                 throw new types_1.AppError("Transaction not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
             }
-            if (transaction.status !== "success") {
+            if (transaction.status !== "COMPLETED") {
                 throw new types_1.AppError("Only successful transactions can be refunded", types_1.HTTP_STATUS.BAD_REQUEST, types_1.ERROR_CODES.VALIDATION_ERROR);
             }
-            // Validate refund amount
-            const refundAmount = request.amount || transaction.amountPaid;
-            if (refundAmount > transaction.amountPaid) {
+            // Validate refund amount (using amount since amountPaid doesn't exist)
+            const refundAmount = request.amount || Number(transaction.amount);
+            if (refundAmount > Number(transaction.amount)) {
                 throw new types_1.AppError("Refund amount cannot exceed paid amount", types_1.HTTP_STATUS.BAD_REQUEST, types_1.ERROR_CODES.VALIDATION_ERROR);
             }
             // Check if already refunded
@@ -52,7 +52,7 @@ class RefundService extends BaseService_1.BaseService {
             const totalRefunded = existingRefunds
                 .filter((r) => r.status === "COMPLETED")
                 .reduce((sum, r) => sum + r.amount, 0);
-            if (totalRefunded + refundAmount > transaction.amountPaid) {
+            if (totalRefunded + refundAmount > Number(transaction.amount)) {
                 throw new types_1.AppError("Total refund amount would exceed paid amount", types_1.HTTP_STATUS.BAD_REQUEST, types_1.ERROR_CODES.VALIDATION_ERROR);
             }
             // Create refund record
@@ -67,7 +67,7 @@ class RefundService extends BaseService_1.BaseService {
             // Process refund based on payment method
             await this.processRefundByMethod(refund, transaction);
             // Update order status if full refund
-            if (refundAmount === transaction.amountPaid) {
+            if (refundAmount === Number(transaction.amount)) {
                 await models_1.OrderModel.update({
                     where: { id: transaction.orderId },
                     data: {
@@ -329,8 +329,8 @@ class RefundService extends BaseService_1.BaseService {
         const user = order.user;
         if (user.email) {
             await this.notificationService.sendNotification({
-                type: "REFUND_PROCESSED",
-                channel: "EMAIL",
+                type: "refund_processed",
+                channel: "email",
                 userId: order.userId,
                 recipient: {
                     email: user.email,

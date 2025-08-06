@@ -53,6 +53,72 @@ export declare class OrderService extends BaseService {
         createdBy?: string;
         createdAt: Date;
     }>>;
+    /**
+     * Get order by order number
+     */
+    getOrderByNumber(orderNumber: string, userId?: string): Promise<Order>;
+    /**
+     * Get order tracking information
+     */
+    getOrderTracking(orderId: string, userId?: string): Promise<{
+        order: Order;
+        tracking: {
+            trackingNumber?: string;
+            status: OrderStatus;
+            estimatedDelivery?: Date;
+            timeline: Array<{
+                status: OrderStatus;
+                description: string;
+                timestamp: Date;
+                notes?: string;
+            }>;
+        };
+    }>;
+    /**
+     * Reorder items from a previous order
+     */
+    reorder(orderId: string, userId: string): Promise<{
+        success: boolean;
+        message: string;
+        cartItems: any[];
+    }>;
+    /**
+     * Request return for an order
+     */
+    requestReturn(orderId: string, userId: string, data: {
+        reason: string;
+        items?: string[];
+        notes?: string;
+    }): Promise<{
+        success: boolean;
+        message: string;
+        returnRequest: any;
+    }>;
+    /**
+     * Verify payment for an order
+     */
+    verifyPayment(orderId: string, userId: string): Promise<{
+        success: boolean;
+        message: string;
+        order: Order;
+    }>;
+    /**
+     * Generate invoice for an order
+     */
+    generateInvoice(orderId: string, userId?: string): Promise<{
+        success: boolean;
+        invoice: any;
+    }>;
+    /**
+     * Get user order statistics
+     */
+    getUserOrderStats(userId: string): Promise<{
+        totalOrders: number;
+        totalSpent: number;
+        averageOrderValue: number;
+        ordersByStatus: Record<string, number>;
+        recentOrders: Order[];
+    }>;
     private generateOrderNumber;
     private calculateShippingAmount;
     private calculateTaxAmount;

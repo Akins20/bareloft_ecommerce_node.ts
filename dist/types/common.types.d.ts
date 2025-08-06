@@ -8,8 +8,9 @@ export type NigerianState = typeof NIGERIAN_STATES[number];
 export type Currency = 'NGN';
 export interface NairaCurrency {
     amount: number;
-    currency: Currency;
+    currency?: Currency;
     formatted: string;
+    inKobo?: number;
 }
 export type NigerianPhoneNumber = string;
 export interface PaginationParams {
@@ -59,7 +60,7 @@ export interface Address {
     country: 'NG';
     phoneNumber: NigerianPhoneNumber;
     isDefault: boolean;
-    type: 'shipping' | 'billing';
+    type: 'SHIPPING' | 'BILLING';
 }
 export interface ResponseData<T = any> {
     success: boolean;
@@ -71,6 +72,12 @@ export interface ResponseData<T = any> {
     };
     meta?: {
         pagination?: PaginationMeta;
+        timestamp: string;
+    };
+}
+export interface PaginatedResponse<T = any> extends ResponseData<T[]> {
+    meta: {
+        pagination: PaginationMeta;
         timestamp: string;
     };
 }

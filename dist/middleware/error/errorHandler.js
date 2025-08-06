@@ -80,7 +80,8 @@ const getNigerianFriendlyMessage = (error) => {
         NETWORK_ERROR: "Please check your internet connection and try again",
         SERVER_ERROR: "Something went wrong on our end. Please try again later",
     };
-    return friendlyMessages[error.errorCode] || friendlyMessages["SERVER_ERROR"];
+    const errorCode = error.errorCode || "SERVER_ERROR";
+    return (friendlyMessages[errorCode] ?? friendlyMessages["SERVER_ERROR"]);
 };
 /**
  * 🔍 Error classification
@@ -148,7 +149,7 @@ const trackErrorMetrics = (error, req) => {
     });
     // Track error frequency for monitoring
     // This would integrate with your monitoring service (e.g., DataDog, New Relic)
-    if (classification.shouldNotify && environment_1.environment.NODE_ENV === "production") {
+    if (classification.shouldNotify && environment_1.config.nodeEnv === "production") {
         // Send to error tracking service
         // Sentry, Bugsnag, etc.
     }
@@ -220,7 +221,7 @@ const errorHandler = (error, req, res, next) => {
     const errorResponse = {
         success: false,
         error: errorCode,
-        message: environment_1.environment.NODE_ENV === "production"
+        message: environment_1.config.nodeEnv === "production"
             ? getNigerianFriendlyMessage({ errorCode })
             : message,
         ...(details && { details }),
@@ -231,7 +232,7 @@ const errorHandler = (error, req, res, next) => {
         errorResponse.requestId = req.id;
     }
     // Include stack trace in development
-    if (environment_1.environment.NODE_ENV === "development") {
+    if (environment_1.config.nodeEnv === "development") {
         errorResponse.stack = error.stack;
         errorResponse.originalMessage = message;
     }
@@ -254,6 +255,12 @@ const errorHandler = (error, req, res, next) => {
     res.status(statusCode).json(errorResponse);
 };
 exports.errorHandler = errorHandler;
+// ==========================================
+// src/middleware/error/notFound.ts
+/**
+ * 🔍 404 Not Found Handler
+ * Handles requests to non-existent endpoints
+ */
 /**
  * 🚫 404 Not Found middleware
  * Provides helpful responses for missing endpoints
@@ -340,8 +347,8 @@ const generateApiSuggestions = (requestedPath) => {
     commonEndpoints.forEach((endpoint) => {
         const normalizedEndpoint = endpoint.toLowerCase();
         // Check for partial matches
-        if (normalizedEndpoint.includes(normalizedPath.replace("/api/", "").split("/")[0]) ||
-            normalizedPath.includes(normalizedEndpoint.split("/")[3] || "")) {
+        if (normalizedEndpoint.includes(normalizedPath.replace("/api/", "").split("/")[0] || "") ||
+            normalizedPath.includes(normalizedEndpoint.split("/")[3] ?? "")) {
             suggestions.push(endpoint);
         }
     });

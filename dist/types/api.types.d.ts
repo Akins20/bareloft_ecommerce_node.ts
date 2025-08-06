@@ -1,8 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { ResponseData, PaginationMeta, PaginationParams } from './common.types';
-import { JWTPayload } from './auth.types';
-import { FileUpload } from './common.types';
-export { PaginationParams };
+import { ResponseData, PaginationMeta, PaginationParams, PaginatedResponse } from './common.types';
+import { AuthenticatedRequest } from './auth.types';
+export { PaginationParams, PaginatedResponse };
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export interface ApiResponse<T = any> extends ResponseData<T> {
 }
@@ -29,16 +28,9 @@ export interface EndpointMeta {
         maxRequests: number;
     };
 }
-export interface AuthenticatedRequest extends Request {
-    user: JWTPayload;
-}
 export interface RequestWithFile extends Request {
-    file?: FileUpload;
-    files?: FileUpload[];
-}
-export interface AuthenticatedRequestWithFile extends AuthenticatedRequest {
-    file?: FileUpload;
-    files?: FileUpload[];
+    file?: any;
+    files?: any[];
 }
 export declare class AppError extends Error {
     readonly statusCode: number;
@@ -86,6 +78,7 @@ export declare const ERROR_CODES: {
     readonly RESOURCE_CONFLICT: "RESOURCE_CONFLICT";
     readonly INSUFFICIENT_STOCK: "INSUFFICIENT_STOCK";
     readonly ORDER_CANNOT_BE_CANCELLED: "ORDER_CANNOT_BE_CANCELLED";
+    readonly INVALID_ORDER_STATUS: "INVALID_ORDER_STATUS";
     readonly PAYMENT_FAILED: "PAYMENT_FAILED";
     readonly INVALID_COUPON: "INVALID_COUPON";
     readonly INTERNAL_ERROR: "INTERNAL_ERROR";

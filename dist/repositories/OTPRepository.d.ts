@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { BaseRepository } from "./BaseRepository";
-import { OTPCode, OTPPurpose, NigerianPhoneNumber } from "../types";
+import { NigerianPhoneNumber } from "../types";
+import { OTPCode, OTPPurpose } from "../types/auth.types";
 interface CreateOTPData {
     phoneNumber: NigerianPhoneNumber;
     code: string;

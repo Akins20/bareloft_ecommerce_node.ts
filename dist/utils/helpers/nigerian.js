@@ -75,7 +75,7 @@ class NigerianPhoneUtils {
     /**
      * Parse phone number with full details
      */
-    static parse(phone) {
+    static parseDetailed(phone) {
         const raw = phone;
         const formatted = this.format(phone);
         const isValid = this.validate(formatted);
@@ -86,6 +86,14 @@ class NigerianPhoneUtils {
             network: network,
             isValid,
         };
+    }
+    /**
+     * Parse phone number to valid format
+     */
+    static parse(phone) {
+        const formatted = this.format(phone);
+        const isValid = this.validate(formatted);
+        return isValid ? formatted : phone;
     }
     /**
      * Mask phone number for privacy (e.g., +234803****567)
@@ -506,8 +514,8 @@ class NigerianEcommerceUtils {
             books: 0.0, // 0% (books are duty-free)
             other: 0.1, // 10%
         };
-        const dutyRate = dutyRates[productCategory] || dutyRates.other;
-        return costPrice * dutyRate;
+        const dutyRate = dutyRates[productCategory] ?? dutyRates.other;
+        return costPrice * (dutyRate || 0.1);
     }
     /**
      * Get recommended payment methods for Nigerian customers

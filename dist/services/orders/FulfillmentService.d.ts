@@ -1,8 +1,5 @@
 import { BaseService } from "../BaseService";
 import { Order } from "../../types";
-import { ReservationService } from "../inventory/ReservationService";
-import { StockService } from "../inventory/StockService";
-import { NotificationService } from "../notifications/NotificationService";
 interface ShippingLabel {
     orderId: string;
     trackingNumber: string;
@@ -21,7 +18,7 @@ export declare class FulfillmentService extends BaseService {
     private reservationService;
     private stockService;
     private notificationService;
-    constructor(reservationService: ReservationService, stockService: StockService, notificationService: NotificationService);
+    constructor(reservationService?: any, stockService?: any, notificationService?: any);
     /**
      * Confirm order and convert reservations to actual stock reduction
      */

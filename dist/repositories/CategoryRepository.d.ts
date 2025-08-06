@@ -23,7 +23,7 @@ export interface UpdateCategoryData {
     seoTitle?: string;
     seoDescription?: string;
 }
-export interface CategoryWithProducts extends Category {
+export interface CategoryWithProducts extends Omit<Category, 'products'> {
     productCount: number;
     hasChildren: boolean;
     products?: any[];

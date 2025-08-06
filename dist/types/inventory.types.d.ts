@@ -1,33 +1,36 @@
 export declare enum InventoryMovementType {
-    INITIAL_STOCK = "initial_stock",
-    RESTOCK = "restock",
-    PURCHASE = "purchase",
-    RETURN = "return",
-    TRANSFER_IN = "transfer_in",
-    ADJUSTMENT_IN = "adjustment_in",
-    SALE = "sale",
-    TRANSFER_OUT = "transfer_out",
-    DAMAGE = "damage",
-    THEFT = "theft",
-    EXPIRED = "expired",
-    ADJUSTMENT_OUT = "adjustment_out",
-    RESERVE = "reserve",
-    RELEASE_RESERVE = "release_reserve"
+    IN = "IN",
+    OUT = "OUT",
+    ADJUSTMENT = "ADJUSTMENT",
+    INITIAL_STOCK = "IN",
+    RESTOCK = "IN",
+    PURCHASE = "IN",
+    RETURN = "IN",
+    TRANSFER_IN = "IN",
+    ADJUSTMENT_IN = "ADJUSTMENT",
+    SALE = "OUT",
+    TRANSFER_OUT = "OUT",
+    DAMAGE = "OUT",
+    THEFT = "OUT",
+    EXPIRED = "OUT",
+    ADJUSTMENT_OUT = "ADJUSTMENT",
+    RESERVE = "OUT",
+    RELEASE_RESERVE = "IN"
 }
 export declare enum InventoryStatus {
-    ACTIVE = "active",
-    INACTIVE = "inactive",
-    DISCONTINUED = "discontinued",
-    OUT_OF_STOCK = "out_of_stock",
-    LOW_STOCK = "low_stock",
-    OVERSTOCKED = "overstocked"
+    ACTIVE = "ACTIVE",
+    INACTIVE = "INACTIVE",
+    DISCONTINUED = "DISCONTINUED",
+    OUT_OF_STOCK = "OUT_OF_STOCK",
+    LOW_STOCK = "LOW_STOCK",
+    OVERSTOCKED = "OVERSTOCKED"
 }
 export declare enum StockAlert {
-    LOW_STOCK = "low_stock",
-    OUT_OF_STOCK = "out_of_stock",
-    OVERSTOCK = "overstock",
-    NEGATIVE_STOCK = "negative_stock",
-    RESERVATION_EXPIRED = "reservation_expired"
+    LOW_STOCK = "LOW_STOCK",
+    OUT_OF_STOCK = "OUT_OF_STOCK",
+    OVERSTOCK = "OVERSTOCK",
+    NEGATIVE_STOCK = "NEGATIVE_STOCK",
+    RESERVATION_EXPIRED = "RESERVATION_EXPIRED"
 }
 export interface Inventory {
     id: string;
@@ -56,35 +59,37 @@ export interface Inventory {
 }
 export interface InventoryMovement {
     id: string;
-    inventoryId: string;
     productId: string;
     type: InventoryMovementType;
     quantity: number;
-    previousQuantity: number;
-    newQuantity: number;
+    reference?: string;
+    reason?: string;
+    inventoryId?: string;
+    previousQuantity?: number;
+    newQuantity?: number;
     unitCost?: number;
     totalCost?: number;
     referenceType?: "order" | "purchase" | "adjustment" | "transfer";
     referenceId?: string;
-    reason?: string;
     notes?: string;
     metadata?: Record<string, any>;
-    createdBy: string;
+    createdBy?: string;
     batchId?: string;
     createdAt: Date;
 }
 export interface StockReservation {
     id: string;
-    inventoryId: string;
     productId: string;
     orderId?: string;
-    cartId?: string;
     quantity: number;
-    reason: string;
     expiresAt: Date;
-    isExpired: boolean;
-    isReleased: boolean;
     createdAt: Date;
+    updatedAt: Date;
+    inventoryId?: string;
+    cartId?: string;
+    reason?: string;
+    isExpired?: boolean;
+    isReleased?: boolean;
     releasedAt?: Date;
 }
 export interface UpdateInventoryRequest {
@@ -93,6 +98,7 @@ export interface UpdateInventoryRequest {
     lowStockThreshold?: number;
     reorderPoint?: number;
     reorderQuantity?: number;
+    trackInventory?: boolean;
     allowBackorder?: boolean;
     reason?: string;
     notes?: string;

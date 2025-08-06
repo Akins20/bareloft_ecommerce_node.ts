@@ -15,7 +15,7 @@ class OrderController extends BaseController_1.BaseController {
     createOrder = async (req, res) => {
         try {
             const userId = req.user?.id;
-            const sessionId = req.sessionID || req.headers["x-session-id"];
+            const sessionId = req.sessionId || req.headers["x-session-id"];
             if (!userId && !sessionId) {
                 res.status(400).json({
                     success: false,
@@ -34,11 +34,20 @@ class OrderController extends BaseController_1.BaseController {
                 });
                 return;
             }
-            const result = await this.orderService.createOrder(userId, sessionId, orderData);
+            if (!userId) {
+                res.status(401).json({
+                    success: false,
+                    message: "User authentication required",
+                });
+                return;
+            }
+            // TODO: Get cart items from cart service
+            const cartItems = []; // Placeholder
+            const result = await this.orderService.createOrder(userId, orderData, cartItems);
             const response = {
                 success: true,
                 message: "Order created successfully",
-                data: result,
+                data: { order: result },
             };
             res.status(201).json(response);
         }
@@ -63,17 +72,40 @@ class OrderController extends BaseController_1.BaseController {
             const query = {
                 page: parseInt(req.query.page) || 1,
                 limit: Math.min(parseInt(req.query.limit) || 20, 100),
-                status: req.query.status,
+                status: req.query.status ? req.query.status : undefined,
                 startDate: req.query.startDate,
                 endDate: req.query.endDate,
                 sortBy: req.query.sortBy || "createdAt",
                 sortOrder: req.query.sortOrder || "desc",
             };
-            const result = await this.orderService.getUserOrders(userId, query);
+            const result = await this.orderService.getUserOrders(userId, query.page, query.limit);
             const response = {
                 success: true,
                 message: "Orders retrieved successfully",
-                data: result,
+                data: {
+                    orders: result.orders.map(order => ({
+                        id: order.id,
+                        orderNumber: order.orderNumber,
+                        status: order.status,
+                        paymentStatus: order.paymentStatus,
+                        totalAmount: order.total,
+                        currency: order.currency,
+                        itemCount: order.items?.length || order._count?.items || 0,
+                        customerName: order.user ? `${order.user.firstName} ${order.user.lastName}` : 'Guest',
+                        createdAt: order.createdAt,
+                    })),
+                    pagination: {
+                        page: result.pagination.currentPage,
+                        limit: result.pagination.itemsPerPage,
+                        total: result.pagination.totalItems,
+                        totalPages: result.pagination.totalPages,
+                    },
+                    summary: {
+                        totalRevenue: 0, // TODO: Calculate actual total revenue
+                        totalOrders: result.pagination.totalItems,
+                        averageOrderValue: 0, // TODO: Calculate actual average
+                    }
+                },
             };
             res.json(response);
         }
@@ -89,7 +121,21 @@ class OrderController extends BaseController_1.BaseController {
         try {
             const { id } = req.params;
             const userId = req.user?.id;
-            const order = await this.orderService.getOrderById(id, userId);
+            if (!userId) {
+                res.status(401).json({
+                    success: false,
+                    message: "Authentication required",
+                });
+                return;
+            }
+            if (!id) {
+                res.status(400).json({
+                    success: false,
+                    message: "Order ID is required",
+                });
+                return;
+            }
+            const order = await this.orderService.getOrderById(id);
             if (!order) {
                 res.status(404).json({
                     success: false,
@@ -100,7 +146,19 @@ class OrderController extends BaseController_1.BaseController {
             const response = {
                 success: true,
                 message: "Order retrieved successfully",
-                data: order,
+                data: {
+                    order: order,
+                    timeline: order.timelineEvents || [],
+                    customer: {
+                        id: order.user?.id || '',
+                        firstName: order.user?.firstName || '',
+                        lastName: order.user?.lastName || '',
+                        email: order.user?.email,
+                        phoneNumber: order.user?.phoneNumber || '',
+                        totalOrders: 0, // TODO: Calculate from database
+                        totalSpent: 0, // TODO: Calculate from database
+                    }
+                },
             };
             res.json(response);
         }
@@ -116,6 +174,20 @@ class OrderController extends BaseController_1.BaseController {
         try {
             const { orderNumber } = req.params;
             const userId = req.user?.id;
+            if (!userId) {
+                res.status(401).json({
+                    success: false,
+                    message: "Authentication required",
+                });
+                return;
+            }
+            if (!orderNumber) {
+                res.status(400).json({
+                    success: false,
+                    message: "Order number is required",
+                });
+                return;
+            }
             const order = await this.orderService.getOrderByNumber(orderNumber, userId);
             if (!order) {
                 res.status(404).json({
@@ -127,7 +199,19 @@ class OrderController extends BaseController_1.BaseController {
             const response = {
                 success: true,
                 message: "Order retrieved successfully",
-                data: order,
+                data: {
+                    order: order,
+                    timeline: order.timelineEvents || [],
+                    customer: {
+                        id: order.user?.id || '',
+                        firstName: order.user?.firstName || '',
+                        lastName: order.user?.lastName || '',
+                        email: order.user?.email,
+                        phoneNumber: order.user?.phoneNumber || '',
+                        totalOrders: 0, // TODO: Calculate from database
+                        totalSpent: 0, // TODO: Calculate from database
+                    }
+                },
             };
             res.json(response);
         }
@@ -151,18 +235,18 @@ class OrderController extends BaseController_1.BaseController {
                 });
                 return;
             }
-            const result = await this.orderService.cancelOrder(id, userId, reason);
-            if (!result.success) {
+            if (!id) {
                 res.status(400).json({
                     success: false,
-                    message: result.message,
+                    message: "Order ID is required",
                 });
                 return;
             }
+            const cancelledOrder = await this.orderService.cancelOrder(id, reason || "Cancelled by user", userId);
             const response = {
                 success: true,
                 message: "Order cancelled successfully",
-                data: result.order,
+                data: cancelledOrder,
             };
             res.json(response);
         }
@@ -178,6 +262,20 @@ class OrderController extends BaseController_1.BaseController {
         try {
             const { id } = req.params;
             const userId = req.user?.id;
+            if (!userId) {
+                res.status(401).json({
+                    success: false,
+                    message: "Authentication required",
+                });
+                return;
+            }
+            if (!id) {
+                res.status(400).json({
+                    success: false,
+                    message: "Order ID is required",
+                });
+                return;
+            }
             const tracking = await this.orderService.getOrderTracking(id, userId);
             if (!tracking) {
                 res.status(404).json({
@@ -205,7 +303,21 @@ class OrderController extends BaseController_1.BaseController {
         try {
             const { id } = req.params;
             const userId = req.user?.id;
-            const timeline = await this.orderService.getOrderTimeline(id, userId);
+            if (!userId) {
+                res.status(401).json({
+                    success: false,
+                    message: "Authentication required",
+                });
+                return;
+            }
+            if (!id) {
+                res.status(400).json({
+                    success: false,
+                    message: "Order ID is required",
+                });
+                return;
+            }
+            const timeline = await this.orderService.getOrderTimeline(id);
             if (!timeline) {
                 res.status(404).json({
                     success: false,
@@ -239,12 +351,19 @@ class OrderController extends BaseController_1.BaseController {
                 });
                 return;
             }
+            if (!id) {
+                res.status(400).json({
+                    success: false,
+                    message: "Order ID is required",
+                });
+                return;
+            }
             const result = await this.orderService.reorder(id, userId);
             if (!result.success) {
                 res.status(400).json({
                     success: false,
                     message: result.message,
-                    data: result.unavailableItems,
+                    data: result.cartItems,
                 });
                 return;
             }
@@ -272,6 +391,13 @@ class OrderController extends BaseController_1.BaseController {
                 res.status(401).json({
                     success: false,
                     message: "User authentication required",
+                });
+                return;
+            }
+            if (!id) {
+                res.status(400).json({
+                    success: false,
+                    message: "Order ID is required",
                 });
                 return;
             }
@@ -314,6 +440,20 @@ class OrderController extends BaseController_1.BaseController {
         try {
             const { id } = req.params;
             const userId = req.user?.id;
+            if (!userId) {
+                res.status(401).json({
+                    success: false,
+                    message: "Authentication required",
+                });
+                return;
+            }
+            if (!id) {
+                res.status(400).json({
+                    success: false,
+                    message: "Order ID is required",
+                });
+                return;
+            }
             const result = await this.orderService.verifyPayment(id, userId);
             const response = {
                 success: true,
@@ -342,8 +482,15 @@ class OrderController extends BaseController_1.BaseController {
                 });
                 return;
             }
-            const invoice = await this.orderService.generateInvoice(id, userId, format);
-            if (!invoice) {
+            if (!id) {
+                res.status(400).json({
+                    success: false,
+                    message: "Order ID is required",
+                });
+                return;
+            }
+            const invoice = await this.orderService.generateInvoice(id, userId);
+            if (!invoice.success || !invoice.invoice) {
                 res.status(404).json({
                     success: false,
                     message: "Order not found or invoice not available",
@@ -351,9 +498,9 @@ class OrderController extends BaseController_1.BaseController {
                 return;
             }
             // Set appropriate headers for file download
-            res.setHeader("Content-Type", invoice.mimeType);
-            res.setHeader("Content-Disposition", `attachment; filename="${invoice.filename}"`);
-            res.send(invoice.data);
+            res.setHeader("Content-Type", invoice.invoice.mimeType || "application/pdf");
+            res.setHeader("Content-Disposition", `attachment; filename="${invoice.invoice.filename || "invoice.pdf"}"`);
+            res.send(invoice.invoice.data);
         }
         catch (error) {
             this.handleError(error, req, res);

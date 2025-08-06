@@ -3,6 +3,13 @@
  * Comprehensive error handling with Nigerian market considerations
  */
 import { Request, Response, NextFunction } from "express";
+declare global {
+    namespace Express {
+        interface Request {
+            id?: string;
+        }
+    }
+}
 export declare class AppError extends Error {
     statusCode: number;
     isOperational: boolean;
@@ -36,10 +43,18 @@ export declare class InventoryError extends AppError {
  */
 export declare const errorHandler: (error: any, req: Request, res: Response, next: NextFunction) => void;
 /**
+ * 🔍 404 Not Found Handler
+ * Handles requests to non-existent endpoints
+ */
+/**
  * 🚫 404 Not Found middleware
  * Provides helpful responses for missing endpoints
  */
 export declare const notFoundHandler: (req: Request, res: Response, next: NextFunction) => void;
+/**
+ * 🔄 Async Error Handler
+ * Wraps async functions to catch and forward errors
+ */
 type AsyncFunction = (req: Request, res: Response, next: NextFunction) => Promise<any>;
 /**
  * 🔧 Async handler wrapper

@@ -64,8 +64,8 @@ export declare class InventoryService extends BaseService {
     private checkLowStockAlert;
     private getInventorySummary;
     private clearInventoryCache;
-    private transformInventory;
-    private transformInventoryListItem;
+    private transformProductToInventory;
+    private transformProductToInventoryListItem;
 }
 export {};
 //# sourceMappingURL=InventoryService.d.ts.map

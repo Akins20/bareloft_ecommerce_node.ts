@@ -21,6 +21,15 @@ export declare class NigerianPhoneUtils {
     /**
      * Parse phone number with full details
      */
+    static parseDetailed(phone: string): {
+        raw: string;
+        formatted: string;
+        network: any;
+        isValid: boolean;
+    };
+    /**
+     * Parse phone number to valid format
+     */
     static parse(phone: string): NigerianPhoneNumber;
     /**
      * Mask phone number for privacy (e.g., +234803****567)

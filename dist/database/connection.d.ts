@@ -58,7 +58,7 @@ export declare class DatabaseManager {
     /**
      * Begin transaction
      */
-    transaction<T>(callback: (prisma: PrismaClient) => Promise<T>): Promise<T>;
+    transaction<T>(callback: (prisma: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>): Promise<T>;
     /**
      * Get Prisma client instance
      */

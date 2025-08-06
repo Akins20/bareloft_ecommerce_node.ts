@@ -1,6 +1,5 @@
 import { BaseService } from "../BaseService";
 import { OrderStatus } from "../../types";
-import { CacheService } from "../cache/CacheService";
 interface TrackingInfo {
     orderId: string;
     orderNumber: string;
@@ -30,7 +29,7 @@ interface DeliveryUpdate {
 }
 export declare class TrackingService extends BaseService {
     private cacheService;
-    constructor(cacheService: CacheService);
+    constructor(cacheService?: any);
     /**
      * Track order by order number or tracking number
      */

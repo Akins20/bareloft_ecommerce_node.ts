@@ -1,5 +1,5 @@
 import { BaseService } from "../BaseService";
-import { InventoryMovement, InventoryMovementType, InventoryMovementRequest, PaginationMeta } from "../../types";
+import { InventoryMovement, InventoryMovementType, InventoryAdjustmentRequest, PaginationMeta } from "../../types";
 import { CacheService } from "../cache/CacheService";
 interface MovementFilter {
     productId?: string;
@@ -16,7 +16,7 @@ export declare class MovementService extends BaseService {
     /**
      * Record a new inventory movement
      */
-    recordMovement(request: InventoryMovementRequest): Promise<InventoryMovement>;
+    recordMovement(request: InventoryAdjustmentRequest): Promise<InventoryMovement>;
     /**
      * Get movement history with filtering and pagination
      */

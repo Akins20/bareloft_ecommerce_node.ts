@@ -97,17 +97,17 @@ export declare const validateSchema: (schemaPath: string, data: any) => Promise<
     isValid: boolean;
     error: any;
     details: any;
-    data?: never;
+    data?: undefined;
 } | {
     isValid: boolean;
     data: any;
-    error?: never;
-    details?: never;
+    error?: undefined;
+    details?: undefined;
 } | {
     isValid: boolean;
     error: string;
-    details?: never;
-    data?: never;
+    details?: undefined;
+    data?: undefined;
 }>;
 export declare const SCHEMA_NAMES: {
     readonly REQUEST_OTP: "auth.requestOTP";

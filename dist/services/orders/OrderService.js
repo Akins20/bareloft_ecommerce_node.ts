@@ -29,16 +29,14 @@ class OrderService extends BaseService_1.BaseService {
                     userId,
                     status: "PENDING",
                     subtotal,
-                    taxAmount,
-                    shippingAmount,
-                    discountAmount: 0,
-                    totalAmount,
+                    tax: taxAmount,
+                    shippingCost: shippingAmount,
+                    discount: 0,
+                    total: totalAmount,
                     currency: "NGN",
                     paymentStatus: "PENDING",
-                    paymentMethod: request.paymentMethod,
-                    shippingAddress: request.shippingAddress,
-                    billingAddress: request.billingAddress || request.shippingAddress,
-                    customerNotes: request.customerNotes,
+                    paymentMethod: request.paymentMethod?.toString(),
+                    notes: request.customerNotes,
                 },
             });
             // Create order items
@@ -47,17 +45,14 @@ class OrderService extends BaseService_1.BaseService {
                     data: {
                         orderId: order.id,
                         productId: item.productId,
-                        productName: item.productName,
-                        productSku: item.productSku,
-                        productImage: item.productImage,
                         quantity: item.quantity,
-                        unitPrice: item.unitPrice,
-                        totalPrice: item.totalPrice,
+                        price: item.unitPrice,
+                        total: item.totalPrice,
                     },
                 });
             }
             // Create timeline event
-            await this.createTimelineEvent(order.id, "PENDING", "Order created and pending payment", userId);
+            await this.createTimelineEvent(order.id, "ORDER_CREATED", "Order created and pending payment", userId);
             return this.getOrderById(order.id);
         }
         catch (error) {
@@ -210,18 +205,11 @@ class OrderService extends BaseService_1.BaseService {
                 where: { id: orderId },
                 data: {
                     status: request.status,
-                    adminNotes: request.adminNotes,
-                    trackingNumber: request.trackingNumber,
-                    estimatedDelivery: request.estimatedDelivery
-                        ? new Date(request.estimatedDelivery)
-                        : undefined,
-                    shippedAt: request.status === "SHIPPED" ? new Date() : order.shippedAt,
-                    deliveredAt: request.status === "DELIVERED" ? new Date() : order.deliveredAt,
-                    updatedAt: new Date(),
+                    notes: request.adminNotes,
                 },
             });
             // Create timeline event
-            await this.createTimelineEvent(orderId, request.status, this.getStatusDescription(request.status), updatedBy, request.adminNotes);
+            await this.createTimelineEvent(orderId, "STATUS_UPDATED", this.getStatusDescription(request.status), updatedBy, request.adminNotes);
             // Clear cache
             await this.clearOrderCache(orderId);
             return this.getOrderById(orderId);
@@ -250,12 +238,12 @@ class OrderService extends BaseService_1.BaseService {
                 where: { id: orderId },
                 data: {
                     status: "CANCELLED",
-                    adminNotes: reason,
+                    notes: reason,
                     updatedAt: new Date(),
                 },
             });
             // Create timeline event
-            await this.createTimelineEvent(orderId, "CANCELLED", `Order cancelled: ${reason}`, cancelledBy);
+            await this.createTimelineEvent(orderId, "ORDER_CANCELLED", `Order cancelled: ${reason}`, cancelledBy);
             return this.getOrderById(orderId);
         }
         catch (error) {
@@ -274,15 +262,323 @@ class OrderService extends BaseService_1.BaseService {
             });
             return timeline.map((event) => ({
                 id: event.id,
-                status: event.status,
-                description: event.description,
-                notes: event.notes,
-                createdBy: event.createdBy,
+                status: event.type,
+                description: event.message,
+                notes: event.data?.notes,
+                createdBy: event.data?.createdBy,
                 createdAt: event.createdAt,
             }));
         }
         catch (error) {
             this.handleError("Error fetching order timeline", error);
+            throw error;
+        }
+    }
+    /**
+     * Get order by order number
+     */
+    async getOrderByNumber(orderNumber, userId) {
+        try {
+            const where = { orderNumber };
+            if (userId) {
+                where.userId = userId;
+            }
+            const order = await models_1.OrderModel.findUnique({
+                where,
+                include: {
+                    items: true,
+                    user: {
+                        select: {
+                            id: true,
+                            firstName: true,
+                            lastName: true,
+                            phoneNumber: true,
+                            email: true,
+                        },
+                    },
+                },
+            });
+            if (!order) {
+                throw new types_1.AppError("Order not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+            }
+            return this.transformOrder(order);
+        }
+        catch (error) {
+            this.handleError("Error fetching order by number", error);
+            throw error;
+        }
+    }
+    /**
+     * Get order tracking information
+     */
+    async getOrderTracking(orderId, userId) {
+        try {
+            const where = { id: orderId };
+            if (userId) {
+                where.userId = userId;
+            }
+            const order = await models_1.OrderModel.findUnique({
+                where,
+                include: {
+                    items: true,
+                },
+            });
+            if (!order) {
+                throw new types_1.AppError("Order not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+            }
+            const timeline = await this.getOrderTimeline(orderId);
+            return {
+                order: this.transformOrder(order),
+                tracking: {
+                    trackingNumber: undefined,
+                    status: order.status,
+                    estimatedDelivery: undefined,
+                    timeline: timeline.map((event) => ({
+                        status: event.status,
+                        description: event.description,
+                        timestamp: event.createdAt,
+                        notes: event.notes,
+                    })),
+                },
+            };
+        }
+        catch (error) {
+            this.handleError("Error fetching order tracking", error);
+            throw error;
+        }
+    }
+    /**
+     * Reorder items from a previous order
+     */
+    async reorder(orderId, userId) {
+        try {
+            const order = await models_1.OrderModel.findUnique({
+                where: { id: orderId, userId },
+                include: {
+                    items: {
+                        include: {
+                            product: {
+                                select: {
+                                    name: true,
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+            if (!order) {
+                throw new types_1.AppError("Order not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+            }
+            // Transform order items to cart items format
+            const cartItems = order.items.map((item) => ({
+                productId: item.productId,
+                productName: item.product?.name || '',
+                quantity: item.quantity,
+                unitPrice: Number(item.price),
+                totalPrice: Number(item.total),
+            }));
+            return {
+                success: true,
+                message: "Items added to cart for reorder",
+                cartItems,
+            };
+        }
+        catch (error) {
+            this.handleError("Error processing reorder", error);
+            throw error;
+        }
+    }
+    /**
+     * Request return for an order
+     */
+    async requestReturn(orderId, userId, data) {
+        try {
+            const order = await models_1.OrderModel.findUnique({
+                where: { id: orderId, userId },
+                include: {
+                    items: {
+                        include: {
+                            product: {
+                                select: {
+                                    name: true,
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+            if (!order) {
+                throw new types_1.AppError("Order not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+            }
+            if (order.status !== "DELIVERED") {
+                throw new types_1.AppError("Returns can only be requested for delivered orders", types_1.HTTP_STATUS.BAD_REQUEST, types_1.ERROR_CODES.INVALID_ORDER_STATUS);
+            }
+            // Create timeline event for return request
+            await this.createTimelineEvent(orderId, "RETURN_REQUESTED", `Return requested: ${data.reason}`, userId, data.notes);
+            const returnRequest = {
+                id: `return_${orderId}`,
+                orderId,
+                reason: data.reason,
+                items: data.items || order.items.map((item) => item.id),
+                notes: data.notes,
+                status: "PENDING",
+                requestedAt: new Date(),
+            };
+            return {
+                success: true,
+                message: "Return request submitted successfully",
+                returnRequest,
+            };
+        }
+        catch (error) {
+            this.handleError("Error requesting return", error);
+            throw error;
+        }
+    }
+    /**
+     * Verify payment for an order
+     */
+    async verifyPayment(orderId, userId) {
+        try {
+            const order = await models_1.OrderModel.findUnique({
+                where: { id: orderId, userId },
+            });
+            if (!order) {
+                throw new types_1.AppError("Order not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+            }
+            // Update payment status
+            const updatedOrder = await models_1.OrderModel.update({
+                where: { id: orderId },
+                data: {
+                    paymentStatus: "COMPLETED",
+                    status: "CONFIRMED",
+                    updatedAt: new Date(),
+                },
+            });
+            // Create timeline event
+            await this.createTimelineEvent(orderId, "PAYMENT_CONFIRMED", "Payment verified and order confirmed", "SYSTEM");
+            return {
+                success: true,
+                message: "Payment verified successfully",
+                order: await this.getOrderById(orderId),
+            };
+        }
+        catch (error) {
+            this.handleError("Error verifying payment", error);
+            throw error;
+        }
+    }
+    /**
+     * Generate invoice for an order
+     */
+    async generateInvoice(orderId, userId) {
+        try {
+            const where = { id: orderId };
+            if (userId) {
+                where.userId = userId;
+            }
+            const order = await models_1.OrderModel.findUnique({
+                where,
+                include: {
+                    items: {
+                        include: {
+                            product: {
+                                select: {
+                                    name: true,
+                                },
+                            },
+                        },
+                    },
+                    user: {
+                        select: {
+                            firstName: true,
+                            lastName: true,
+                            email: true,
+                            phoneNumber: true,
+                        },
+                    },
+                    shippingAddress: true,
+                    billingAddress: true,
+                },
+            });
+            if (!order) {
+                throw new types_1.AppError("Order not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+            }
+            const invoice = {
+                invoiceNumber: `INV-${order.orderNumber}`,
+                orderNumber: order.orderNumber,
+                invoiceDate: new Date(),
+                dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+                customer: {
+                    name: `${order.user?.firstName} ${order.user?.lastName}`,
+                    email: order.user?.email,
+                    phone: order.user?.phoneNumber,
+                },
+                billing: order.billingAddress || null,
+                shipping: order.shippingAddress || null,
+                items: order.items.map((item) => ({
+                    description: item.product?.name || '',
+                    quantity: item.quantity,
+                    unitPrice: Number(item.price),
+                    totalPrice: Number(item.total),
+                })),
+                subtotal: Number(order.subtotal),
+                taxAmount: Number(order.tax),
+                shippingAmount: Number(order.shippingCost),
+                discountAmount: Number(order.discount),
+                totalAmount: Number(order.total),
+                currency: order.currency,
+                paymentStatus: order.paymentStatus,
+                paymentMethod: order.paymentMethod,
+            };
+            return {
+                success: true,
+                invoice,
+            };
+        }
+        catch (error) {
+            this.handleError("Error generating invoice", error);
+            throw error;
+        }
+    }
+    /**
+     * Get user order statistics
+     */
+    async getUserOrderStats(userId) {
+        try {
+            const [orders, totalSpent] = await Promise.all([
+                models_1.OrderModel.findMany({
+                    where: { userId },
+                    include: { items: { take: 1 } },
+                    orderBy: { createdAt: "desc" },
+                }),
+                models_1.OrderModel.aggregate({
+                    where: { userId, paymentStatus: "COMPLETED" },
+                    _sum: { total: true },
+                }),
+            ]);
+            const totalOrders = orders.length;
+            const totalAmount = Number(totalSpent._sum.total) || 0;
+            const averageOrderValue = totalOrders > 0 ? totalAmount / totalOrders : 0;
+            // Count orders by status
+            const ordersByStatus = orders.reduce((acc, order) => {
+                acc[order.status] = (acc[order.status] || 0) + 1;
+                return acc;
+            }, {});
+            // Get recent orders (last 5)
+            const recentOrders = orders
+                .slice(0, 5)
+                .map((order) => this.transformOrder(order));
+            return {
+                totalOrders,
+                totalSpent: totalAmount,
+                averageOrderValue,
+                ordersByStatus,
+                recentOrders,
+            };
+        }
+        catch (error) {
+            this.handleError("Error fetching user order stats", error);
             throw error;
         }
     }
@@ -318,14 +614,16 @@ class OrderService extends BaseService_1.BaseService {
         // 7.5% VAT
         return Math.round(subtotal * 0.075);
     }
-    async createTimelineEvent(orderId, status, description, createdBy, notes) {
+    async createTimelineEvent(orderId, type, message, createdBy, notes) {
         await models_1.OrderTimelineEventModel.create({
             data: {
                 orderId,
-                status,
-                description,
-                notes,
-                createdBy,
+                type,
+                message,
+                data: {
+                    createdBy,
+                    notes,
+                },
             },
         });
     }
@@ -344,8 +642,8 @@ class OrderService extends BaseService_1.BaseService {
     async clearOrderCache(orderId) {
         await Promise.all([
             this.cacheService.delete(`order:${orderId}`),
-            this.cacheService.deletePattern("orders:*"),
-            this.cacheService.deletePattern("user-orders:*"),
+            this.cacheService.clearPattern("orders:*"),
+            this.cacheService.clearPattern("user-orders:*"),
         ]);
     }
     transformOrder(order) {
@@ -355,38 +653,35 @@ class OrderService extends BaseService_1.BaseService {
             userId: order.userId,
             status: order.status,
             subtotal: Number(order.subtotal),
-            taxAmount: Number(order.taxAmount),
-            shippingAmount: Number(order.shippingAmount),
-            discountAmount: Number(order.discountAmount),
-            totalAmount: Number(order.totalAmount),
+            tax: Number(order.tax),
+            shippingCost: Number(order.shippingCost),
+            discount: Number(order.discount),
+            total: Number(order.total),
             currency: order.currency,
             paymentStatus: order.paymentStatus,
             paymentMethod: order.paymentMethod,
             paymentReference: order.paymentReference,
-            shippingAddress: order.shippingAddress,
-            billingAddress: order.billingAddress,
-            customerNotes: order.customerNotes,
-            adminNotes: order.adminNotes,
-            trackingNumber: order.trackingNumber,
-            estimatedDelivery: order.estimatedDelivery,
-            paidAt: order.paidAt,
-            shippedAt: order.shippedAt,
-            deliveredAt: order.deliveredAt,
+            notes: order.notes,
+            shippingAddressId: order.shippingAddressId,
+            billingAddressId: order.billingAddressId,
             createdAt: order.createdAt,
             updatedAt: order.updatedAt,
+            user: order.user,
             items: order.items?.map((item) => ({
                 id: item.id,
+                quantity: item.quantity,
+                price: Number(item.price),
+                total: Number(item.total),
                 orderId: item.orderId,
                 productId: item.productId,
-                productName: item.productName,
-                productSku: item.productSku,
-                productImage: item.productImage,
-                quantity: item.quantity,
-                unitPrice: Number(item.unitPrice),
-                totalPrice: Number(item.totalPrice),
                 createdAt: item.createdAt,
                 updatedAt: item.updatedAt,
+                product: item.product,
             })) || [],
+            shippingAddress: order.shippingAddress,
+            billingAddress: order.billingAddress,
+            timelineEvents: order.timelineEvents,
+            paymentTransactions: order.paymentTransactions,
         };
     }
     transformOrderSummary(order) {
@@ -395,13 +690,12 @@ class OrderService extends BaseService_1.BaseService {
             orderNumber: order.orderNumber,
             status: order.status,
             paymentStatus: order.paymentStatus,
-            totalAmount: Number(order.totalAmount),
+            totalAmount: Number(order.total),
             currency: order.currency,
             itemCount: order.items?.length || 0,
             customerName: `${order.user?.firstName} ${order.user?.lastName}`,
             customerPhone: order.user?.phoneNumber,
             createdAt: order.createdAt,
-            estimatedDelivery: order.estimatedDelivery,
         };
     }
 }

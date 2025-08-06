@@ -80,7 +80,7 @@ export declare abstract class BaseRepository<T, CreateData, UpdateData> {
     /**
      * Execute raw transaction
      */
-    transaction<R>(callback: (prisma: PrismaClient) => Promise<R>): Promise<R>;
+    transaction<R>(callback: (prisma: Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">) => Promise<R>): Promise<R>;
     /**
      * Batch operations with transaction
      */
@@ -92,7 +92,7 @@ export declare abstract class BaseRepository<T, CreateData, UpdateData> {
     /**
      * Get aggregated data
      */
-    aggregate(where: any | undefined, aggregations: {
+    aggregate(where: any, aggregations: {
         _count?: any;
         _sum?: any;
         _avg?: any;

@@ -3,14 +3,44 @@
  * ⚡ Cache Middleware
  * Intelligent caching system optimized for Nigerian e-commerce
  */
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.cacheStrategies = exports.invalidateCache = exports.cacheMiddleware = void 0;
 const RedisService_1 = require("../../services/cache/RedisService");
 const winston_1 = require("../../utils/logger/winston");
-const crypto_1 = __importDefault(require("crypto"));
+const crypto = __importStar(require("crypto"));
 /**
  * 🔑 Generate cache key from request
  */
@@ -19,7 +49,7 @@ const generateCacheKey = (req, options) => {
     // Include query parameters
     const queryString = new URLSearchParams(req.query).toString();
     if (queryString) {
-        parts.push(crypto_1.default.createHash("md5").update(queryString).digest("hex"));
+        parts.push(crypto.createHash("md5").update(queryString).digest("hex"));
     }
     // Include specific headers in cache key
     if (options.varyBy && options.varyBy.length > 0) {
@@ -27,7 +57,7 @@ const generateCacheKey = (req, options) => {
             .map((header) => req.get(header) || "")
             .join("|");
         if (headerValues) {
-            parts.push(crypto_1.default.createHash("md5").update(headerValues).digest("hex"));
+            parts.push(crypto.createHash("md5").update(headerValues).digest("hex"));
         }
     }
     // Include user context for personalized content
@@ -79,7 +109,7 @@ const cacheMiddleware = (options = {}) => {
             }
             const cacheKey = generateCacheKey(req, { ...options, prefix });
             // Try to get from cache
-            const cachedEntry = await redis.get(cacheKey);
+            const cachedEntry = await redis.getJSON(cacheKey);
             if (cachedEntry) {
                 const age = Math.floor((Date.now() - cachedEntry.timestamp) / 1000);
                 const isStale = age > ttl;
@@ -98,7 +128,9 @@ const cacheMiddleware = (options = {}) => {
                     res.set("Cache-Control", `max-age=${ttl - age}, public`);
                     // Set original headers
                     Object.entries(cachedEntry.headers).forEach(([key, value]) => {
-                        res.set(key, value);
+                        if (typeof value === 'string') {
+                            res.set(key, value);
+                        }
                     });
                     // Set ETag
                     res.set("ETag", cachedEntry.etag);
@@ -108,7 +140,8 @@ const cacheMiddleware = (options = {}) => {
                         responseData = decompressData(Buffer.from(cachedEntry.data, "base64"));
                         res.set("Content-Encoding", "gzip");
                     }
-                    return res.status(cachedEntry.statusCode).send(responseData);
+                    res.status(cachedEntry.statusCode).send(responseData);
+                    return;
                 }
                 // If stale but within revalidation window, serve stale content
                 // and update cache in background
@@ -122,7 +155,9 @@ const cacheMiddleware = (options = {}) => {
                     res.set("X-Cache-Age", age.toString());
                     // Serve stale content
                     Object.entries(cachedEntry.headers).forEach(([key, value]) => {
-                        res.set(key, value);
+                        if (typeof value === 'string') {
+                            res.set(key, value);
+                        }
                     });
                     let responseData = cachedEntry.data;
                     if (cachedEntry.compressed && compress) {
@@ -168,12 +203,13 @@ const cacheMiddleware = (options = {}) => {
                 return originalSend.call(this, body);
             };
             // Override end method
-            res.end = function (chunk, ...args) {
+            const originalThis = res;
+            res.end = function (chunk, encoding, cb) {
                 if (!responseSent && chunk) {
                     responseBody = chunk;
                     cacheResponse(typeof chunk === "string" ? chunk : chunk.toString());
                 }
-                originalEnd.call(this, chunk, ...args);
+                return originalEnd.call(originalThis, chunk, encoding, cb);
             };
             // Cache response function
             const cacheResponse = async (body) => {
@@ -196,7 +232,7 @@ const cacheMiddleware = (options = {}) => {
                         return;
                     }
                     // Generate ETag
-                    const etag = `"${crypto_1.default.createHash("md5").update(body).digest("hex")}"`;
+                    const etag = `"${crypto.createHash("md5").update(body).digest("hex")}"`;
                     res.set("ETag", etag);
                     // Prepare cache entry
                     let dataToCache = body;
@@ -222,7 +258,7 @@ const cacheMiddleware = (options = {}) => {
                         compressed,
                     };
                     // Store in cache
-                    await redis.setex(cacheKey, ttl, cacheEntry);
+                    await redis.setexJSON(cacheKey, ttl, cacheEntry);
                     winston_1.logger.debug("Response cached", {
                         cacheKey,
                         size: bodySize,
@@ -265,7 +301,8 @@ const invalidateCache = (patterns) => {
     return async (req, res, next) => {
         // Store original end method
         const originalEnd = res.end;
-        res.end = function (chunk, ...args) {
+        const originalThis = res;
+        res.end = function (chunk, encoding, cb) {
             // Only invalidate on successful operations
             if (res.statusCode >= 200 && res.statusCode < 300) {
                 setImmediate(async () => {
@@ -293,7 +330,7 @@ const invalidateCache = (patterns) => {
                     }
                 });
             }
-            originalEnd.call(this, chunk, ...args);
+            return originalEnd.call(originalThis, chunk, encoding, cb);
         };
         next();
     };

@@ -181,9 +181,10 @@ class SearchController extends BaseController_1.BaseController {
         try {
             const { brand } = req.params;
             const query = req.query.q || "";
+            const decodedBrand = decodeURIComponent(brand);
             const searchQuery = {
                 query: query.trim(),
-                brand: decodeURIComponent(brand),
+                brand: decodedBrand,
                 page: parseInt(req.query.page) || 1,
                 limit: Math.min(parseInt(req.query.limit) || 20, 100),
                 categoryId: req.query.categoryId,
@@ -202,13 +203,13 @@ class SearchController extends BaseController_1.BaseController {
             };
             const result = await this.searchService.searchByBrand(searchQuery);
             this.logAction("BRAND_SEARCH", req.user?.id, "SEARCH", undefined, {
-                brand: decodeURIComponent(brand),
+                brand: decodedBrand,
                 query: query.trim(),
                 resultCount: result.products.length,
             });
             const response = {
                 success: true,
-                message: `Found ${result.pagination.total} product(s) from ${decodeURIComponent(brand)}`,
+                message: `Found ${result.pagination.total} product(s) from ${decodedBrand}`,
                 data: result,
             };
             res.json(response);
@@ -340,7 +341,7 @@ class SearchController extends BaseController_1.BaseController {
                 return;
             }
             const days = parseInt(req.query.days) || 30;
-            const analytics = await this.searchService.getSearchAnalytics(days);
+            const analytics = await this.searchService.getSearchAnalyticsWithDays(days);
             this.sendSuccess(res, analytics, "Search analytics retrieved successfully");
         }
         catch (error) {

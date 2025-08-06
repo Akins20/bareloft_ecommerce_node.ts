@@ -17,15 +17,16 @@ class CategoryController extends BaseController_1.BaseController {
             const query = {
                 page: parseInt(req.query.page) || 1,
                 limit: Math.min(parseInt(req.query.limit) || 50, 100),
-                search: req.query.search,
-                parentId: req.query.parentId,
-                isActive: req.query.isActive !== undefined
-                    ? req.query.isActive === "true"
-                    : undefined,
-                includeProductCount: req.query.includeProductCount === "true",
                 sortBy: req.query.sortBy || "sortOrder",
                 sortOrder: req.query.sortOrder || "asc",
+                includeProductCount: req.query.includeProductCount === "true",
             };
+            if (req.query.parentId) {
+                query.parentId = req.query.parentId;
+            }
+            if (req.query.isActive !== undefined) {
+                query.isActive = req.query.isActive === "true";
+            }
             const result = await this.categoryService.getCategories(query);
             const response = {
                 success: true,
@@ -46,6 +47,13 @@ class CategoryController extends BaseController_1.BaseController {
         try {
             const { id } = req.params;
             const includeProducts = req.query.includeProducts === "true";
+            if (!id) {
+                res.status(400).json({
+                    success: false,
+                    message: "Category ID is required",
+                });
+                return;
+            }
             const category = await this.categoryService.getCategoryById(id, includeProducts);
             if (!category) {
                 res.status(404).json({
@@ -73,7 +81,14 @@ class CategoryController extends BaseController_1.BaseController {
         try {
             const { slug } = req.params;
             const includeProducts = req.query.includeProducts === "true";
-            const category = await this.categoryService.getCategoryBySlug(slug, includeProducts);
+            if (!slug) {
+                res.status(400).json({
+                    success: false,
+                    message: "Category slug is required",
+                });
+                return;
+            }
+            const category = await this.categoryService.getCategoryBySlug(slug);
             if (!category) {
                 res.status(404).json({
                     success: false,
@@ -100,7 +115,7 @@ class CategoryController extends BaseController_1.BaseController {
         try {
             const includeProductCount = req.query.includeProductCount === "true";
             const activeOnly = req.query.activeOnly !== "false"; // Default to true
-            const tree = await this.categoryService.getCategoryTree(includeProductCount, activeOnly);
+            const tree = await this.categoryService.getCategoryTree();
             const response = {
                 success: true,
                 message: "Category tree retrieved successfully",
@@ -120,7 +135,7 @@ class CategoryController extends BaseController_1.BaseController {
         try {
             const includeProductCount = req.query.includeProductCount === "true";
             const activeOnly = req.query.activeOnly !== "false";
-            const categories = await this.categoryService.getRootCategories(includeProductCount, activeOnly);
+            const categories = await this.categoryService.getRootCategories();
             const response = {
                 success: true,
                 message: "Root categories retrieved successfully",
@@ -141,7 +156,14 @@ class CategoryController extends BaseController_1.BaseController {
             const { id } = req.params;
             const includeProductCount = req.query.includeProductCount === "true";
             const activeOnly = req.query.activeOnly !== "false";
-            const children = await this.categoryService.getChildCategories(id, includeProductCount, activeOnly);
+            if (!id) {
+                res.status(400).json({
+                    success: false,
+                    message: "Parent category ID is required",
+                });
+                return;
+            }
+            const children = await this.categoryService.getChildCategories(id);
             const response = {
                 success: true,
                 message: "Child categories retrieved successfully",
@@ -160,6 +182,13 @@ class CategoryController extends BaseController_1.BaseController {
     getCategoryBreadcrumb = async (req, res) => {
         try {
             const { id } = req.params;
+            if (!id) {
+                res.status(400).json({
+                    success: false,
+                    message: "Category ID is required",
+                });
+                return;
+            }
             const breadcrumb = await this.categoryService.getCategoryBreadcrumb(id);
             if (!breadcrumb || breadcrumb.length === 0) {
                 res.status(404).json({
@@ -251,6 +280,13 @@ class CategoryController extends BaseController_1.BaseController {
     getCategoryStats = async (req, res) => {
         try {
             const { id } = req.params;
+            if (!id) {
+                res.status(400).json({
+                    success: false,
+                    message: "Category ID is required",
+                });
+                return;
+            }
             const stats = await this.categoryService.getCategoryStats(id);
             if (!stats) {
                 res.status(404).json({
@@ -278,7 +314,7 @@ class CategoryController extends BaseController_1.BaseController {
         try {
             const activeOnly = req.query.activeOnly !== "false";
             const includeHierarchy = req.query.includeHierarchy === "true";
-            const categories = await this.categoryService.getFlatCategoryList(activeOnly, includeHierarchy);
+            const categories = await this.categoryService.getFlatCategoryList();
             const response = {
                 success: true,
                 message: "Flat category list retrieved successfully",
@@ -298,7 +334,14 @@ class CategoryController extends BaseController_1.BaseController {
         try {
             const { id } = req.params;
             const includeSubcategories = req.query.includeSubcategories === "true";
-            const hasProducts = await this.categoryService.checkCategoryHasProducts(id, includeSubcategories);
+            if (!id) {
+                res.status(400).json({
+                    success: false,
+                    message: "Category ID is required",
+                });
+                return;
+            }
+            const hasProducts = await this.categoryService.checkCategoryHasProducts(id);
             const response = {
                 success: true,
                 message: "Category product check completed",

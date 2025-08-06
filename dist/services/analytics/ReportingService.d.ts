@@ -119,7 +119,7 @@ export interface InventoryReportData {
 export declare class ReportingService extends BaseService {
     private analytics;
     private cache;
-    constructor(analyticsService: AnalyticsService, cacheService: CacheService);
+    constructor(analyticsService?: AnalyticsService, cacheService?: CacheService);
     /**
      * Generate report
      */

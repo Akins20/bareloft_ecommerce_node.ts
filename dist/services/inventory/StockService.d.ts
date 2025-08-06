@@ -1,6 +1,6 @@
 import { BaseService } from "../BaseService";
 import { InventoryRepository } from "../../repositories/InventoryRepository";
-import { InventoryMovementType } from "../../types";
+import { MovementType } from "@prisma/client";
 import { CacheService } from "../cache/CacheService";
 import { NotificationService } from "../notifications/NotificationService";
 interface StockCheckResult {
@@ -15,7 +15,7 @@ interface StockCheckResult {
 interface StockUpdateData {
     productId: string;
     quantity: number;
-    type: InventoryMovementType;
+    type: MovementType;
     reason?: string;
     reference?: string;
     referenceId?: string;
@@ -86,14 +86,12 @@ export declare class StockService extends BaseService {
      * Get out of stock products
      */
     getOutOfStockProducts(): Promise<any[]>;
-    private createDefaultInventory;
+    private getReservedStock;
     private isInboundMovement;
     private isOutboundMovement;
-    private updateInventoryStatus;
     private checkStockAlerts;
     private sendLowStockAlert;
     private sendOutOfStockAlert;
-    private sendReorderAlert;
     private calculateUrgency;
     private clearStockCache;
 }

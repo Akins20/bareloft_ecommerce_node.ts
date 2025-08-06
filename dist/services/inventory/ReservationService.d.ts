@@ -1,6 +1,5 @@
 import { BaseService } from "../BaseService";
 import { StockReservation, ReserveStockRequest, ReleaseReservationRequest } from "../../types";
-import { CacheService } from "../cache/CacheService";
 interface ReservationResult {
     success: boolean;
     reservationId?: string;
@@ -31,7 +30,7 @@ interface BulkReservationResult {
 }
 export declare class ReservationService extends BaseService {
     private cacheService;
-    constructor(cacheService: CacheService);
+    constructor(cacheService?: any);
     /**
      * Reserve stock for a single product
      */

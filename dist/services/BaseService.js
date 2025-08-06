@@ -1,8 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BaseService = void 0;
-const types_1 = require("@/types");
-const winston_1 = require("@/utils/logger/winston");
+const api_types_1 = require("../types/api.types");
+const winston_1 = require("../utils/logger/winston");
 /**
  * Base service class providing common functionality
  */
@@ -13,10 +13,10 @@ class BaseService {
      */
     handleError(message, error) {
         this.logger.error(message, { error: error.message, stack: error.stack });
-        if (error instanceof types_1.AppError) {
+        if (error instanceof api_types_1.AppError) {
             throw error;
         }
-        throw new types_1.AppError(message, types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.INTERNAL_ERROR);
+        throw new api_types_1.AppError(message, api_types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, api_types_1.ERROR_CODES.INTERNAL_ERROR);
     }
     /**
      * Validate required fields
@@ -24,7 +24,7 @@ class BaseService {
     validateRequired(data, fields) {
         const missing = fields.filter(field => !data[field]);
         if (missing.length > 0) {
-            throw new types_1.AppError(`Missing required fields: ${missing.join(', ')}`, types_1.HTTP_STATUS.BAD_REQUEST, types_1.ERROR_CODES.MISSING_REQUIRED_FIELD);
+            throw new api_types_1.AppError(`Missing required fields: ${missing.join(', ')}`, api_types_1.HTTP_STATUS.BAD_REQUEST, api_types_1.ERROR_CODES.MISSING_REQUIRED_FIELD);
         }
     }
     /**
@@ -32,7 +32,7 @@ class BaseService {
      */
     validateId(id) {
         if (!id || typeof id !== 'string') {
-            throw new types_1.AppError('Invalid ID provided', types_1.HTTP_STATUS.BAD_REQUEST, types_1.ERROR_CODES.INVALID_INPUT);
+            throw new api_types_1.AppError('Invalid ID provided', api_types_1.HTTP_STATUS.BAD_REQUEST, api_types_1.ERROR_CODES.INVALID_INPUT);
         }
     }
     /**
@@ -52,6 +52,20 @@ class BaseService {
             return sanitized;
         }
         return data;
+    }
+    /**
+     * Create pagination metadata
+     */
+    createPagination(page, limit, total) {
+        const totalPages = Math.ceil(total / limit);
+        return {
+            currentPage: page,
+            totalPages,
+            totalItems: total,
+            itemsPerPage: limit,
+            hasNextPage: page < totalPages,
+            hasPreviousPage: page > 1,
+        };
     }
 }
 exports.BaseService = BaseService;

@@ -49,6 +49,13 @@ class AddressController extends BaseController_1.BaseController {
                 });
                 return;
             }
+            if (!id) {
+                res.status(400).json({
+                    success: false,
+                    message: "Address ID is required",
+                });
+                return;
+            }
             const address = await this.addressService.getAddressById(id, userId);
             if (!address) {
                 res.status(404).json({
@@ -93,7 +100,7 @@ class AddressController extends BaseController_1.BaseController {
                 });
                 return;
             }
-            const address = await this.addressService.createAddress(userId, addressData);
+            const address = await this.addressService.createAddress(userId, { ...addressData, country: addressData.country || 'NG' });
             const response = {
                 success: true,
                 message: "Address created successfully",
@@ -131,6 +138,13 @@ class AddressController extends BaseController_1.BaseController {
                 });
                 return;
             }
+            if (!id) {
+                res.status(400).json({
+                    success: false,
+                    message: "Address ID is required",
+                });
+                return;
+            }
             const address = await this.addressService.updateAddress(id, userId, updateData);
             if (!address) {
                 res.status(404).json({
@@ -162,6 +176,13 @@ class AddressController extends BaseController_1.BaseController {
                 res.status(401).json({
                     success: false,
                     message: "User authentication required",
+                });
+                return;
+            }
+            if (!id) {
+                res.status(400).json({
+                    success: false,
+                    message: "Address ID is required",
                 });
                 return;
             }
@@ -207,7 +228,14 @@ class AddressController extends BaseController_1.BaseController {
                 });
                 return;
             }
-            const address = await this.addressService.setDefaultAddress(id, userId, type);
+            if (!id) {
+                res.status(400).json({
+                    success: false,
+                    message: "Address ID is required",
+                });
+                return;
+            }
+            const address = await this.addressService.setDefaultAddress(id, userId, type.toUpperCase());
             if (!address) {
                 res.status(404).json({
                     success: false,
@@ -313,6 +341,13 @@ class AddressController extends BaseController_1.BaseController {
                 res.status(401).json({
                     success: false,
                     message: "User authentication required",
+                });
+                return;
+            }
+            if (!id) {
+                res.status(400).json({
+                    success: false,
+                    message: "Address ID is required",
                 });
                 return;
             }

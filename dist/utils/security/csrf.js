@@ -103,7 +103,7 @@ class CSRFProtection {
                     return next();
                 }
                 // Get session ID from request
-                const sessionId = req.session?.id || req.headers["x-session-id"];
+                const sessionId = req.sessionId || req.headers["x-session-id"];
                 if (!sessionId) {
                     return res.status(403).json({
                         success: false,
@@ -148,7 +148,7 @@ class CSRFProtection {
      */
     static async generateTokenEndpoint(req, res) {
         try {
-            const sessionId = req.session?.id || req.headers["x-session-id"];
+            const sessionId = req.sessionId || req.headers["x-session-id"];
             if (!sessionId) {
                 res.status(400).json({
                     success: false,

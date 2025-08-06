@@ -1,4 +1,4 @@
-import { JWTPayload } from "@/types";
+import { JWTPayload } from "../../types";
 export declare class JWTService {
     private accessTokenSecret;
     private refreshTokenSecret;

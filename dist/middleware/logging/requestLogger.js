@@ -72,24 +72,26 @@ const requestLogger = (req, res, next) => {
     req.id = requestId;
     // Detect Nigerian context
     const userAgent = req.get("User-Agent") || "";
-    const nigerianContext = detectNigerianContext(userAgent, req.ip);
+    const nigerianContext = detectNigerianContext(userAgent, req.ip || "unknown");
     // Capture original end method to log response
     const originalEnd = res.end;
     const originalWrite = res.write;
     let responseBody = "";
     let responseSent = false;
     // Override write method to capture response body (for errors)
-    res.write = function (chunk, ...args) {
-        if (chunk && res.statusCode >= 400) {
+    const self = res;
+    res.write = function (chunk, encoding, cb) {
+        if (chunk && self.statusCode >= 400) {
             responseBody += chunk.toString();
         }
-        return originalWrite.call(this, chunk, ...args);
+        return originalWrite.call(self, chunk, encoding, cb);
     };
     // Override end method to log response
-    res.end = function (chunk, ...args) {
+    const selfEnd = res;
+    res.end = function (chunk, encoding, cb) {
         if (!responseSent) {
             responseSent = true;
-            if (chunk && res.statusCode >= 400) {
+            if (chunk && selfEnd.statusCode >= 400) {
                 responseBody += chunk.toString();
             }
             const endTime = Date.now();
@@ -97,9 +99,9 @@ const requestLogger = (req, res, next) => {
             const contentLength = res.get("Content-Length");
             // Determine log level based on status code
             let logLevel = "info";
-            if (res.statusCode >= 400 && res.statusCode < 500)
+            if (selfEnd.statusCode >= 400 && selfEnd.statusCode < 500)
                 logLevel = "warn";
-            if (res.statusCode >= 500)
+            if (selfEnd.statusCode >= 500)
                 logLevel = "error";
             // Build log data
             const logData = {
@@ -122,12 +124,12 @@ const requestLogger = (req, res, next) => {
                     httpVersion: req.httpVersion,
                 },
                 response: {
-                    statusCode: res.statusCode,
+                    statusCode: selfEnd.statusCode,
                     contentLength: contentLength ? parseInt(contentLength) : undefined,
                     headers: sanitizeForLogging({
-                        "content-type": res.get("Content-Type"),
-                        "cache-control": res.get("Cache-Control"),
-                        etag: res.get("ETag"),
+                        "content-type": selfEnd.get("Content-Type"),
+                        "cache-control": selfEnd.get("Cache-Control"),
+                        etag: selfEnd.get("ETag"),
                     }),
                 },
                 timing: {
@@ -145,12 +147,12 @@ const requestLogger = (req, res, next) => {
                     : undefined,
                 context: {
                     ...nigerianContext,
-                    environment: environment_1.environment.NODE_ENV,
+                    environment: environment_1.config.nodeEnv,
                     nodeVersion: process.version,
                 },
             };
             // Add response body for errors (but limit size)
-            if (res.statusCode >= 400 && responseBody) {
+            if (selfEnd.statusCode >= 400 && responseBody) {
                 logData.response.body = responseBody.substring(0, 1000); // Limit to 1KB
             }
             // Add request body for POST/PUT/PATCH (sanitized)
@@ -179,7 +181,7 @@ const requestLogger = (req, res, next) => {
             // Log the request
             winston_1.logger[logLevel]("HTTP Request", logData);
         }
-        originalEnd.call(this, chunk, ...args);
+        return originalEnd.call(selfEnd, chunk, encoding, cb);
     };
     // Log incoming request (minimal)
     winston_1.logger.info("Incoming request", {

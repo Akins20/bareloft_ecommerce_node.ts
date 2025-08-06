@@ -16,7 +16,7 @@ interface RecommendationOptions {
 export declare class RecommendationService extends BaseService {
     private productRepository;
     private cacheService;
-    constructor(productRepository: ProductRepository, cacheService: CacheService);
+    constructor(productRepository?: ProductRepository, cacheService?: CacheService);
     /**
      * Get personalized recommendations for a user
      * Combines collaborative filtering and content-based filtering

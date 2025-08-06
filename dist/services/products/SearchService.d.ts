@@ -4,7 +4,8 @@
  * Supports fuzzy search, autocomplete, and intelligent filtering
  */
 import { BaseService } from "../BaseService";
-import { SearchQuery, SearchResult, SearchSuggestion, SearchAnalytics } from "../../types/product.types";
+import { SearchQuery, SearchResult, SearchSuggestion, SearchFilters, SearchAnalytics, SearchResponse, SearchHistoryResponse, ClearHistoryResult, TrendingSearch } from "../../types/product.types";
+import { PaginationParams } from "../../types/common.types";
 export declare class SearchService extends BaseService {
     private productRepo;
     private categoryRepo;
@@ -13,9 +14,17 @@ export declare class SearchService extends BaseService {
     private readonly SEARCH_INTENT_PATTERNS;
     constructor();
     /**
+     * 🔍 Search products with advanced filtering
+     */
+    searchProducts(query: SearchQuery): Promise<SearchResponse>;
+    /**
      * 🔍 Main search function with intelligent query processing
      */
     search(query: SearchQuery): Promise<SearchResult>;
+    /**
+     * 🔍 Get autocomplete suggestions
+     */
+    getAutocompleteSuggestions(query: string, limit?: number): Promise<SearchSuggestion[]>;
     /**
      * 💡 Get search suggestions and autocomplete
      */
@@ -88,5 +97,71 @@ export declare class SearchService extends BaseService {
      * 📊 Track search for analytics
      */
     private trackSearch;
+    /**
+     * 🔍 Get popular search terms
+     */
+    getPopularSearchTerms(limit?: number, timeframe?: string): Promise<{
+        query: string;
+        count: number;
+    }[]>;
+    /**
+     * 👤 Get personalized suggestions for user
+     */
+    getPersonalizedSuggestions(userId: string, limit?: number): Promise<SearchSuggestion[]>;
+    /**
+     * 🌟 Get popular suggestions
+     */
+    getPopularSuggestions(limit?: number): Promise<SearchSuggestion[]>;
+    /**
+     * 🔍 Search in specific category
+     */
+    searchInCategory(query: SearchQuery): Promise<SearchResponse>;
+    /**
+     * 🏷️ Search by brand
+     */
+    searchByBrand(query: SearchQuery): Promise<SearchResponse>;
+    /**
+     * 🔧 Get available filters for search query
+     */
+    getAvailableFilters(query: string): Promise<{
+        brands: {
+            name: string;
+            count: number;
+        }[];
+        categories: {
+            id: string;
+            name: string;
+            count: number;
+        }[];
+        priceRanges: {
+            min: number;
+            max: number;
+            count: number;
+        }[];
+    }>;
+    /**
+     * 📜 Get user search history
+     */
+    getUserSearchHistory(userId: string, params: PaginationParams): Promise<SearchHistoryResponse>;
+    /**
+     * 🗑️ Clear user search history
+     */
+    clearUserSearchHistory(userId: string): Promise<ClearHistoryResult>;
+    /**
+     * 📈 Get trending searches
+     */
+    getTrendingSearches(limit?: number, hours?: number): Promise<TrendingSearch[]>;
+    /**
+     * 💾 Save search to user history
+     */
+    saveSearchToHistory(userId: string, searchData: {
+        query: string;
+        filters?: SearchFilters;
+        resultCount: number;
+    }): Promise<void>;
+    /**
+     * 📊 Get search analytics (admin) - with days parameter
+     */
+    getSearchAnalyticsWithDays(days?: number): Promise<SearchAnalytics>;
 }
 //# sourceMappingURL=SearchService.d.ts.map

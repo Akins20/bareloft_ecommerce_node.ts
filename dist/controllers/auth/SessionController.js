@@ -127,7 +127,7 @@ class SessionController extends BaseController_1.BaseController {
                 timeUntilExpiry: session.timeUntilExpiry,
                 lastUsedAt: session.lastUsedAt,
                 createdAt: session.createdAt,
-                isCurrent: session.sessionId === req.user.sessionId,
+                isCurrent: session.sessionId === req.user?.sessionId,
             }));
             const response = {
                 success: true,

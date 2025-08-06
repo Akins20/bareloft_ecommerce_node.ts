@@ -1,29 +1,25 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthService = void 0;
-const UserRepository_1 = require("@/repositories/UserRepository");
-const OTPRepository_1 = require("@/repositories/OTPRepository");
-const SessionRepository_1 = require("@/repositories/SessionRepository");
-const JWTService_1 = require("./JWTService");
-const OTPService_1 = require("./OTPService");
-const SMSService_1 = require("./SMSService");
-const api_types_1 = require("@/types/api.types");
-const redis_1 = require("@/config/redis");
-const common_types_1 = require("@/types/common.types");
-class AuthService {
+const BaseService_1 = require("../BaseService");
+const api_types_1 = require("../../types/api.types");
+const redis_1 = require("../../config/redis");
+const common_types_1 = require("../../types/common.types");
+class AuthService extends BaseService_1.BaseService {
     userRepository;
     otpRepository;
     sessionRepository;
     jwtService;
     otpService;
     smsService;
-    constructor() {
-        this.userRepository = new UserRepository_1.UserRepository();
-        this.otpRepository = new OTPRepository_1.OTPRepository();
-        this.sessionRepository = new SessionRepository_1.SessionRepository();
-        this.jwtService = new JWTService_1.JWTService();
-        this.otpService = new OTPService_1.OTPService();
-        this.smsService = new SMSService_1.SMSService();
+    constructor(userRepository, otpRepository, sessionRepository, jwtService, otpService, smsService) {
+        super();
+        this.userRepository = userRepository || {};
+        this.otpRepository = otpRepository || {};
+        this.sessionRepository = sessionRepository || {};
+        this.jwtService = jwtService || {};
+        this.otpService = otpService || {};
+        this.smsService = smsService || {};
     }
     /**
      * Request OTP for phone number verification

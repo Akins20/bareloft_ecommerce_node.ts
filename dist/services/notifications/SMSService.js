@@ -5,7 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SMSService = void 0;
 const BaseService_1 = require("../BaseService");
-const config_1 = require("../../config");
+// import { smsConfig } from "../../config";
 const axios_1 = __importDefault(require("axios"));
 class SMSService extends BaseService_1.BaseService {
     apiKey;
@@ -13,8 +13,8 @@ class SMSService extends BaseService_1.BaseService {
     baseUrl;
     constructor() {
         super();
-        this.apiKey = config_1.smsConfig.termii.apiKey;
-        this.senderId = config_1.smsConfig.termii.senderId;
+        this.apiKey = process.env.TERMII_API_KEY || '';
+        this.senderId = process.env.TERMII_SENDER_ID || 'Bareloft';
         this.baseUrl = "https://api.ng.termii.com/api";
     }
     /**

@@ -34,14 +34,23 @@ class AuthMiddleware {
                 // Validate token and get user
                 const user = await this.authService.validateToken(token);
                 // Attach user to request
-                req.user = {
+                const authenticatedUser = {
+                    id: user.id,
                     userId: user.id,
                     phoneNumber: user.phoneNumber,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
                     role: user.role,
+                    isVerified: user.isVerified,
                     sessionId: this.jwtService.extractSessionId(token),
-                    iat: 0, // Will be set by JWT service
-                    exp: 0, // Will be set by JWT service
+                    createdAt: user.createdAt,
                 };
+                // Add optional fields if they exist
+                if (user.email)
+                    authenticatedUser.email = user.email;
+                if (user.avatar)
+                    authenticatedUser.avatar = user.avatar;
+                req.user = authenticatedUser;
                 next();
             }
             catch (error) {
@@ -63,14 +72,23 @@ class AuthMiddleware {
                     if (token) {
                         try {
                             const user = await this.authService.validateToken(token);
-                            req.user = {
+                            const authenticatedUser = {
+                                id: user.id,
                                 userId: user.id,
                                 phoneNumber: user.phoneNumber,
+                                firstName: user.firstName,
+                                lastName: user.lastName,
                                 role: user.role,
+                                isVerified: user.isVerified,
                                 sessionId: this.jwtService.extractSessionId(token),
-                                iat: 0,
-                                exp: 0,
+                                createdAt: user.createdAt,
                             };
+                            // Add optional fields if they exist
+                            if (user.email)
+                                authenticatedUser.email = user.email;
+                            if (user.avatar)
+                                authenticatedUser.avatar = user.avatar;
+                            req.user = authenticatedUser;
                         }
                         catch (error) {
                             // Ignore authentication errors in optional auth
@@ -120,19 +138,19 @@ class AuthMiddleware {
      * Admin only authorization
      */
     adminOnly() {
-        return this.authorize(["admin", "super_admin"]);
+        return this.authorize(["ADMIN", "SUPER_ADMIN"]);
     }
     /**
      * Super admin only authorization
      */
     superAdminOnly() {
-        return this.authorize("super_admin");
+        return this.authorize("SUPER_ADMIN");
     }
     /**
      * Customer only authorization
      */
     customerOnly() {
-        return this.authorize("customer");
+        return this.authorize("CUSTOMER");
     }
     /**
      * Check if user owns the resource
@@ -150,7 +168,7 @@ class AuthMiddleware {
                 const currentUserId = req.user.userId;
                 // Allow if user owns the resource or is admin
                 if (resourceUserId === currentUserId ||
-                    ["admin", "super_admin"].includes(req.user.role)) {
+                    ["ADMIN", "SUPER_ADMIN"].includes(req.user.role)) {
                     next();
                     return;
                 }
@@ -248,9 +266,9 @@ class AuthMiddleware {
                 // Permission checking logic would go here
                 // For now, we'll use role-based permissions
                 const rolePermissions = {
-                    customer: ["read:own", "update:own", "delete:own"],
-                    admin: ["read:any", "update:any", "delete:any", "create:any"],
-                    super_admin: ["*"],
+                    CUSTOMER: ["read:own", "update:own", "delete:own"],
+                    ADMIN: ["read:any", "update:any", "delete:any", "create:any"],
+                    SUPER_ADMIN: ["*"],
                 };
                 const userPermissions = rolePermissions[req.user.role] || [];
                 if (userPermissions.includes("*") ||
@@ -277,14 +295,14 @@ class AuthMiddleware {
         if (parts.length !== 2 || parts[0] !== "Bearer") {
             return null;
         }
-        return parts[1];
+        return parts[1] || null;
     }
     /**
      * Get user ID from request parameters
      */
     static getUserIdFromParams(paramName = "userId") {
         return (req) => {
-            return req.params[paramName];
+            return req.params[paramName] || "";
         };
     }
     /**
@@ -292,7 +310,7 @@ class AuthMiddleware {
      */
     static getUserIdFromBody(fieldName = "userId") {
         return (req) => {
-            return req.body[fieldName];
+            return req.body[fieldName] || "";
         };
     }
 }

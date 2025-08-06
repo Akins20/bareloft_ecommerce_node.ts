@@ -135,8 +135,7 @@ const sanitizeRichContent = (content) => {
             "blockquote",
         ],
         ALLOWED_ATTR: ["class"],
-        REMOVE_DATA_ATTR: true,
-        REMOVE_EMPTY: true,
+        FORBID_ATTR: ["data-*"],
     });
 };
 exports.sanitizeRichContent = sanitizeRichContent;

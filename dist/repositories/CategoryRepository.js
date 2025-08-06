@@ -289,7 +289,7 @@ class CategoryRepository extends BaseRepository_1.BaseRepository {
                     },
                 },
                 orderBy: { sortOrder: "asc" },
-                pagination,
+                ...(pagination && { pagination }),
             });
             return {
                 data: result.data.map(this.transformCategoryWithCounts),
@@ -310,7 +310,7 @@ class CategoryRepository extends BaseRepository_1.BaseRepository {
             let currentCategory = await this.findById(categoryId, { parent: true });
             while (currentCategory) {
                 breadcrumb.unshift(currentCategory);
-                currentCategory = currentCategory.parent;
+                currentCategory = currentCategory.parent || null;
             }
             return breadcrumb;
         }
@@ -379,7 +379,7 @@ class CategoryRepository extends BaseRepository_1.BaseRepository {
                         },
                     },
                 },
-                pagination,
+                ...(pagination && { pagination }),
             });
             return {
                 data: result.data.map(this.transformCategoryWithCounts),
@@ -427,7 +427,11 @@ class CategoryRepository extends BaseRepository_1.BaseRepository {
                     throw new types_1.AppError("Cannot create circular category reference", types_1.HTTP_STATUS.BAD_REQUEST, types_1.ERROR_CODES.VALIDATION_ERROR);
                 }
             }
-            return await this.update(categoryId, { parentId: newParentId }, {
+            const updateData = {};
+            if (newParentId !== null) {
+                updateData.parentId = newParentId;
+            }
+            return await this.update(categoryId, updateData, {
                 parent: true,
                 children: {
                     where: { isActive: true },
