@@ -4,6 +4,13 @@ import { PrismaClient } from "@prisma/client";
 import { UserRepository } from "../repositories/UserRepository";
 import { OTPRepository } from "../repositories/OTPRepository";
 import { SessionRepository } from "../repositories/SessionRepository";
+import { ProductRepository } from "../repositories/ProductRepository";
+import { CategoryRepository } from "../repositories/CategoryRepository";
+import { CartRepository } from "../repositories/CartRepository";
+import { OrderRepository } from "../repositories/OrderRepository";
+import { AddressRepository } from "../repositories/AddressRepository";
+import { ReviewRepository } from "../repositories/ReviewRepository";
+import { InventoryRepository } from "../repositories/InventoryRepository";
 
 // Service imports
 import { AuthService } from "../services/auth/AuthService";
@@ -11,6 +18,15 @@ import { OTPService } from "../services/auth/OTPService";
 import { SessionService } from "../services/auth/SessionService";
 import { JWTService } from "../services/auth/JWTService";
 import { SMSService } from "../services/auth/SMSService";
+import { ProductService } from "../services/products/ProductService";
+import { CategoryService } from "../services/products/CategoryService";
+import { CartService } from "../services/cart/CartService";
+import { OrderService } from "../services/orders/OrderService";
+import { UserService } from "../services/users/UserService";
+import { AddressService } from "../services/users/AddressService";
+import { ReviewService } from "../services/products/ReviewService";
+import { WishlistService } from "../services/users/WishlistService";
+import { SearchService } from "../services/products/SearchService";
 
 /**
  * Service Container for Dependency Injection
@@ -38,16 +54,20 @@ export class ServiceContainer {
     const userRepository = new UserRepository(this.prisma);
     const otpRepository = new OTPRepository(this.prisma);
     const sessionRepository = new SessionRepository(this.prisma);
+    const productRepository = new ProductRepository(this.prisma);
+    const categoryRepository = new CategoryRepository(this.prisma);
+    const cartRepository = new CartRepository(this.prisma);
+    const orderRepository = new OrderRepository(this.prisma);
+    const addressRepository = new AddressRepository(this.prisma);
+    const reviewRepository = new ReviewRepository(this.prisma);
+    const inventoryRepository = new InventoryRepository(this.prisma);
 
     // Initialize base services
     const jwtService = new JWTService();
     const smsService = new SMSService();
     
-    // Initialize OTP service with dependencies
-    const otpService = new OTPService(
-      otpRepository,
-      smsService
-    );
+    // Initialize OTP service (no constructor dependencies)
+    const otpService = new OTPService();
 
     // Initialize session service
     const sessionService = new SessionService(
@@ -65,15 +85,52 @@ export class ServiceContainer {
       smsService
     );
 
-    // Store services in container
+    // Initialize product services with proper repositories
+    const productService = new ProductService(productRepository, categoryRepository, inventoryRepository);
+    const categoryService = new CategoryService();
+    const searchService = new SearchService();
+    const reviewService = {} as any; // TODO: Fix dependencies - needs UserRepository, ProductRepository, OrderRepository, CacheService, NotificationService
+
+    // Initialize cart service
+    const cartService = new CartService();
+
+    // Initialize order service (using empty object for missing CacheService dependency for now)
+    const orderService = {} as any; // TODO: Fix dependencies - needs CacheService
+
+    // Initialize user services
+    const userService = new UserService();
+    const addressService = new AddressService();
+    const wishlistService = new WishlistService();
+
+    // Store repositories in container
     this.services.set('userRepository', userRepository);
     this.services.set('otpRepository', otpRepository);
     this.services.set('sessionRepository', sessionRepository);
+    this.services.set('productRepository', productRepository);
+    this.services.set('categoryRepository', categoryRepository);
+    this.services.set('cartRepository', cartRepository);
+    this.services.set('orderRepository', orderRepository);
+    this.services.set('addressRepository', addressRepository);
+    this.services.set('reviewRepository', reviewRepository);
+    this.services.set('inventoryRepository', inventoryRepository);
+
+    // Store base services in container
     this.services.set('jwtService', jwtService);
     this.services.set('smsService', smsService);
     this.services.set('otpService', otpService);
     this.services.set('sessionService', sessionService);
     this.services.set('authService', authService);
+
+    // Store business services in container
+    this.services.set('productService', productService);
+    this.services.set('categoryService', categoryService);
+    this.services.set('searchService', searchService);
+    this.services.set('reviewService', reviewService);
+    this.services.set('cartService', cartService);
+    this.services.set('orderService', orderService);
+    this.services.set('userService', userService);
+    this.services.set('addressService', addressService);
+    this.services.set('wishlistService', wishlistService);
   }
 
   public getService<T>(serviceName: string): T {

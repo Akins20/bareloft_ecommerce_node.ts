@@ -22,6 +22,11 @@ import { Router } from "express";
 import { AuthController } from "../../controllers/auth/AuthController";
 import { OTPController } from "../../controllers/auth/OTPController";
 
+// Service imports
+import { AuthService } from "../../services/auth/AuthService";
+import { OTPService } from "../../services/auth/OTPService";
+import { SessionService } from "../../services/auth/SessionService";
+
 // Middleware imports
 import { authenticate } from "../../middleware/auth/authenticate";
 import { rateLimiter } from "../../middleware/security/rateLimiter";
@@ -45,9 +50,9 @@ import { getServiceContainer } from "../../config/serviceContainer";
 const serviceContainer = getServiceContainer();
 
 // Get services from container
-const authService = serviceContainer.getService('authService');
-const otpService = serviceContainer.getService('otpService');
-const sessionService = serviceContainer.getService('sessionService');
+const authService = serviceContainer.getService<AuthService>('authService');
+const otpService = serviceContainer.getService<OTPService>('otpService');
+const sessionService = serviceContainer.getService<SessionService>('sessionService');
 
 const router = Router();
 
@@ -261,7 +266,7 @@ router.post(
   // validateRequest(authSchemas.logout), // Skip validation for now due to empty schema
   (req, res, next) => {
     try {
-      authController.logout(req, res, next);
+      authController.logout(req as any, res);
     } catch (error) {
       next(error);
     }
@@ -298,7 +303,7 @@ router.post(
  */
 router.get("/me", authenticate, (req, res, next) => {
   try {
-    authController.getCurrentUser(req, res, next);
+    authController.getCurrentUser(req as any, res);
   } catch (error) {
     next(error);
   }

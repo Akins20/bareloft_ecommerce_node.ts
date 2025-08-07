@@ -36,69 +36,18 @@ const authSchemas = {
     logout: {},
     changePassword: {},
 };
-// Services (with fallback for dependency injection)
-let authService;
-let otpService;
-let sessionService;
-try {
-    authService = require("../../services/auth/AuthService").authService || {};
-    otpService = require("../../services/auth/OTPService").otpService || {};
-    sessionService = require("../../services/auth/SessionService").sessionService || {};
-}
-catch (error) {
-    // Fallback services
-    authService = {};
-    otpService = {};
-    sessionService = {};
-}
+// Import service container
+const serviceContainer_1 = require("../../config/serviceContainer");
+// Get service container instance
+const serviceContainer = (0, serviceContainer_1.getServiceContainer)();
+// Get services from container
+const authService = serviceContainer.getService('authService');
+const otpService = serviceContainer.getService('otpService');
+const sessionService = serviceContainer.getService('sessionService');
 const router = (0, express_1.Router)();
-// Initialize controllers with fallback
-let authController;
-let otpController;
-try {
-    authController = new AuthController_1.AuthController(authService, otpService, sessionService);
-    otpController = new OTPController_1.OTPController(otpService);
-}
-catch (error) {
-    // Create fallback controllers
-    authController = {
-        signup: async (req, res) => {
-            res.status(501).json({ success: false, message: "Auth service not initialized" });
-        },
-        login: async (req, res) => {
-            res.status(501).json({ success: false, message: "Auth service not initialized" });
-        },
-        requestOTP: async (req, res) => {
-            res.status(501).json({ success: false, message: "Auth service not initialized" });
-        },
-        verifyOTP: async (req, res) => {
-            res.status(501).json({ success: false, message: "Auth service not initialized" });
-        },
-        refreshToken: async (req, res) => {
-            res.status(501).json({ success: false, message: "Auth service not initialized" });
-        },
-        logout: async (req, res) => {
-            res.status(501).json({ success: false, message: "Auth service not initialized" });
-        },
-        getCurrentUser: async (req, res) => {
-            res.status(501).json({ success: false, message: "Auth service not initialized" });
-        },
-        checkPhoneAvailability: async (req, res) => {
-            res.status(501).json({ success: false, message: "Auth service not initialized" });
-        }
-    };
-    otpController = {
-        resendOTP: async (req, res) => {
-            res.status(501).json({ success: false, message: "OTP service not initialized" });
-        },
-        getOTPStatus: async (req, res) => {
-            res.status(501).json({ success: false, message: "OTP service not initialized" });
-        },
-        getAttemptsRemaining: async (req, res) => {
-            res.status(501).json({ success: false, message: "OTP service not initialized" });
-        }
-    };
-}
+// Initialize controllers with services from container
+const authController = new AuthController_1.AuthController(authService, otpService, sessionService);
+const otpController = new OTPController_1.OTPController(otpService);
 /**
  * @route   POST /api/v1/auth/signup
  * @desc    Register new user account with OTP verification
@@ -283,7 +232,7 @@ router.post("/logout", authenticate_1.authenticate,
 // validateRequest(authSchemas.logout), // Skip validation for now due to empty schema
 (req, res, next) => {
     try {
-        authController.logout(req, res, next);
+        authController.logout(req, res);
     }
     catch (error) {
         next(error);
@@ -319,7 +268,7 @@ router.post("/logout", authenticate_1.authenticate,
  */
 router.get("/me", authenticate_1.authenticate, (req, res, next) => {
     try {
-        authController.getCurrentUser(req, res, next);
+        authController.getCurrentUser(req, res);
     }
     catch (error) {
         next(error);

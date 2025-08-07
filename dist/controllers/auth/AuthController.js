@@ -16,7 +16,7 @@ class AuthController extends BaseController_1.BaseController {
      * User signup with OTP verification
      * POST /api/v1/auth/signup
      */
-    signup = async (req, res) => {
+    signup = async (req, res, next) => {
         try {
             const signupData = req.body;
             // Validate signup data
@@ -79,7 +79,7 @@ class AuthController extends BaseController_1.BaseController {
      * User login with OTP verification
      * POST /api/v1/auth/login
      */
-    login = async (req, res) => {
+    login = async (req, res, next) => {
         try {
             const loginData = req.body;
             // Validate login data
@@ -130,7 +130,7 @@ class AuthController extends BaseController_1.BaseController {
      * Request OTP for login or signup
      * POST /api/v1/auth/request-otp
      */
-    requestOTP = async (req, res) => {
+    requestOTP = async (req, res, next) => {
         try {
             const { phoneNumber, purpose } = req.body;
             // Validate request
@@ -196,7 +196,7 @@ class AuthController extends BaseController_1.BaseController {
      * Verify OTP (standalone verification)
      * POST /api/v1/auth/verify-otp
      */
-    verifyOTP = async (req, res) => {
+    verifyOTP = async (req, res, next) => {
         try {
             const { phoneNumber, code, purpose } = req.body;
             // Validate request
@@ -239,7 +239,7 @@ class AuthController extends BaseController_1.BaseController {
      * Refresh access token
      * POST /api/v1/auth/refresh
      */
-    refreshToken = async (req, res) => {
+    refreshToken = async (req, res, next) => {
         try {
             const { refreshToken } = req.body;
             if (!refreshToken) {
@@ -351,7 +351,7 @@ class AuthController extends BaseController_1.BaseController {
      * Check if phone number is available for registration
      * GET /api/v1/auth/check-phone/:phoneNumber
      */
-    checkPhoneAvailability = async (req, res) => {
+    checkPhoneAvailability = async (req, res, next) => {
         try {
             const { phoneNumber } = req.params;
             if (!phoneNumber || !this.isValidNigerianPhone(phoneNumber)) {

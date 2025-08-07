@@ -13,27 +13,27 @@ export declare class AuthController extends BaseController {
      * User signup with OTP verification
      * POST /api/v1/auth/signup
      */
-    signup: (req: Request, res: Response) => Promise<void>;
+    signup: (req: Request, res: Response, next?: unknown) => Promise<void>;
     /**
      * User login with OTP verification
      * POST /api/v1/auth/login
      */
-    login: (req: Request, res: Response) => Promise<void>;
+    login: (req: Request, res: Response, next?: unknown) => Promise<void>;
     /**
      * Request OTP for login or signup
      * POST /api/v1/auth/request-otp
      */
-    requestOTP: (req: Request, res: Response) => Promise<void>;
+    requestOTP: (req: Request, res: Response, next?: unknown) => Promise<void>;
     /**
      * Verify OTP (standalone verification)
      * POST /api/v1/auth/verify-otp
      */
-    verifyOTP: (req: Request, res: Response) => Promise<void>;
+    verifyOTP: (req: Request, res: Response, next?: unknown) => Promise<void>;
     /**
      * Refresh access token
      * POST /api/v1/auth/refresh
      */
-    refreshToken: (req: Request, res: Response) => Promise<void>;
+    refreshToken: (req: Request, res: Response, next?: unknown) => Promise<void>;
     /**
      * User logout
      * POST /api/v1/auth/logout
@@ -48,7 +48,7 @@ export declare class AuthController extends BaseController {
      * Check if phone number is available for registration
      * GET /api/v1/auth/check-phone/:phoneNumber
      */
-    checkPhoneAvailability: (req: Request, res: Response) => Promise<void>;
+    checkPhoneAvailability: (req: Request, res: Response, next?: unknown) => Promise<void>;
     /**
      * Validate signup request
      */

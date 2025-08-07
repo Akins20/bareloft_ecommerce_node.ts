@@ -5,7 +5,7 @@ export declare const prisma: PrismaClient<{
             url: string;
         };
     };
-    log: ("query" | "error" | "warn" | "info")[];
+    log: ("query" | "error" | "info" | "warn")[];
 }, never, import("@prisma/client/runtime/library").DefaultArgs>;
 export declare class DatabaseConnection {
     private static instance;

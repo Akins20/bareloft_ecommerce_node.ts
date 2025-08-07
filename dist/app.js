@@ -11,6 +11,7 @@ const morgan_1 = __importDefault(require("morgan"));
 // Configuration imports
 const environment_1 = require("@/config/environment");
 const client_1 = require("@prisma/client");
+const serviceContainer_1 = require("@/config/serviceContainer");
 // Type imports
 const types_1 = require("@/types");
 // Middleware imports
@@ -352,16 +353,13 @@ class App {
     async initialize() {
         try {
             console.log("🔄 Initializing Bareloft API services...");
-            // Skip database connection for testing
-            console.log("⚠️ Running in test mode - database connection skipped");
-            // Try to connect to database but don't fail if it's not available
-            try {
-                await this.prisma.$connect();
-                console.log("✅ Database connected successfully");
-            }
-            catch (dbError) {
-                console.log("⚠️ Database not available - API will run in mock mode");
-            }
+            // Initialize database connection
+            await this.prisma.$connect();
+            console.log("✅ Database connected successfully");
+            // Initialize service container with proper dependencies
+            const serviceContainer = (0, serviceContainer_1.getServiceContainer)();
+            await serviceContainer.initialize();
+            console.log("✅ Service container initialized successfully");
             // Run database migrations if needed
             // await this.runMigrations();
             console.log("🎉 All services initialized successfully");

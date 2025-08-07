@@ -419,7 +419,7 @@ export class AuthController extends BaseController {
    * POST /api/v1/auth/logout
    */
   public logout = async (
-req: unknown, res: unknown, next: unknown, req: AuthenticatedRequest, res: Response): Promise<void> => {
+req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const userId = this.getUserId(req);
       const { refreshToken, logoutAllDevices }: LogoutRequest = req.body;
@@ -474,7 +474,7 @@ req: unknown, res: unknown, next: unknown, req: AuthenticatedRequest, res: Respo
    * GET /api/v1/auth/me
    */
   public getCurrentUser = async (
-req: unknown, res: unknown, next: unknown, req: AuthenticatedRequest, res: Response): Promise<void> => {
+req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const userId = this.getUserId(req);
 

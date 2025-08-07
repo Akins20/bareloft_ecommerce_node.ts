@@ -18,17 +18,17 @@ export declare class OTPController extends BaseController {
      * Resend OTP code
      * POST /api/v1/auth/otp/resend
      */
-    resendOTP: (req: Request, res: Response) => Promise<void>;
+    resendOTP: (req: Request, res: Response, next?: unknown) => Promise<void>;
     /**
      * Check OTP status
      * GET /api/v1/auth/otp/status/:phoneNumber
      */
-    getOTPStatus: (req: Request, res: Response) => Promise<void>;
+    getOTPStatus: (req: Request, res: Response, next?: unknown) => Promise<void>;
     /**
      * Get OTP attempts remaining
      * GET /api/v1/auth/otp/attempts/:phoneNumber
      */
-    getAttemptsRemaining: (req: Request, res: Response) => Promise<void>;
+    getAttemptsRemaining: (req: Request, res: Response, next?: unknown) => Promise<void>;
     /**
      * Validate OTP request
      */

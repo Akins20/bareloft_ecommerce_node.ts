@@ -107,7 +107,7 @@ class OTPController extends BaseController_1.BaseController {
      * Resend OTP code
      * POST /api/v1/auth/otp/resend
      */
-    resendOTP = async (req, res) => {
+    resendOTP = async (req, res, next) => {
         try {
             const { phoneNumber, purpose } = req.body;
             // Validate input
@@ -150,7 +150,7 @@ class OTPController extends BaseController_1.BaseController {
      * Check OTP status
      * GET /api/v1/auth/otp/status/:phoneNumber
      */
-    getOTPStatus = async (req, res) => {
+    getOTPStatus = async (req, res, next) => {
         try {
             const { phoneNumber } = req.params;
             const { purpose } = req.query;
@@ -177,7 +177,7 @@ class OTPController extends BaseController_1.BaseController {
      * Get OTP attempts remaining
      * GET /api/v1/auth/otp/attempts/:phoneNumber
      */
-    getAttemptsRemaining = async (req, res) => {
+    getAttemptsRemaining = async (req, res, next) => {
         try {
             const { phoneNumber } = req.params;
             if (!phoneNumber || !this.isValidNigerianPhone(phoneNumber)) {

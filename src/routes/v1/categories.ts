@@ -4,19 +4,23 @@ import { authenticate } from "../../middleware/auth/authenticate";
 import { authorize } from "../../middleware/auth/authorize";
 import { validateRequest } from "../../middleware/validation/validateRequest";
 import { cacheMiddleware } from "../../middleware/cache/cacheMiddleware";
+
+// Service imports
+import { getServiceContainer } from "../../config/serviceContainer";
+import { CategoryService } from "../../services/products/CategoryService";
+
 // Note: Category schemas not yet created, using placeholder validation
 const createCategorySchema = {};
 const updateCategorySchema = {};
 
 const router = Router();
 
-// Initialize controller (will be injected via dependency injection)
-let categoryController: CategoryController;
+// Get services from container
+const serviceContainer = getServiceContainer();
+const categoryService = serviceContainer.getService<CategoryService>('categoryService');
 
-export const initializeCategoryRoutes = (controller: CategoryController) => {
-  categoryController = controller;
-  return router;
-};
+// Initialize controller with service
+const categoryController = new CategoryController(categoryService);
 
 // ==================== PUBLIC CATEGORY ENDPOINTS ====================
 

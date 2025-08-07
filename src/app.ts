@@ -8,6 +8,7 @@ import rateLimit from "express-rate-limit";
 // Configuration imports
 import { config } from "@/config/environment";
 import { PrismaClient } from "@prisma/client";
+import { getServiceContainer } from "@/config/serviceContainer";
 
 // Type imports
 import {
@@ -409,6 +410,11 @@ class App {
       // Initialize database connection
       await this.prisma.$connect();
       console.log("✅ Database connected successfully");
+
+      // Initialize service container with proper dependencies
+      const serviceContainer = getServiceContainer();
+      await serviceContainer.initialize();
+      console.log("✅ Service container initialized successfully");
 
       // Run database migrations if needed
       // await this.runMigrations();

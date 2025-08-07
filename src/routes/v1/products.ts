@@ -22,6 +22,10 @@
 import { Router } from "express";
 import { ProductController } from "../../controllers/products/ProductController";
 
+// Service imports
+import { getServiceContainer } from "../../config/serviceContainer";
+import { ProductService } from "../../services/products/ProductService";
+
 // Middleware imports
 import { authenticate } from "../../middleware/auth/authenticate";
 import { authorize } from "../../middleware/auth/authorize";
@@ -35,8 +39,9 @@ const productSchemas = {
   checkStock: {},
 };
 
-// Services (dependency injection) - using placeholder for now
-const productService = {} as any;
+// Get services from container
+const serviceContainer = getServiceContainer();
+const productService = serviceContainer.getService<ProductService>('productService');
 
 const router = Router();
 

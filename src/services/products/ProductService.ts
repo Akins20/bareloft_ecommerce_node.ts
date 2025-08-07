@@ -30,11 +30,11 @@ export class ProductService extends BaseService {
   private categoryRepo: any;
   private inventoryRepo: any;
 
-  constructor() {
+  constructor(productRepo?: any, categoryRepo?: any, inventoryRepo?: any) {
     super();
-    this.productRepo = {} as any; // Mock repository
-    this.categoryRepo = {} as any; // Mock repository
-    this.inventoryRepo = {} as any; // Mock repository
+    this.productRepo = productRepo || {} as any; // Accept injected repository or use mock
+    this.categoryRepo = categoryRepo || {} as any; // Accept injected repository or use mock
+    this.inventoryRepo = inventoryRepo || {} as any; // Accept injected repository or use mock
   }
 
   /**
