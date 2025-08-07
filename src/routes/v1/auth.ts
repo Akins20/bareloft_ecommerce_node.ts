@@ -398,6 +398,139 @@ router.get(
   }
 );
 
+/**
+ * @route   POST /api/v1/auth/test-login
+ * @desc    Test login bypass for development - bypasses OTP verification
+ * @access  Public (Development Only)
+ * @dev_only This endpoint should be removed in production
+ *
+ * @body {
+ *   phoneNumber: string     // Test user phone number
+ * }
+ *
+ * @response {
+ *   success: true,
+ *   message: "Test login successful",
+ *   data: {
+ *     user: User,
+ *     accessToken: string,
+ *     refreshToken: string,
+ *     expiresIn: number
+ *   }
+ * }
+ */
+router.post(
+  "/test-login",
+  rateLimiter.auth,
+  async (req, res, next) => {
+    try {
+      // Only allow in development mode
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(404).json({
+          success: false,
+          error: "ENDPOINT_NOT_FOUND",
+          message: "Endpoint not available in production"
+        });
+      }
+
+      const { phoneNumber } = req.body;
+
+      if (!phoneNumber) {
+        return res.status(400).json({
+          success: false,
+          error: "VALIDATION_ERROR",
+          message: "Phone number is required"
+        });
+      }
+
+      // Find test user by phone number
+      const serviceContainer = getServiceContainer();
+      const userRepository = serviceContainer.getService('userRepository') as any;
+      
+      const user = await userRepository.prisma.user.findUnique({
+        where: { phoneNumber },
+        select: {
+          id: true,
+          phoneNumber: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          status: true,
+          isVerified: true,
+          isActive: true
+        }
+      });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: "USER_NOT_FOUND",
+          message: "Test user not found with this phone number"
+        });
+      }
+
+      if (!user.isActive || user.status !== 'ACTIVE') {
+        return res.status(403).json({
+          success: false,
+          error: "USER_INACTIVE",
+          message: "User account is not active"
+        });
+      }
+
+      // Generate tokens using JWT service
+      const jwtService = serviceContainer.getService('jwtService') as any;
+      const accessToken = await jwtService.generateAccessToken({ 
+        userId: user.id, 
+        role: user.role 
+      });
+      const refreshToken = await jwtService.generateRefreshToken({ 
+        userId: user.id 
+      });
+
+      // Create session
+      const sessionService = serviceContainer.getService('sessionService') as any;
+      await sessionService.createSession({
+        userId: user.id,
+        refreshToken,
+        deviceInfo: {
+          userAgent: req.headers['user-agent'] || 'Test Client',
+          ipAddress: req.ip || '127.0.0.1'
+        }
+      });
+
+      // Update last login
+      await userRepository.prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() }
+      });
+
+      res.json({
+        success: true,
+        message: "Test login successful",
+        data: {
+          user: {
+            id: user.id,
+            phoneNumber: user.phoneNumber,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            role: user.role,
+            isVerified: user.isVerified
+          },
+          accessToken,
+          refreshToken,
+          expiresIn: 900 // 15 minutes
+        }
+      });
+
+    } catch (error) {
+      console.error('Test login error:', error);
+      next(error);
+    }
+  }
+);
+
 export default router;
 
 /**

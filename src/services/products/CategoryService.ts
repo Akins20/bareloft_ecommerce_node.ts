@@ -316,7 +316,29 @@ export class CategoryService extends BaseService {
     pagination?: any;
   }> {
     try {
-      const { categories, total } = await this.categoryRepository.findWithFilters(params);
+      // Direct Prisma call for now
+      const where: any = {
+        isActive: params.isActive !== undefined ? params.isActive : true,
+      };
+      
+      if (params.parentId !== undefined) {
+        where.parentId = params.parentId;
+      }
+
+      const [categories, total] = await Promise.all([
+        this.categoryRepository.prisma.category.findMany({
+          where,
+          include: {
+            products: params.hasProducts ? true : false,
+            parent: true,
+            children: true,
+          },
+          orderBy: params.sortBy === 'name' ? { name: 'asc' } : { sortOrder: 'asc' },
+          skip: params.page ? (params.page - 1) * (params.limit || 50) : 0,
+          take: params.limit || 50,
+        }),
+        this.categoryRepository.prisma.category.count({ where })
+      ]);
 
       const enrichedCategories = categories.map(category => this.enrichCategory(category));
 
@@ -627,7 +649,7 @@ export class CategoryService extends BaseService {
    */
   async getFeaturedCategories(limit: number = 10): Promise<Category[]> {
     try {
-      const categories = await this.categoryRepository.findMany({
+      const categories = await this.categoryRepository.prisma.category.findMany({
         where: { 
           isActive: true,
           // Add logic for featured categories - for now just get active ones
@@ -646,7 +668,7 @@ export class CategoryService extends BaseService {
    */
   async searchCategories(query: string, limit: number = 20): Promise<Category[]> {
     try {
-      const categories = await this.categoryRepository.findMany({
+      const categories = await this.categoryRepository.prisma.category.findMany({
         where: {
           OR: [
             { name: { contains: query, mode: 'insensitive' } },
@@ -705,7 +727,7 @@ export class CategoryService extends BaseService {
    */
   async getFlatCategoryList(): Promise<Category[]> {
     try {
-      const categories = await this.categoryRepository.findMany({
+      const categories = await this.categoryRepository.prisma.category.findMany({
         where: { isActive: true },
         orderBy: { name: 'asc' }
       });

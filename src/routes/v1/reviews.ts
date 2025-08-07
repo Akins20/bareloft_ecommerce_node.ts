@@ -12,13 +12,14 @@ const reportReviewSchema = {};
 
 const router = Router();
 
-// Initialize controller
-let reviewController: ReviewController;
+// Service imports
+import { getServiceContainer } from "../../config/serviceContainer";
+import { ReviewService } from "../../services/products/ReviewService";
 
-export const initializeReviewRoutes = (controller: ReviewController) => {
-  reviewController = controller;
-  return router;
-};
+// Initialize controller with service container
+const serviceContainer = getServiceContainer();
+const reviewService = serviceContainer.getService<ReviewService>('reviewService');
+const reviewController = new ReviewController(reviewService);
 
 // Rate limiting for review operations
 const reviewActionLimit = rateLimiter.authenticated;

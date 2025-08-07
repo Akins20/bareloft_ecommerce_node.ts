@@ -69,7 +69,11 @@ export class ProductService extends BaseService {
       };
 
       if (search) {
-        queryFilters.search = search;
+        queryFilters.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+          { shortDescription: { contains: search, mode: 'insensitive' } }
+        ];
       }
 
       if (categoryId) {
@@ -81,12 +85,14 @@ export class ProductService extends BaseService {
         queryFilters.categoryId = categoryId;
       }
 
-      if (priceMin !== undefined) {
-        queryFilters.priceMin = priceMin;
-      }
-
-      if (priceMax !== undefined) {
-        queryFilters.priceMax = priceMax;
+      if (priceMin !== undefined || priceMax !== undefined) {
+        queryFilters.price = {};
+        if (priceMin !== undefined) {
+          queryFilters.price.gte = priceMin;
+        }
+        if (priceMax !== undefined) {
+          queryFilters.price.lte = priceMax;
+        }
       }
 
       if (featured !== undefined) {
@@ -94,25 +100,43 @@ export class ProductService extends BaseService {
       }
 
       if (inStock) {
-        queryFilters.inStock = true;
+        queryFilters.stock = { gt: 0 };
       }
 
-      // Get products with pagination
-      const products = await this.productRepo.findMany({
-        filters: queryFilters,
-        pagination: { page, limit },
-        sort: { field: sortBy, order: sortOrder },
-        include: {
-          category: true,
-          images: true,
-          inventory: true,
-          reviews: {
-            select: {
-              rating: true,
+      // Direct Prisma call for now (bypassing BaseRepository complexity)
+      const skip = (page - 1) * limit;
+      const [productData, total] = await Promise.all([
+        this.productRepo.prisma.product.findMany({
+          where: queryFilters,
+          include: {
+            category: true,
+            images: true,
+            reviews: {
+              select: {
+                rating: true,
+              },
             },
           },
+          orderBy: { [sortBy]: sortOrder },
+          skip,
+          take: limit,
+        }),
+        this.productRepo.prisma.product.count({
+          where: queryFilters,
+        }),
+      ]);
+
+      const products = {
+        data: productData,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(total / limit),
+          totalItems: total,
+          itemsPerPage: limit,
+          hasNextPage: page < Math.ceil(total / limit),
+          hasPreviousPage: page > 1,
         },
-      });
+      };
 
       // Calculate Nigerian market insights
       const productInsights = this.calculateMarketInsights(products.data);
@@ -642,10 +666,12 @@ export class ProductService extends BaseService {
    */
   private async getAvailableCategories(): Promise<any[]> {
     try {
-      const result = await this.categoryRepo.findMany?.({ 
-        filters: { isActive: true } 
-      }) || { data: [] };
-      return result.data || [];
+      // Direct Prisma call to avoid BaseRepository complexity
+      const categories = await this.categoryRepo.prisma.category.findMany({
+        where: { isActive: true },
+        orderBy: { name: 'asc' }
+      });
+      return categories || [];
     } catch (error) {
       logger.error("Error fetching available categories", {
         error: error instanceof Error ? error.message : "Unknown error",
