@@ -286,7 +286,7 @@ export abstract class BaseController {
    * Check if user has required role
    */
   protected hasRole(req: any, requiredRole: string): boolean {
-    const userRole = req.user?.role;
+    const userRole = req.user?.role?.toLowerCase();
 
     const roleHierarchy = {
       customer: 1,

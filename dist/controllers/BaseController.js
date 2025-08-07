@@ -223,7 +223,7 @@ class BaseController {
      * Check if user has required role
      */
     hasRole(req, requiredRole) {
-        const userRole = req.user?.role;
+        const userRole = req.user?.role?.toLowerCase();
         const roleHierarchy = {
             customer: 1,
             admin: 2,

@@ -33,6 +33,17 @@ model User {
   sessions      Session[]
   otpCodes      OTPCode[]
   cartItems     CartItem[]
+  returnRequests ReturnRequest[] @relation("CustomerReturns")
+  refunds       Refund[] @relation("CustomerRefunds")
+  bankAccounts  NigerianBankAccount[] @relation("CustomerBankAccounts")
+  // Support System Relations
+  supportTickets      SupportTicket[]             @relation("CustomerTickets")
+  supportAgent        SupportAgent?               @relation("SupportAgentUser")
+  sentMessages        SupportTicketMessage[]      @relation("MessageSender")
+  knowledgeBaseArticles SupportKnowledgeBase[]    @relation("KnowledgeBaseAuthor")
+  updatedKnowledgeBase SupportKnowledgeBase[]     @relation("KnowledgeBaseUpdater")
+  createdTemplates    SupportTemplate[]           @relation("TemplateCreator")
+  satisfactionSurveys SupportSatisfactionSurvey[] @relation("CustomerSurveys")
 
   @@map("users")
 }
@@ -119,6 +130,7 @@ model Product {
   orderItems      OrderItem[]
   inventoryMovements InventoryMovement[]
   stockReservations StockReservation[]
+  returnItems     ReturnItem[]
 
   @@map("products")
 }
@@ -212,6 +224,10 @@ model Order {
   timelineEvents  OrderTimelineEvent[]
   paymentTransactions PaymentTransaction[]
   reviews         ProductReview[]
+  shipment        Shipment?
+  returnRequests  ReturnRequest[]
+  refunds         Refund[]
+  supportTickets  SupportTicket[]
 
   @@map("orders")
 }
@@ -227,6 +243,9 @@ model OrderItem {
   product   Product @relation(fields: [productId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Relations
+  returnItems ReturnItem[]
 
   @@map("order_items")
 }
@@ -255,6 +274,9 @@ model PaymentTransaction {
   order       Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
+
+  // Relations
+  refunds     Refund[]
 
   @@map("payment_transactions")
 }
@@ -426,3 +448,923 @@ enum CouponType {
   FIXED_AMOUNT
   FREE_SHIPPING
 }
+
+// Return and Refund Enums
+enum ReturnRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  IN_TRANSIT
+  RECEIVED
+  INSPECTED
+  COMPLETED
+  CANCELLED
+}
+
+enum ReturnReason {
+  DEFECTIVE
+  WRONG_ITEM
+  WRONG_SIZE
+  DAMAGED_SHIPPING
+  NOT_AS_DESCRIBED
+  CHANGED_MIND
+  DUPLICATE_ORDER
+  QUALITY_ISSUES
+  LATE_DELIVERY
+  OTHER
+}
+
+enum ReturnItemCondition {
+  SELLABLE
+  MINOR_DAMAGE
+  MAJOR_DAMAGE
+  DEFECTIVE
+  UNSELLABLE
+}
+
+enum RefundProcessStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  PARTIALLY_REFUNDED
+}
+
+enum RefundMethod {
+  ORIGINAL_PAYMENT
+  BANK_TRANSFER
+  WALLET_CREDIT
+  STORE_CREDIT
+  CASH
+}
+
+enum ReturnShippingMethod {
+  CUSTOMER_DROP_OFF
+  PICKUP_SERVICE
+  COURIER_SERVICE
+  POSTAL_SERVICE
+}
+
+enum ShippingCarrierStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+enum ShipmentStatus {
+  PENDING
+  PICKED_UP
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED_DELIVERY
+  RETURNED
+  CANCELLED
+}
+
+enum DeliveryAttemptStatus {
+  SUCCESSFUL
+  FAILED_NO_ONE_HOME
+  FAILED_WRONG_ADDRESS
+  FAILED_REFUSED
+  FAILED_DAMAGED
+  RESCHEDULED
+}
+
+model ShippingCarrier {
+  id                String              @id @default(cuid())
+  name              String              @unique // e.g., "DHL Nigeria", "GIG Logistics"
+  code              String              @unique // e.g., "DHL_NG", "GIG"
+  type              String              // "express", "standard", "economy"
+  status            ShippingCarrierStatus @default(ACTIVE)
+  baseUrl           String?             // API base URL
+  apiKey            String?             // Encrypted API key
+  secretKey         String?             // Encrypted secret key
+  webhookUrl        String?             // Webhook endpoint for status updates
+  supportedServices Json?               // Array of supported service types
+  coverageAreas     Json?               // Nigerian states/cities covered
+  businessHours     Json?               // Operating hours
+  maxWeight         Decimal?            @db.Decimal(8, 2) // Maximum weight in kg
+  maxDimensions     Json?               // Maximum package dimensions
+  deliveryTimeframes Json?              // Delivery timeframes by zone
+  rateStructure     Json?               // Pricing structure
+  contactInfo       Json?               // Contact information
+  isDefault         Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  // Relations
+  shipments         Shipment[]
+  shippingRates     ShippingRate[]
+  analytics         ShippingAnalytics[] @relation("CarrierAnalytics")
+
+  @@map("shipping_carriers")
+}
+
+model ShippingZone {
+  id              String   @id @default(cuid())
+  name            String   // e.g., "Lagos Metropolitan", "Southwest Region"
+  states          Json     // Array of Nigerian states
+  cities          Json?    // Specific cities if applicable
+  postalCodes     Json?    // Postal code ranges
+  baseRate        Decimal  @db.Decimal(8, 2)
+  weightMultiplier Decimal @db.Decimal(4, 2) @default(1.0)
+  deliveryDays    Int      @default(3) // Standard delivery days
+  expressDeliveryDays Int? // Express delivery days
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  shippingRates   ShippingRate[]
+
+  @@map("shipping_zones")
+}
+
+model ShippingRate {
+  id                String         @id @default(cuid())
+  carrierId         String
+  carrier           ShippingCarrier @relation(fields: [carrierId], references: [id])
+  zoneId            String
+  zone              ShippingZone   @relation(fields: [zoneId], references: [id])
+  serviceType       String         // "standard", "express", "same-day"
+  minWeight         Decimal        @db.Decimal(8, 2)
+  maxWeight         Decimal        @db.Decimal(8, 2)
+  baseRate          Decimal        @db.Decimal(8, 2)
+  weightRate        Decimal        @db.Decimal(8, 2) // Rate per kg
+  dimensionalFactor Decimal        @db.Decimal(4, 2) @default(5000) // For dimensional weight calculation
+  fuelSurcharge     Decimal        @db.Decimal(4, 2) @default(0)
+  insuranceRate     Decimal        @db.Decimal(4, 2) @default(0.01) // 1% of package value
+  isActive          Boolean        @default(true)
+  effectiveFrom     DateTime       @default(now())
+  effectiveTo       DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@unique([carrierId, zoneId, serviceType])
+  @@map("shipping_rates")
+}
+
+model Shipment {
+  id                  String         @id @default(cuid())
+  trackingNumber      String         @unique
+  orderId             String         @unique
+  order               Order          @relation(fields: [orderId], references: [id])
+  carrierId           String
+  carrier             ShippingCarrier @relation(fields: [carrierId], references: [id])
+  serviceType         String         // "standard", "express", "same-day"
+  status              ShipmentStatus @default(PENDING)
+  originAddress       Json           // Warehouse/pickup address
+  destinationAddress  Json           // Customer delivery address
+  packageWeight       Decimal        @db.Decimal(8, 2)
+  packageDimensions   Json           // length, width, height in cm
+  declaredValue       Decimal        @db.Decimal(10, 2)
+  shippingCost        Decimal        @db.Decimal(8, 2)
+  insuranceCost       Decimal?       @db.Decimal(8, 2)
+  estimatedDelivery   DateTime?
+  actualDelivery      DateTime?
+  pickedUpAt          DateTime?
+  lastLocationUpdate  Json?          // Latest tracking location
+  specialInstructions String?
+  customerNotes       String?
+  labelUrl            String?        // URL to shipping label
+  manifestNumber      String?        // Carrier manifest number
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  // Relations
+  trackingEvents      TrackingEvent[]
+  deliveryAttempts    DeliveryAttempt[]
+
+  @@map("shipments")
+}
+
+model TrackingEvent {
+  id              String     @id @default(cuid())
+  shipmentId      String
+  shipment        Shipment   @relation(fields: [shipmentId], references: [id])
+  status          ShipmentStatus
+  location        String?    // Current location
+  city            String?
+  state           String?
+  country         String     @default("NG")
+  description     String
+  carrierEventCode String?   // Carrier-specific event code
+  eventData       Json?      // Additional carrier event data
+  latitude        Decimal?   @db.Decimal(10, 8)
+  longitude       Decimal?   @db.Decimal(11, 8)
+  estimatedDelivery DateTime?
+  isPublic        Boolean    @default(true) // Whether to show to customer
+  createdAt       DateTime   @default(now())
+
+  @@map("tracking_events")
+}
+
+model DeliveryAttempt {
+  id            String               @id @default(cuid())
+  shipmentId    String
+  shipment      Shipment             @relation(fields: [shipmentId], references: [id])
+  attemptNumber Int                  @default(1)
+  status        DeliveryAttemptStatus
+  attemptedAt   DateTime
+  reason        String?              // Reason for failure
+  notes         String?              // Delivery notes
+  driverName    String?
+  driverPhone   String?
+  recipientName String?              // Who received (if successful)
+  signatureUrl  String?              // URL to delivery signature
+  photoUrl      String?              // URL to delivery photo
+  nextAttemptAt DateTime?            // Scheduled next attempt
+  createdAt     DateTime             @default(now())
+
+  @@map("delivery_attempts")
+}
+
+model ShippingAnalytics {
+  id                    String   @id @default(cuid())
+  carrierId             String
+  carrier               ShippingCarrier @relation(fields: [carrierId], references: [id], name: "CarrierAnalytics")
+  date                  DateTime @db.Date
+  state                 String
+  totalShipments        Int      @default(0)
+  deliveredShipments    Int      @default(0)
+  failedDeliveries      Int      @default(0)
+  averageDeliveryDays   Decimal? @db.Decimal(4, 2)
+  totalRevenue          Decimal  @db.Decimal(10, 2) @default(0)
+  averageShippingCost   Decimal? @db.Decimal(8, 2)
+  onTimeDeliveryRate    Decimal? @db.Decimal(5, 4) // Percentage as decimal (0.95 = 95%)
+  customerSatisfaction  Decimal? @db.Decimal(3, 2) // Rating out of 5
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([carrierId, date, state])
+  @@map("shipping_analytics")
+}
+
+// Returns and Refunds Models for Customer Service
+model ReturnRequest {
+  id                    String               @id @default(cuid())
+  returnNumber          String               @unique
+  orderId               String
+  order                 Order                @relation(fields: [orderId], references: [id])
+  customerId            String
+  customer              User                 @relation("CustomerReturns", fields: [customerId], references: [id])
+  status                ReturnRequestStatus  @default(PENDING)
+  reason                ReturnReason
+  description           String?
+  totalAmount           Decimal              @db.Decimal(10, 2)
+  currency              String               @default("NGN")
+  isEligible            Boolean              @default(true)
+  eligibilityReason     String?
+  returnShippingMethod  ReturnShippingMethod?
+  returnTrackingNumber  String?
+  estimatedPickupDate   DateTime?
+  actualPickupDate      DateTime?
+  estimatedReturnDate   DateTime?
+  actualReturnDate      DateTime?
+  qualityCheckNotes     String?
+  inspectionPhotos      Json?                // Array of photo URLs
+  adminNotes            String?
+  customerNotes         String?
+  processedBy           String?
+  approvedBy            String?
+  rejectedBy            String?
+  rejectionReason       String?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  // Relations
+  items                 ReturnItem[]
+  refunds               Refund[]
+  timeline              ReturnTimelineEvent[]
+  supportTickets        SupportTicket[]
+
+  @@map("return_requests")
+}
+
+model ReturnItem {
+  id                String         @id @default(cuid())
+  returnRequestId   String
+  returnRequest     ReturnRequest  @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  orderItemId       String
+  orderItem         OrderItem      @relation(fields: [orderItemId], references: [id])
+  productId         String
+  product           Product        @relation(fields: [productId], references: [id])
+  productName       String
+  productSku        String?
+  productImage      String?
+  quantityReturned  Int
+  unitPrice         Decimal        @db.Decimal(10, 2)
+  totalPrice        Decimal        @db.Decimal(10, 2)
+  condition         ReturnItemCondition?
+  conditionNotes    String?
+  inspectionPhotos  Json?          // Array of photo URLs
+  restockable       Boolean        @default(false)
+  restockLocation   String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@map("return_items")
+}
+
+model Refund {
+  id                  String              @id @default(cuid())
+  refundNumber        String              @unique
+  returnRequestId     String?
+  returnRequest       ReturnRequest?      @relation(fields: [returnRequestId], references: [id])
+  orderId             String
+  order               Order               @relation(fields: [orderId], references: [id])
+  transactionId       String?
+  transaction         PaymentTransaction? @relation(fields: [transactionId], references: [id])
+  customerId          String
+  customer            User                @relation("CustomerRefunds", fields: [customerId], references: [id])
+  status              RefundProcessStatus @default(PENDING)
+  refundMethod        RefundMethod        @default(ORIGINAL_PAYMENT)
+  amount              Decimal             @db.Decimal(10, 2)
+  currency            String              @default("NGN")
+  reason              String
+  description         String?
+  bankAccountDetails  Json?               // Nigerian bank account details
+  providerRefundId    String?             // Paystack refund ID
+  providerReference   String?             // Paystack reference
+  processedAt         DateTime?
+  completedAt         DateTime?
+  failureReason       String?
+  adminNotes          String?
+  customerNotes       String?
+  processedBy         String?
+  approvedBy          String?
+  metadata            Json?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@map("refunds")
+}
+
+model ReturnTimelineEvent {
+  id              String        @id @default(cuid())
+  returnRequestId String
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  type            String
+  title           String
+  description     String
+  data            Json?
+  createdBy       String?
+  createdByName   String?
+  isVisible       Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+
+  @@map("return_timeline_events")
+}
+
+model NigerianBankAccount {
+  id            String   @id @default(cuid())
+  customerId    String
+  customer      User     @relation("CustomerBankAccounts", fields: [customerId], references: [id])
+  accountNumber String
+  accountName   String
+  bankName      String
+  bankCode      String
+  isVerified    Boolean  @default(false)
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([customerId, accountNumber, bankCode])
+  @@map("nigerian_bank_accounts")
+}
+
+// Support Ticket System Models
+model SupportTicket {
+  id                  String             @id @default(cuid())
+  ticketNumber        String             @unique
+  subject             String
+  description         String
+  status              SupportTicketStatus @default(OPEN)
+  priority            SupportTicketPriority @default(MEDIUM)
+  category            SupportTicketCategory @default(GENERAL)
+  subcategory         String?
+  source              SupportChannelType @default(EMAIL)
+  language            SupportLanguage    @default(ENGLISH)
+  customerId          String
+  customer            User               @relation("CustomerTickets", fields: [customerId], references: [id])
+  assignedAgentId     String?
+  assignedAgent       SupportAgent?      @relation("AssignedTickets", fields: [assignedAgentId], references: [id])
+  orderId             String?
+  order               Order?             @relation(fields: [orderId], references: [id])
+  returnRequestId     String?
+  returnRequest       ReturnRequest?     @relation(fields: [returnRequestId], references: [id])
+  estimatedResolution DateTime?
+  actualResolution    DateTime?
+  firstResponseTime   DateTime?
+  resolutionTime      DateTime?
+  slaBreached         Boolean            @default(false)
+  customerSatisfaction Int?              @db.SmallInt // 1-5 rating
+  satisfactionComment String?
+  internalNotes       String?
+  tags                Json?              // Array of tags
+  metadata            Json?              // Additional ticket metadata
+  isArchived          Boolean            @default(false)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  closedAt            DateTime?
+  escalatedAt         DateTime?
+  lastReplyAt         DateTime?
+
+  // Relations
+  messages            SupportTicketMessage[]
+  escalations         SupportTicketEscalation[]
+  assignments         SupportTicketAssignment[]
+  satisfactionSurveys SupportSatisfactionSurvey[]
+  mergedTickets       SupportTicket[]    @relation("TicketMerge")
+  parentTicket        SupportTicket?     @relation("TicketMerge", fields: [parentTicketId], references: [id])
+  parentTicketId      String?
+  nigerianFeatures    SupportNigerianFeature?
+
+  @@map("support_tickets")
+}
+
+model SupportAgent {
+  id                  String             @id @default(cuid())
+  userId              String             @unique
+  user                User               @relation("SupportAgentUser", fields: [userId], references: [id])
+  agentNumber         String             @unique
+  department          SupportDepartment
+  specializations     Json               // Array of specialization areas
+  languages           Json               // Array of supported languages
+  status              SupportAgentStatus @default(AVAILABLE)
+  skillLevel          SupportSkillLevel  @default(JUNIOR)
+  maxConcurrentTickets Int               @default(10)
+  currentTicketCount  Int                @default(0)
+  workingHours        Json               // Working hours schedule
+  timeZone            String             @default("Africa/Lagos")
+  performanceRating   Decimal?           @db.Decimal(3, 2) // Average rating out of 5
+  totalTicketsResolved Int               @default(0)
+  averageResolutionTime Decimal?         @db.Decimal(8, 2) // In hours
+  averageResponseTime Decimal?           @db.Decimal(8, 2) // In hours
+  customerSatisfactionRate Decimal?      @db.Decimal(5, 4) // Percentage as decimal
+  isActive            Boolean            @default(true)
+  lastActiveAt        DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  // Relations
+  assignedTickets     SupportTicket[]    @relation("AssignedTickets")
+  assignments         SupportTicketAssignment[]
+  escalationsFrom     SupportTicketEscalation[] @relation("EscalationFromAgent")
+  escalationsTo       SupportTicketEscalation[] @relation("EscalationToAgent")
+  messages            SupportTicketMessage[]
+  shiftSchedules      SupportAgentShift[]
+  performanceReports  SupportAgentPerformance[]
+
+  @@map("support_agents")
+}
+
+model SupportTicketMessage {
+  id              String                    @id @default(cuid())
+  ticketId        String
+  ticket          SupportTicket             @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderId        String?
+  sender          User?                     @relation("MessageSender", fields: [senderId], references: [id])
+  agentId         String?
+  agent           SupportAgent?             @relation(fields: [agentId], references: [id])
+  type            SupportMessageType        @default(MESSAGE)
+  channel         SupportChannelType        @default(EMAIL)
+  direction       SupportMessageDirection   @default(INCOMING)
+  subject         String?
+  content         String
+  htmlContent     String?
+  attachments     Json?                     // Array of attachment URLs
+  isInternal      Boolean                   @default(false)
+  messageId       String?                   // External message ID (email, SMS, etc.)
+  threadId        String?                   // For message threading
+  replyToId       String?
+  replyTo         SupportTicketMessage?     @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies         SupportTicketMessage[]    @relation("MessageReplies")
+  isRead          Boolean                   @default(false)
+  readAt          DateTime?
+  deliveredAt     DateTime?
+  template        String?                   // Template used for the message
+  metadata        Json?
+  createdAt       DateTime                  @default(now())
+
+  @@map("support_ticket_messages")
+}
+
+model SupportTicketEscalation {
+  id              String           @id @default(cuid())
+  ticketId        String
+  ticket          SupportTicket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  fromAgentId     String?
+  fromAgent       SupportAgent?    @relation("EscalationFromAgent", fields: [fromAgentId], references: [id])
+  toAgentId       String?
+  toAgent         SupportAgent?    @relation("EscalationToAgent", fields: [toAgentId], references: [id])
+  escalationType  EscalationType
+  reason          String
+  priority        SupportTicketPriority
+  urgencyLevel    UrgencyLevel
+  notes           String?
+  escalatedBy     String           // User ID who triggered escalation
+  resolvedAt      DateTime?
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+
+  @@map("support_ticket_escalations")
+}
+
+model SupportTicketAssignment {
+  id              String          @id @default(cuid())
+  ticketId        String
+  ticket          SupportTicket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  agentId         String
+  agent           SupportAgent    @relation(fields: [agentId], references: [id])
+  assignedBy      String          // User ID who made the assignment
+  assignmentType  AssignmentType  @default(MANUAL)
+  reason          String?
+  isActive        Boolean         @default(true)
+  assignedAt      DateTime        @default(now())
+  unassignedAt    DateTime?
+
+  @@map("support_ticket_assignments")
+}
+
+model SupportKnowledgeBase {
+  id              String                    @id @default(cuid())
+  title           String
+  slug            String                    @unique
+  content         String
+  summary         String?
+  category        SupportTicketCategory
+  subcategory     String?
+  tags            Json?                     // Array of tags
+  language        SupportLanguage           @default(ENGLISH)
+  status          KnowledgeBaseStatus       @default(DRAFT)
+  viewCount       Int                       @default(0)
+  helpfulVotes    Int                       @default(0)
+  unhelpfulVotes  Int                       @default(0)
+  isPublic        Boolean                   @default(true)
+  isFeatured      Boolean                   @default(false)
+  publishedAt     DateTime?
+  authorId        String
+  author          User                      @relation("KnowledgeBaseAuthor", fields: [authorId], references: [id])
+  lastUpdatedBy   String?
+  updater         User?                     @relation("KnowledgeBaseUpdater", fields: [lastUpdatedBy], references: [id])
+  searchKeywords  String?                   // For better search functionality
+  relatedArticles Json?                     // Array of related article IDs
+  attachments     Json?                     // Array of attachment URLs
+  metadata        Json?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  @@map("support_knowledge_base")
+}
+
+model SupportTemplate {
+  id              String                  @id @default(cuid())
+  name            String
+  subject         String?
+  content         String
+  htmlContent     String?
+  category        SupportTicketCategory
+  type            SupportTemplateType
+  language        SupportLanguage         @default(ENGLISH)
+  variables       Json?                   // Template variables
+  isActive        Boolean                 @default(true)
+  isDefault       Boolean                 @default(false)
+  usageCount      Int                     @default(0)
+  createdBy       String
+  creator         User                    @relation("TemplateCreator", fields: [createdBy], references: [id])
+  lastUsedAt      DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@map("support_templates")
+}
+
+model SupportSatisfactionSurvey {
+  id              String              @id @default(cuid())
+  ticketId        String
+  ticket          SupportTicket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  customerId      String
+  customer        User                @relation("CustomerSurveys", fields: [customerId], references: [id])
+  rating          Int                 @db.SmallInt // 1-5 rating
+  feedback        String?
+  categories      Json?               // Specific category ratings
+  isAnonymous     Boolean             @default(false)
+  surveyType      SurveyType          @default(POST_RESOLUTION)
+  sentAt          DateTime?
+  submittedAt     DateTime?
+  remindersSent   Int                 @default(0)
+  isCompleted     Boolean             @default(false)
+  metadata        Json?
+  createdAt       DateTime            @default(now())
+
+  @@map("support_satisfaction_surveys")
+}
+
+model SupportAgentShift {
+  id              String           @id @default(cuid())
+  agentId         String
+  agent           SupportAgent     @relation(fields: [agentId], references: [id])
+  shiftDate       DateTime         @db.Date
+  startTime       DateTime
+  endTime         DateTime
+  breakStartTime  DateTime?
+  breakEndTime    DateTime?
+  shiftType       ShiftType        @default(REGULAR)
+  status          ShiftStatus      @default(SCHEDULED)
+  actualStartTime DateTime?
+  actualEndTime   DateTime?
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([agentId, shiftDate])
+  @@map("support_agent_shifts")
+}
+
+model SupportAgentPerformance {
+  id                      String        @id @default(cuid())
+  agentId                 String
+  agent                   SupportAgent  @relation(fields: [agentId], references: [id])
+  periodStart             DateTime
+  periodEnd               DateTime
+  periodType              PeriodType    @default(WEEKLY)
+  ticketsAssigned         Int           @default(0)
+  ticketsResolved         Int           @default(0)
+  ticketsEscalated        Int           @default(0)
+  averageResponseTime     Decimal?      @db.Decimal(8, 2) // In hours
+  averageResolutionTime   Decimal?      @db.Decimal(8, 2) // In hours
+  firstContactResolution  Int           @default(0)
+  customerSatisfactionAvg Decimal?      @db.Decimal(3, 2) // Out of 5
+  slaCompliance          Decimal?      @db.Decimal(5, 4) // Percentage
+  totalWorkingHours      Decimal?      @db.Decimal(6, 2)
+  productivityScore      Decimal?      @db.Decimal(5, 4) // 0-1 scale
+  qualityScore           Decimal?      @db.Decimal(5, 4) // 0-1 scale
+  createdAt              DateTime      @default(now())
+
+  @@unique([agentId, periodStart, periodEnd, periodType])
+  @@map("support_agent_performance")
+}
+
+// Nigerian Market Support Features
+model SupportNigerianFeature {
+  id                  String              @id @default(cuid())
+  ticketId            String              @unique
+  ticket              SupportTicket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  stateRegion         NigerianState?
+  customerLanguage    NigerianLanguage?
+  paymentChannel      NigerianPaymentChannel?
+  shippingCarrier     String?
+  bankIssue           String?
+  ussdCode            String?
+  culturalContext     Json?               // Cultural considerations
+  localHolidays       Json?               // Nigerian holiday considerations
+  businessHoursAdjust Json?               // Business hours adjustments
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@map("support_nigerian_features")
+}
+
+// Support System Enums
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_CUSTOMER
+  WAITING_FOR_INTERNAL
+  RESOLVED
+  CLOSED
+  CANCELLED
+  REOPENED
+}
+
+enum SupportTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+  CRITICAL
+}
+
+enum SupportTicketCategory {
+  GENERAL
+  ORDER_ISSUES
+  PAYMENT_PROBLEMS
+  RETURNS_REFUNDS
+  TECHNICAL_SUPPORT
+  ACCOUNT_ISSUES
+  SHIPPING_DELIVERY
+  PRODUCT_INQUIRY
+  BILLING
+  COMPLAINT
+  FEEDBACK
+  FEATURE_REQUEST
+}
+
+enum SupportChannelType {
+  EMAIL
+  PHONE
+  SMS
+  WHATSAPP
+  LIVE_CHAT
+  SOCIAL_MEDIA
+  IN_APP
+  WEB_FORM
+  WALK_IN
+}
+
+enum SupportLanguage {
+  ENGLISH
+  PIDGIN
+  HAUSA
+  YORUBA
+  IGBO
+}
+
+enum SupportAgentStatus {
+  AVAILABLE
+  BUSY
+  AWAY
+  BREAK
+  OFFLINE
+  DO_NOT_DISTURB
+}
+
+enum SupportDepartment {
+  GENERAL_SUPPORT
+  TECHNICAL_SUPPORT
+  BILLING_PAYMENTS
+  RETURNS_REFUNDS
+  ORDER_FULFILLMENT
+  PRODUCT_SPECIALIST
+  ESCALATION_TEAM
+  MANAGEMENT
+}
+
+enum SupportSkillLevel {
+  TRAINEE
+  JUNIOR
+  SENIOR
+  SPECIALIST
+  TEAM_LEAD
+  MANAGER
+}
+
+enum SupportMessageType {
+  MESSAGE
+  NOTE
+  SYSTEM_UPDATE
+  AUTO_REPLY
+  ESCALATION
+  ASSIGNMENT
+  RESOLUTION
+  FEEDBACK_REQUEST
+}
+
+enum SupportMessageDirection {
+  INCOMING
+  OUTGOING
+  INTERNAL
+}
+
+enum EscalationType {
+  TECHNICAL
+  BILLING
+  MANAGEMENT
+  URGENT
+  VIP_CUSTOMER
+  COMPLAINT
+  LEGAL
+}
+
+enum UrgencyLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AssignmentType {
+  MANUAL
+  AUTO_ROUND_ROBIN
+  AUTO_WORKLOAD
+  AUTO_SKILL_BASED
+  AUTO_GEOGRAPHIC
+}
+
+enum KnowledgeBaseStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum SupportTemplateType {
+  EMAIL
+  SMS
+  WHATSAPP
+  AUTO_REPLY
+  CANNED_RESPONSE
+  ESCALATION
+  RESOLUTION
+  FOLLOW_UP
+}
+
+enum SurveyType {
+  POST_RESOLUTION
+  PERIODIC
+  FEEDBACK
+  NPS
+}
+
+enum ShiftType {
+  REGULAR
+  OVERTIME
+  HOLIDAY
+  ON_CALL
+  PART_TIME
+}
+
+enum ShiftStatus {
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  MISSED
+  CANCELLED
+}
+
+enum PeriodType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum NigerianState {
+  ABIA
+  ADAMAWA
+  AKWA_IBOM
+  ANAMBRA
+  BAUCHI
+  BAYELSA
+  BENUE
+  BORNO
+  CROSS_RIVER
+  DELTA
+  EBONYI
+  EDO
+  EKITI
+  ENUGU
+  FCT
+  GOMBE
+  IMO
+  JIGAWA
+  KADUNA
+  KANO
+  KATSINA
+  KEBBI
+  KOGI
+  KWARA
+  LAGOS
+  NASARAWA
+  NIGER
+  OGUN
+  ONDO
+  OSUN
+  OYO
+  PLATEAU
+  RIVERS
+  SOKOTO
+  TARABA
+  YOBE
+  ZAMFARA
+}
+
+enum NigerianLanguage {
+  ENGLISH
+  HAUSA
+  YORUBA
+  IGBO
+  PIDGIN
+  FULANI
+  KANURI
+  TIV
+  IJAW
+  IBIBIO
+}
+
+enum NigerianPaymentChannel {
+  CARD
+  BANK_TRANSFER
+  USSD
+  QR_CODE
+  MOBILE_MONEY
+  POS
+  CASH
+  WALLET
+}
+

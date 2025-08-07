@@ -38,6 +38,7 @@ export {
 } from './auth.types';
 export * from './cart.types';
 export * from './order.types';
+export * from './return.types';
 export { 
   PaymentProvider,
   PaymentChannel,
@@ -65,3 +66,5 @@ export {
 } from './payment.types';
 export * from './inventory.types';
 export * from './notification.types';
+export * from './shipping.types';
+export * from './support.types';

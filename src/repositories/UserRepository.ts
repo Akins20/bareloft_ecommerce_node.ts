@@ -33,6 +33,7 @@ export interface UpdateUserData {
   role?: "CUSTOMER" | "ADMIN" | "SUPER_ADMIN";
   status?: "ACTIVE" | "INACTIVE" | "SUSPENDED" | "PENDING_VERIFICATION";
   isVerified?: boolean;
+  isActive?: boolean;
   lastLoginAt?: Date;
 }
 

@@ -1,3 +1,9 @@
+import { ShippingCarrier as ShippingCarrierModel } from "./ShippingCarrier";
+import { Shipment as ShipmentModel } from "./Shipment";
+import { TrackingEvent as TrackingEventModel } from "./TrackingEvent";
+import { ShippingRate as ShippingRateModel } from "./ShippingRate";
+import { ShippingZone as ShippingZoneModel } from "./ShippingZone";
+export * from "./ReturnRequest";
 export { default as UserModel, UserSchema } from "./User";
 export { default as AddressModel, AddressSchema } from "./Address";
 export { default as ProductModel, ProductSchema } from "./Product";
@@ -18,6 +24,11 @@ export { default as StockReservationModel, StockReservationSchema, } from "./Sto
 export { default as OrderTimelineEventModel, OrderTimelineEventSchema, } from "./OrderTimelineEvent";
 export { default as CouponModel, CouponSchema } from "./Coupon";
 export { default as NotificationModel, NotificationSchema, } from "./Notification";
+export { ShippingCarrier as ShippingCarrierModel } from "./ShippingCarrier";
+export { Shipment as ShipmentModel } from "./Shipment";
+export { TrackingEvent as TrackingEventModel } from "./TrackingEvent";
+export { ShippingRate as ShippingRateModel } from "./ShippingRate";
+export { ShippingZone as ShippingZoneModel } from "./ShippingZone";
 export declare const ProductModels: {
     Product: import(".prisma/client").Prisma.ProductDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     Category: import(".prisma/client").Prisma.CategoryDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
@@ -50,6 +61,13 @@ export declare const PaymentModels: {
 export declare const CommunicationModels: {
     Notification: import(".prisma/client").Prisma.NotificationDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
 };
+export declare const ShippingModels: {
+    ShippingCarrier: typeof ShippingCarrierModel;
+    Shipment: typeof ShipmentModel;
+    TrackingEvent: typeof TrackingEventModel;
+    ShippingRate: typeof ShippingRateModel;
+    ShippingZone: typeof ShippingZoneModel;
+};
 export declare const AllModels: {
     User: import(".prisma/client").Prisma.UserDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     Address: import(".prisma/client").Prisma.AddressDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
@@ -71,6 +89,11 @@ export declare const AllModels: {
     PaymentTransaction: import(".prisma/client").Prisma.PaymentTransactionDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     Coupon: import(".prisma/client").Prisma.CouponDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
     Notification: import(".prisma/client").Prisma.NotificationDelegate<import("@prisma/client/runtime/library").DefaultArgs>;
+    ShippingCarrier: typeof ShippingCarrierModel;
+    Shipment: typeof ShipmentModel;
+    TrackingEvent: typeof TrackingEventModel;
+    ShippingRate: typeof ShippingRateModel;
+    ShippingZone: typeof ShippingZoneModel;
 };
 export declare const AllSchemas: {
     User: string;

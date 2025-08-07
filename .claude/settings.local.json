@@ -35,7 +35,12 @@
       "Bash(docker:*)",
       "Bash(where psql)",
       "Bash(echo:*)",
-      "Bash(timeout 30 npm run dev)"
+      "Bash(timeout 30 npm run dev)",
+      "Bash(mkdir:*)",
+      "Bash(time curl:*)",
+      "Bash(/dev/null)",
+      "Bash(npm test:*)",
+      "Bash(timeout:*)"
     ],
     "deny": []
   }

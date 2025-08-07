@@ -62,8 +62,8 @@ const upload_1 = __importDefault(require("./v1/upload"));
 const users_1 = __importDefault(require("./v1/users"));
 const addresses_1 = __importDefault(require("./v1/addresses"));
 const wishlist_1 = __importDefault(require("./v1/wishlist"));
-// Admin and webhook routes don't exist yet, comment out
-// import adminRoutes from "./admin";
+// Import admin and webhook routes
+const admin_1 = __importDefault(require("./admin"));
 // import webhookRoutes from "./webhooks";
 const router = (0, express_1.Router)();
 // ==================== GLOBAL MIDDLEWARE ====================
@@ -204,8 +204,11 @@ router.use("/v1/wishlist", wishlist_1.default);
 // Utility routes
 router.use("/v1/upload", upload_1.default);
 // ==================== ADMIN ROUTES ====================
-// Comment out until admin routes are implemented
-// router.use("/admin", adminRoutes);
+/**
+ * Admin routes with enhanced security and role-based access control
+ * All admin routes require authentication and admin role authorization
+ */
+router.use("/admin", admin_1.default);
 // ==================== WEBHOOK ROUTES ====================
 // Comment out until webhook routes are implemented
 // router.use("/webhooks", webhookRoutes);

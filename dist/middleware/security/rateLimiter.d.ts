@@ -20,6 +20,7 @@ export declare const rateLimiter: {
     admin: import("express-rate-limit").RateLimitRequestHandler;
     payment: import("express-rate-limit").RateLimitRequestHandler;
     upload: import("express-rate-limit").RateLimitRequestHandler;
+    webhook: import("express-rate-limit").RateLimitRequestHandler;
 };
 export { createRateLimiter };
 /**

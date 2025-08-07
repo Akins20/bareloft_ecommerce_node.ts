@@ -23,6 +23,16 @@ import StockReservationModel from "./StockReservation";
 import UserModel, { UserSchema } from "./User";
 import WishlistItemModel from "./WishlistItem";
 
+// Shipping Models
+import { ShippingCarrier as ShippingCarrierModel } from "./ShippingCarrier";
+import { Shipment as ShipmentModel } from "./Shipment";
+import { TrackingEvent as TrackingEventModel } from "./TrackingEvent";
+import { ShippingRate as ShippingRateModel } from "./ShippingRate";
+import { ShippingZone as ShippingZoneModel } from "./ShippingZone";
+
+// Returns and Refunds Models
+export * from "./ReturnRequest";
+
 // Core User Models
 export { default as UserModel, UserSchema } from "./User";
 export { default as AddressModel, AddressSchema } from "./Address";
@@ -85,6 +95,13 @@ export {
   NotificationSchema,
 } from "./Notification";
 
+// Shipping Models
+export { ShippingCarrier as ShippingCarrierModel } from "./ShippingCarrier";
+export { Shipment as ShipmentModel } from "./Shipment";
+export { TrackingEvent as TrackingEventModel } from "./TrackingEvent";
+export { ShippingRate as ShippingRateModel } from "./ShippingRate";
+export { ShippingZone as ShippingZoneModel } from "./ShippingZone";
+
 // Grouped exports for convenience
 export const ProductModels = {
   Product: ProductModel,
@@ -124,6 +141,14 @@ export const CommunicationModels = {
   Notification: NotificationModel,
 };
 
+export const ShippingModels = {
+  ShippingCarrier: ShippingCarrierModel,
+  Shipment: ShipmentModel,
+  TrackingEvent: TrackingEventModel,
+  ShippingRate: ShippingRateModel,
+  ShippingZone: ShippingZoneModel,
+};
+
 // All models in one object for dynamic access
 export const AllModels = {
   // User Management
@@ -155,6 +180,13 @@ export const AllModels = {
   PaymentTransaction: PaymentTransactionModel,
   Coupon: CouponModel,
   Notification: NotificationModel,
+
+  // Shipping Management
+  ShippingCarrier: ShippingCarrierModel,
+  Shipment: ShipmentModel,
+  TrackingEvent: TrackingEventModel,
+  ShippingRate: ShippingRateModel,
+  ShippingZone: ShippingZoneModel,
 };
 
 // Schema definitions for documentation/migration purposes

@@ -129,5 +129,35 @@ export declare class DataFormatters {
         };
     };
 }
+/**
+ * Report generation utilities
+ */
+export declare class ReportFormatters {
+    /**
+     * Generate CSV report from data array
+     */
+    static generateCSVReport(data: Record<string, any>[]): string;
+    /**
+     * Generate PDF report buffer (mock implementation)
+     * In production, this would use a library like puppeteer or jsPDF
+     */
+    static generatePDFReport(data: Record<string, any>[], title: string): Promise<Buffer>;
+    /**
+     * Generate Excel-compatible CSV with proper headers
+     */
+    static generateExcelCSV(data: Record<string, any>[], sheetName?: string): string;
+    /**
+     * Format data for export with Nigerian specific formatting
+     */
+    static formatForNigerianExport(data: Record<string, any>[]): Record<string, any>[];
+}
+/**
+ * Convenience functions for common formatting tasks
+ */
+export declare const formatNaira: (amount: number) => string;
+export declare const formatNigerianPhoneNumber: (phone: string) => string;
+export declare const calculateVAT: (amount: number) => number;
+export declare const generateCSVReport: typeof ReportFormatters.generateCSVReport;
+export declare const generatePDFReport: typeof ReportFormatters.generatePDFReport;
 export default DataFormatters;
 //# sourceMappingURL=formatters.d.ts.map

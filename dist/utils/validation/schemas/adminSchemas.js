@@ -112,6 +112,128 @@ exports.inventorySchemas = {
         }),
         includeOutOfStock: joi_1.default.boolean().optional().default(true),
     }),
+    /**
+     * Stock reservation schema
+     */
+    stockReservation: joi_1.default.object({
+        productId: joi_1.default.string().uuid().required().messages({
+            "string.uuid": "Product ID must be a valid UUID",
+            "any.required": "Product ID is required",
+        }),
+        quantity: joi_1.default.number().integer().min(1).required().messages({
+            "number.integer": "Quantity must be a whole number",
+            "number.min": "Quantity must be at least 1",
+            "any.required": "Quantity is required",
+        }),
+        orderId: joi_1.default.string().uuid().optional().messages({
+            "string.uuid": "Order ID must be a valid UUID",
+        }),
+        cartId: joi_1.default.string().uuid().optional().messages({
+            "string.uuid": "Cart ID must be a valid UUID",
+        }),
+        reason: joi_1.default.string().max(500).required().messages({
+            "string.max": "Reason must not exceed 500 characters",
+            "any.required": "Reason is required",
+        }),
+        expirationMinutes: joi_1.default.number().integer().min(1).max(1440).optional().default(15).messages({
+            "number.integer": "Expiration minutes must be a whole number",
+            "number.min": "Expiration must be at least 1 minute",
+            "number.max": "Expiration cannot exceed 24 hours (1440 minutes)",
+        }),
+    }),
+    /**
+     * Release stock reservation schema
+     */
+    releaseReservation: joi_1.default.object({
+        reservationId: joi_1.default.string().uuid().optional().messages({
+            "string.uuid": "Reservation ID must be a valid UUID",
+        }),
+        orderId: joi_1.default.string().uuid().optional().messages({
+            "string.uuid": "Order ID must be a valid UUID",
+        }),
+        cartId: joi_1.default.string().uuid().optional().messages({
+            "string.uuid": "Cart ID must be a valid UUID",
+        }),
+        reason: joi_1.default.string().max(500).optional().allow("").messages({
+            "string.max": "Reason must not exceed 500 characters",
+        }),
+    }).or('reservationId', 'orderId', 'cartId').messages({
+        "object.missing": "At least one of reservationId, orderId, or cartId must be provided",
+    }),
+    /**
+     * Inventory movement query schema
+     */
+    inventoryMovementQuery: joi_1.default.object({
+        page: joi_1.default.number().integer().min(1).optional().default(1),
+        limit: joi_1.default.number().integer().min(1).max(100).optional().default(50),
+        productId: joi_1.default.string().uuid().optional().messages({
+            "string.uuid": "Product ID must be a valid UUID",
+        }),
+        type: joi_1.default.string().valid("IN", "OUT", "ADJUSTMENT", "SALE", "RESTOCK", "RETURN", "TRANSFER_IN", "TRANSFER_OUT", "DAMAGE", "THEFT", "EXPIRED", "RESERVE", "RELEASE_RESERVE").optional(),
+        dateFrom: joi_1.default.date().optional(),
+        dateTo: joi_1.default.date().min(joi_1.default.ref("dateFrom")).optional().messages({
+            "date.min": "End date must be after start date",
+        }),
+        createdBy: joi_1.default.string().uuid().optional().messages({
+            "string.uuid": "Created by must be a valid user UUID",
+        }),
+    }),
+    /**
+     * Bulk stock reservation schema
+     */
+    bulkStockReservation: joi_1.default.object({
+        items: joi_1.default.array()
+            .items(joi_1.default.object({
+            productId: joi_1.default.string().uuid().required(),
+            quantity: joi_1.default.number().integer().min(1).required(),
+        }))
+            .min(1)
+            .max(50)
+            .required()
+            .messages({
+            "array.min": "At least 1 item is required",
+            "array.max": "Maximum 50 items allowed per bulk reservation",
+        }),
+        orderId: joi_1.default.string().uuid().optional().messages({
+            "string.uuid": "Order ID must be a valid UUID",
+        }),
+        cartId: joi_1.default.string().uuid().optional().messages({
+            "string.uuid": "Cart ID must be a valid UUID",
+        }),
+        reason: joi_1.default.string().max(500).required().messages({
+            "string.max": "Reason must not exceed 500 characters",
+            "any.required": "Reason is required",
+        }),
+        expirationMinutes: joi_1.default.number().integer().min(1).max(1440).optional().default(15).messages({
+            "number.integer": "Expiration minutes must be a whole number",
+            "number.min": "Expiration must be at least 1 minute",
+            "number.max": "Expiration cannot exceed 24 hours (1440 minutes)",
+        }),
+    }),
+    /**
+     * Inventory export schema
+     */
+    inventoryExport: joi_1.default.object({
+        format: joi_1.default.string().valid("csv", "excel", "pdf").optional().default("csv").messages({
+            "any.only": "Format must be one of: csv, excel, pdf",
+        }),
+        includeVAT: joi_1.default.boolean().optional().default(true),
+        currency: joi_1.default.object({
+            format: joi_1.default.string().valid("naira", "kobo").optional().default("naira"),
+            includeSymbol: joi_1.default.boolean().optional().default(true),
+            decimalPlaces: joi_1.default.number().integer().min(0).max(4).optional().default(2),
+        }).optional(),
+        timezone: joi_1.default.string().valid("Africa/Lagos", "UTC").optional().default("Africa/Lagos"),
+        includeNigerianFields: joi_1.default.boolean().optional().default(true),
+        complianceLevel: joi_1.default.string().valid("basic", "full", "nafdac").optional().default("basic"),
+        filters: joi_1.default.object({
+            categoryId: joi_1.default.string().uuid().optional(),
+            lowStock: joi_1.default.boolean().optional(),
+            outOfStock: joi_1.default.boolean().optional(),
+            dateFrom: joi_1.default.date().optional(),
+            dateTo: joi_1.default.date().min(joi_1.default.ref("dateFrom")).optional(),
+        }).optional(),
+    }),
 };
 /**
  * User management schemas

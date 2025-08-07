@@ -19,10 +19,19 @@ var NotificationType;
     NotificationType["ACCOUNT_VERIFIED"] = "account_verified";
     NotificationType["PASSWORD_RESET"] = "password_reset";
     NotificationType["LOGIN_ALERT"] = "login_alert";
-    // Inventory Notifications (Admin)
+    // Inventory Notifications (Admin) - Enhanced Phase 2.2
     NotificationType["LOW_STOCK_ALERT"] = "low_stock_alert";
     NotificationType["OUT_OF_STOCK_ALERT"] = "out_of_stock_alert";
+    NotificationType["CRITICAL_STOCK_ALERT"] = "critical_stock_alert";
     NotificationType["RESTOCK_NEEDED"] = "restock_needed";
+    NotificationType["REORDER_SUGGESTION"] = "reorder_suggestion";
+    NotificationType["REORDER_APPROVED"] = "reorder_approved";
+    NotificationType["REORDER_COMPLETED"] = "reorder_completed";
+    NotificationType["SLOW_MOVING_ALERT"] = "slow_moving_alert";
+    NotificationType["FAST_MOVING_ALERT"] = "fast_moving_alert";
+    NotificationType["OVERSTOCK_ALERT"] = "overstock_alert";
+    NotificationType["NEGATIVE_STOCK_ALERT"] = "negative_stock_alert";
+    NotificationType["SUPPLIER_ALERT"] = "supplier_alert";
     // Marketing Notifications
     NotificationType["WELCOME_SERIES"] = "welcome_series";
     NotificationType["ABANDONED_CART"] = "abandoned_cart";

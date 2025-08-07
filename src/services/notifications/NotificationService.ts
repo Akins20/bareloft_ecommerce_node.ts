@@ -454,7 +454,16 @@ export class NotificationService extends BaseService {
       LOGIN_ALERT: "New Login to Your Account",
       LOW_STOCK_ALERT: "Low Stock Alert - #{productName}",
       OUT_OF_STOCK_ALERT: "Out of Stock Alert - #{productName}",
+      CRITICAL_STOCK_ALERT: "CRITICAL: #{productName} - Immediate Action Required",
       RESTOCK_NEEDED: "Restock Needed - #{productName}",
+      REORDER_SUGGESTION: "Reorder Suggested - #{productName}",
+      REORDER_APPROVED: "Reorder Approved - #{productName}",
+      REORDER_COMPLETED: "Reorder Completed - #{productName}",
+      SLOW_MOVING_ALERT: "Slow Moving Product - #{productName}",
+      FAST_MOVING_ALERT: "Fast Moving Product - #{productName}",
+      OVERSTOCK_ALERT: "Overstock Alert - #{productName}",
+      NEGATIVE_STOCK_ALERT: "URGENT: Negative Stock - #{productName}",
+      SUPPLIER_ALERT: "Supplier Alert - #{supplierName}",
       WELCOME_SERIES: "Welcome to Bareloft - Get Started!",
       ABANDONED_CART: "You Left Something in Your Cart",
       PRODUCT_BACK_IN_STOCK: "#{productName} is Back in Stock!",
@@ -505,9 +514,27 @@ export class NotificationService extends BaseService {
       PASSWORD_RESET: "Your password reset request has been processed.",
       LOGIN_ALERT: "New login detected on your account.",
       LOW_STOCK_ALERT:
-        "Low stock alert: #{productName} - Current stock: #{currentStock}",
-      OUT_OF_STOCK_ALERT: "Out of stock: #{productName}",
-      RESTOCK_NEEDED: "Restock needed for #{productName}",
+        "Low stock alert: #{productName} - Current stock: #{currentStock}, Threshold: #{threshold}",
+      OUT_OF_STOCK_ALERT: "Out of stock: #{productName} - Immediate restocking required",
+      CRITICAL_STOCK_ALERT: 
+        "CRITICAL: #{productName} has only #{currentStock} units left! This requires immediate attention.",
+      RESTOCK_NEEDED: "Restock needed for #{productName} - Current stock: #{currentStock}",
+      REORDER_SUGGESTION: 
+        "Reorder suggested for #{productName}: #{suggestedQuantity} units at estimated cost of ₦#{estimatedCost}",
+      REORDER_APPROVED: 
+        "Reorder for #{productName} has been approved. Quantity: #{quantity}, Supplier: #{supplierName}",
+      REORDER_COMPLETED: 
+        "Reorder completed for #{productName}. #{quantity} units added to stock.",
+      SLOW_MOVING_ALERT: 
+        "#{productName} is slow-moving - no sales in #{days} days. Current stock: #{currentStock}",
+      FAST_MOVING_ALERT: 
+        "#{productName} is moving fast! Consider increasing stock. Daily sales: #{dailySales} units",
+      OVERSTOCK_ALERT: 
+        "#{productName} may be overstocked. Current stock: #{currentStock}, days of stock: #{daysOfStock}",
+      NEGATIVE_STOCK_ALERT: 
+        "URGENT: #{productName} has negative stock (#{currentStock}). This requires immediate investigation.",
+      SUPPLIER_ALERT: 
+        "Supplier alert for #{supplierName}: #{alertMessage}",
       WELCOME_SERIES: "Welcome to Bareloft! Start shopping today.",
       ABANDONED_CART:
         "You have items waiting in your cart. Complete your purchase now!",
@@ -634,5 +661,197 @@ export class NotificationService extends BaseService {
       createdAt: notification.createdAt,
       updatedAt: notification.updatedAt,
     } as any;
+  }
+
+  // ==================== RETURN-SPECIFIC NOTIFICATION METHODS ====================
+
+  /**
+   * Send return request created notification
+   */
+  async sendReturnRequestCreatedNotification(
+    customerId: string,
+    returnRequest: any
+  ): Promise<void> {
+    try {
+      await this.sendNotification({
+        userId: customerId,
+        type: 'RETURN_REQUEST_CREATED' as any,
+        channel: 'EMAIL',
+        priority: 'normal',
+        variables: {
+          customerName: returnRequest.customer?.firstName || 'Valued Customer',
+          returnNumber: returnRequest.returnNumber,
+          orderNumber: returnRequest.order?.orderNumber,
+          totalAmount: `₦${(returnRequest.totalAmount / 100).toLocaleString()}`,
+          itemCount: returnRequest.requestedItems?.length || 0,
+          estimatedProcessingTime: '3-5 business days'
+        }
+      });
+
+      // Also send SMS for Nigerian customers
+      await this.sendNotification({
+        userId: customerId,
+        type: 'RETURN_REQUEST_CREATED' as any,
+        channel: 'SMS',
+        priority: 'normal',
+        variables: {
+          returnNumber: returnRequest.returnNumber,
+          estimatedProcessingTime: '3-5 business days'
+        }
+      });
+
+    } catch (error) {
+      this.handleError('Error sending return request created notification', error);
+    }
+  }
+
+  /**
+   * Send return request cancelled notification
+   */
+  async sendReturnRequestCancelledNotification(
+    customerId: string,
+    returnRequest: any
+  ): Promise<void> {
+    try {
+      await this.sendNotification({
+        userId: customerId,
+        type: 'RETURN_REQUEST_CANCELLED' as any,
+        channel: 'EMAIL',
+        priority: 'normal',
+        variables: {
+          customerName: returnRequest.customer?.firstName || 'Valued Customer',
+          returnNumber: returnRequest.returnNumber,
+          orderNumber: returnRequest.order?.orderNumber,
+          totalAmount: `₦${(returnRequest.totalAmount / 100).toLocaleString()}`
+        }
+      });
+
+    } catch (error) {
+      this.handleError('Error sending return request cancelled notification', error);
+    }
+  }
+
+  /**
+   * Send pickup scheduled notification
+   */
+  async sendPickupScheduledNotification(
+    customerId: string,
+    pickupDetails: {
+      confirmationNumber: string;
+      scheduledDate: Date;
+      timeSlot: string;
+      contactPhone: string;
+    }
+  ): Promise<void> {
+    try {
+      await this.sendNotification({
+        userId: customerId,
+        type: 'PICKUP_SCHEDULED' as any,
+        channel: 'SMS',
+        priority: 'high',
+        variables: {
+          confirmationNumber: pickupDetails.confirmationNumber,
+          scheduledDate: pickupDetails.scheduledDate.toLocaleDateString('en-NG'),
+          timeSlot: pickupDetails.timeSlot,
+          contactPhone: pickupDetails.contactPhone
+        }
+      });
+
+    } catch (error) {
+      this.handleError('Error sending pickup scheduled notification', error);
+    }
+  }
+
+  /**
+   * Send support ticket created notification
+   */
+  async sendSupportTicketCreatedNotification(
+    customerId: string,
+    ticket: any
+  ): Promise<void> {
+    try {
+      await this.sendNotification({
+        userId: customerId,
+        type: 'SUPPORT_TICKET_CREATED' as any,
+        channel: 'EMAIL',
+        priority: 'normal',
+        variables: {
+          ticketNumber: ticket.ticketNumber,
+          subject: ticket.subject,
+          priority: ticket.priority,
+          expectedResponseTime: this.getExpectedResponseTime(ticket.priority)
+        }
+      });
+
+    } catch (error) {
+      this.handleError('Error sending support ticket created notification', error);
+    }
+  }
+
+  /**
+   * Send new customer message notification (to agent)
+   */
+  async sendNewCustomerMessageNotification(
+    agentId: string,
+    ticket: any,
+    message: string
+  ): Promise<void> {
+    try {
+      await this.sendNotification({
+        userId: agentId,
+        type: 'NEW_CUSTOMER_MESSAGE' as any,
+        channel: 'EMAIL',
+        priority: ticket.priority === 'urgent' ? 'high' : 'normal',
+        variables: {
+          ticketNumber: ticket.ticketNumber,
+          customerName: ticket.customer?.firstName || 'Customer',
+          messagePreview: message.substring(0, 100) + (message.length > 100 ? '...' : ''),
+          ticketUrl: `/admin/support/tickets/${ticket.id}`
+        }
+      });
+
+    } catch (error) {
+      this.handleError('Error sending new customer message notification', error);
+    }
+  }
+
+  /**
+   * Send ticket assignment notification (to agent)
+   */
+  async sendTicketAssignmentNotification(
+    agentId: string,
+    ticketId: string
+  ): Promise<void> {
+    try {
+      await this.sendNotification({
+        userId: agentId,
+        type: 'TICKET_ASSIGNED' as any,
+        channel: 'EMAIL',
+        priority: 'normal',
+        variables: {
+          ticketId,
+          ticketUrl: `/admin/support/tickets/${ticketId}`
+        }
+      });
+
+    } catch (error) {
+      this.handleError('Error sending ticket assignment notification', error);
+    }
+  }
+
+  // ==================== HELPER METHODS ====================
+
+  /**
+   * Get expected response time based on ticket priority
+   */
+  private getExpectedResponseTime(priority: string): string {
+    const responseTimes = {
+      urgent: '2 hours',
+      high: '4 hours',
+      medium: '24 hours',
+      low: '48 hours'
+    };
+
+    return responseTimes[priority as keyof typeof responseTimes] || '24 hours';
   }
 }

@@ -1,8 +1,9 @@
 // src/controllers/index.ts
 // Central barrel export for all controllers
 
-// Base Controller
+// Base Controllers
 export { BaseController } from "./BaseController";
+export { BaseAdminController } from "./BaseAdminController";
 
 // Authentication Controllers
 export { AuthController } from "./auth/AuthController";
@@ -28,6 +29,7 @@ export { UploadController } from "./upload/UploadController";
 
 // Re-export for convenience
 export * from "./BaseController";
+export * from "./BaseAdminController";
 export * from "./auth/AuthController";
 export * from "./auth/OTPController";
 export * from "./products/ProductController";

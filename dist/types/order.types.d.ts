@@ -208,4 +208,219 @@ export interface OrderAnalytics {
         percentage: number;
     }[];
 }
+export declare enum BulkOperationType {
+    STATUS_UPDATE = "status_update",
+    ASSIGN_STAFF = "assign_staff",
+    CANCEL_ORDERS = "cancel_orders",
+    PROCESS_REFUNDS = "process_refunds",
+    SET_PRIORITY = "set_priority",
+    EXPORT_DATA = "export_data",
+    GENERATE_LABELS = "generate_labels",
+    SEND_NOTIFICATIONS = "send_notifications",
+    IMPORT_DATA = "import_data"
+}
+export declare enum BulkJobStatus {
+    PENDING = "pending",
+    PROCESSING = "processing",
+    COMPLETED = "completed",
+    FAILED = "failed",
+    CANCELLED = "cancelled",
+    PARTIALLY_COMPLETED = "partially_completed"
+}
+export declare enum OrderPriority {
+    HIGH = "high",
+    NORMAL = "normal",
+    LOW = "low"
+}
+export interface BulkOrderStatusUpdateRequest {
+    orderIds: string[];
+    newStatus: OrderStatus;
+    notes?: string;
+    notifyCustomers?: boolean;
+    processInBatches?: boolean;
+    batchSize?: number;
+}
+export interface BulkOrderAssignRequest {
+    orderIds: string[];
+    staffId: string;
+    staffName?: string;
+    notes?: string;
+    assignmentType?: 'fulfillment' | 'customer_service' | 'quality_check';
+}
+export interface BulkOrderCancelRequest {
+    orderIds: string[];
+    reason: string;
+    processRefunds?: boolean;
+    notifyCustomers?: boolean;
+    refundPercentage?: number;
+}
+export interface BulkRefundRequest {
+    orderIds: string[];
+    reason: string;
+    refundType?: 'full' | 'partial';
+    customAmounts?: {
+        [orderId: string]: number;
+    };
+    refundMethod?: 'original' | 'wallet' | 'bank_transfer';
+    notifyCustomers?: boolean;
+}
+export interface BulkPriorityUpdateRequest {
+    orderIds: string[];
+    priority: OrderPriority;
+    reason?: string;
+    autoReorder?: boolean;
+}
+export interface BulkNotificationRequest {
+    orderIds: string[];
+    notificationType: 'status_update' | 'shipping_delay' | 'ready_for_pickup' | 'custom';
+    customMessage?: string;
+    channels: ('email' | 'sms' | 'push')[];
+    scheduleTime?: Date;
+}
+export interface BulkExportRequest {
+    orderIds?: string[];
+    filters?: {
+        status?: OrderStatus[];
+        paymentStatus?: PaymentStatus[];
+        dateFrom?: Date;
+        dateTo?: Date;
+        state?: string[];
+        minAmount?: number;
+        maxAmount?: number;
+    };
+    format: 'csv' | 'xlsx' | 'pdf';
+    includeCustomerData?: boolean;
+    includePaymentData?: boolean;
+    includeItemDetails?: boolean;
+    groupBy?: 'status' | 'state' | 'date' | 'none';
+}
+export interface BulkImportRequest {
+    data: BulkImportRow[];
+    validateOnly?: boolean;
+    skipInvalidRows?: boolean;
+    notifyOnCompletion?: boolean;
+}
+export interface BulkImportRow {
+    orderNumber?: string;
+    orderId?: string;
+    newStatus?: string;
+    trackingNumber?: string;
+    notes?: string;
+    priority?: string;
+    assignedStaff?: string;
+    estimatedDelivery?: string;
+    customData?: {
+        [key: string]: any;
+    };
+}
+export interface BulkJob {
+    id: string;
+    type: BulkOperationType;
+    status: BulkJobStatus;
+    title: string;
+    description?: string;
+    requestData: any;
+    totalItems: number;
+    processedItems: number;
+    successfulItems: number;
+    failedItems: number;
+    progress: number;
+    results?: BulkJobResult[];
+    errors?: BulkJobError[];
+    estimatedCompletion?: Date;
+    startedAt?: Date;
+    completedAt?: Date;
+    createdBy: string;
+    createdByName?: string;
+    createdAt: Date;
+    updatedAt: Date;
+    processingRegion?: 'lagos' | 'abuja' | 'kano' | 'port_harcourt' | 'national';
+    businessHoursOnly?: boolean;
+    respectHolidays?: boolean;
+}
+export interface BulkJobResult {
+    id: string;
+    orderId: string;
+    orderNumber?: string;
+    success: boolean;
+    message?: string;
+    data?: any;
+    processedAt: Date;
+}
+export interface BulkJobError {
+    id: string;
+    orderId?: string;
+    orderNumber?: string;
+    error: string;
+    errorCode?: string;
+    retryable: boolean;
+    occurredAt: Date;
+}
+export interface BulkJobProgress {
+    jobId: string;
+    status: BulkJobStatus;
+    progress: number;
+    totalItems: number;
+    processedItems: number;
+    successfulItems: number;
+    failedItems: number;
+    estimatedCompletion?: Date;
+    currentOperation?: string;
+    lastUpdate: Date;
+}
+export interface BulkProcessingSummary {
+    totalJobs: number;
+    activeJobs: number;
+    completedJobs: number;
+    failedJobs: number;
+    totalOrdersProcessed: number;
+    averageProcessingTime: number;
+    successRate: number;
+    lastJobCompletion?: Date;
+    queueSize: number;
+    systemLoad: 'low' | 'medium' | 'high';
+}
+export interface SmartBatchConfig {
+    maxBatchSize: number;
+    priorityBatching: boolean;
+    locationBasedBatching: boolean;
+    timeBasedBatching: boolean;
+    resourceAwareBatching: boolean;
+    nigerianBusinessHours: {
+        enabled: boolean;
+        timezone: string;
+        weekdays: {
+            start: string;
+            end: string;
+        };
+        saturday: {
+            start: string;
+            end: string;
+        };
+        holidays: Date[];
+    };
+}
+export interface BulkOperationMetrics {
+    operationType: BulkOperationType;
+    totalOperations: number;
+    successRate: number;
+    averageProcessingTime: number;
+    averageBatchSize: number;
+    peakProcessingHours: string[];
+    commonErrors: {
+        error: string;
+        frequency: number;
+        impact: 'low' | 'medium' | 'high';
+    }[];
+    performanceByState: {
+        state: string;
+        successRate: number;
+        averageTime: number;
+    }[];
+    resourceUtilization: {
+        cpuUsage: number;
+        memoryUsage: number;
+        queueLength: number;
+    };
+}
 //# sourceMappingURL=order.types.d.ts.map

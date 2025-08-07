@@ -33,6 +33,7 @@ const reviews_1 = __importDefault(require("./reviews"));
 const wishlist_1 = __importDefault(require("./wishlist"));
 const search_1 = __importDefault(require("./search"));
 const upload_1 = __importDefault(require("./upload"));
+const returns_1 = __importDefault(require("./returns"));
 const router = (0, express_1.Router)();
 /**
  * V1 API Information
@@ -57,6 +58,7 @@ router.get("/", (req, res) => {
                 wishlist: "/api/v1/wishlist",
                 search: "/api/v1/search",
                 upload: "/api/v1/upload",
+                returns: "/api/v1/returns",
             },
             features: [
                 "OTP-based authentication",
@@ -91,6 +93,8 @@ router.use("/addresses", addresses_1.default);
 router.use("/wishlist", wishlist_1.default);
 // Utility routes
 router.use("/upload", upload_1.default);
+// Return management routes
+router.use("/returns", returns_1.default);
 exports.default = router;
 /**
  * Route Documentation - Version 1 API

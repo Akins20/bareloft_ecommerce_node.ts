@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.StockAlert = exports.InventoryStatus = exports.InventoryMovementType = void 0;
+exports.ReorderStatus = exports.AlertSeverity = exports.StockAlert = exports.InventoryStatus = exports.InventoryMovementType = void 0;
 var InventoryMovementType;
 (function (InventoryMovementType) {
     // Inbound
@@ -41,5 +41,28 @@ var StockAlert;
     StockAlert["OVERSTOCK"] = "OVERSTOCK";
     StockAlert["NEGATIVE_STOCK"] = "NEGATIVE_STOCK";
     StockAlert["RESERVATION_EXPIRED"] = "RESERVATION_EXPIRED";
+    StockAlert["REORDER_NEEDED"] = "REORDER_NEEDED";
+    StockAlert["CRITICAL_STOCK"] = "CRITICAL_STOCK";
+    StockAlert["SLOW_MOVING"] = "SLOW_MOVING";
+    StockAlert["FAST_MOVING"] = "FAST_MOVING";
 })(StockAlert || (exports.StockAlert = StockAlert = {}));
+var AlertSeverity;
+(function (AlertSeverity) {
+    AlertSeverity["INFO"] = "info";
+    AlertSeverity["LOW"] = "low";
+    AlertSeverity["MEDIUM"] = "medium";
+    AlertSeverity["HIGH"] = "high";
+    AlertSeverity["CRITICAL"] = "critical";
+    AlertSeverity["URGENT"] = "urgent";
+})(AlertSeverity || (exports.AlertSeverity = AlertSeverity = {}));
+var ReorderStatus;
+(function (ReorderStatus) {
+    ReorderStatus["SUGGESTED"] = "suggested";
+    ReorderStatus["PENDING_APPROVAL"] = "pending_approval";
+    ReorderStatus["APPROVED"] = "approved";
+    ReorderStatus["ORDER_PLACED"] = "order_placed";
+    ReorderStatus["COMPLETED"] = "completed";
+    ReorderStatus["CANCELLED"] = "cancelled";
+    ReorderStatus["REJECTED"] = "rejected";
+})(ReorderStatus || (exports.ReorderStatus = ReorderStatus = {}));
 //# sourceMappingURL=inventory.types.js.map

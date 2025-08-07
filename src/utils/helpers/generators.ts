@@ -363,6 +363,81 @@ export class IDGenerators {
     const checkDigit = (10 - (sum % 10)) % 10;
     return checkDigit === parseInt(barcode[12] || "0");
   }
+
+  // Support System Generators
+
+  /**
+   * Generate unique ticket number
+   * Format: TKT-YYYYMMDD-XXXXX
+   */
+  static generateTicketNumber(): string {
+    const date = new Date();
+    const dateString = date.toISOString().slice(0, 10).replace(/-/g, '');
+    const randomPart = crypto.randomBytes(3).toString('hex').toUpperCase();
+    return `TKT-${dateString}-${randomPart}`;
+  }
+
+  /**
+   * Generate unique agent number based on department
+   * Format: [DEPT_CODE]-XXXXX
+   */
+  static generateAgentNumber(department: string): string {
+    const deptCodes: Record<string, string> = {
+      'GENERAL_SUPPORT': 'GS',
+      'TECHNICAL_SUPPORT': 'TS',
+      'BILLING_PAYMENTS': 'BP',
+      'RETURNS_REFUNDS': 'RR',
+      'ORDER_FULFILLMENT': 'OF',
+      'PRODUCT_SPECIALIST': 'PS',
+      'ESCALATION_TEAM': 'ET',
+      'MANAGEMENT': 'MG',
+    };
+
+    const deptCode = deptCodes[department] || 'GS';
+    const randomPart = crypto.randomBytes(3).toString('hex').toUpperCase();
+    return `${deptCode}-${randomPart}`;
+  }
+
+  /**
+   * Generate return request number
+   * Format: RET-YYYYMMDD-XXXXX
+   */
+  static generateReturnNumber(): string {
+    const date = new Date();
+    const dateString = date.toISOString().slice(0, 10).replace(/-/g, '');
+    const randomPart = crypto.randomBytes(3).toString('hex').toUpperCase();
+    return `RET-${dateString}-${randomPart}`;
+  }
+
+  /**
+   * Generate refund number
+   * Format: REF-YYYYMMDD-XXXXX
+   */
+  static generateRefundNumber(): string {
+    const date = new Date();
+    const dateString = date.toISOString().slice(0, 10).replace(/-/g, '');
+    const randomPart = crypto.randomBytes(3).toString('hex').toUpperCase();
+    return `REF-${dateString}-${randomPart}`;
+  }
+
+  /**
+   * Generate Nigerian-specific transaction reference
+   */
+  static generateNigerianTransactionRef(): string {
+    const timestamp = Date.now().toString();
+    const random = crypto.randomBytes(3).toString('hex').toUpperCase();
+    return `NG${timestamp}${random}`;
+  }
+
+  /**
+   * Generate knowledge base article ID
+   * Format: KB-CATEGORY-XXXXX
+   */
+  static generateKnowledgeBaseId(category: string): string {
+    const categoryCode = category.substring(0, 3).toUpperCase();
+    const randomPart = crypto.randomBytes(3).toString('hex').toUpperCase();
+    return `KB-${categoryCode}-${randomPart}`;
+  }
 }
 
 export default IDGenerators;

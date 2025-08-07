@@ -26,8 +26,8 @@ import userRoutes from "./v1/users";
 import addressRoutes from "./v1/addresses";
 import wishlistRoutes from "./v1/wishlist";
 
-// Admin and webhook routes don't exist yet, comment out
-// import adminRoutes from "./admin";
+// Import admin and webhook routes
+import adminRoutes from "./admin";
 // import webhookRoutes from "./webhooks";
 
 const router = Router();
@@ -189,8 +189,11 @@ router.use("/v1/upload", uploadRoutes);
 
 // ==================== ADMIN ROUTES ====================
 
-// Comment out until admin routes are implemented
-// router.use("/admin", adminRoutes);
+/**
+ * Admin routes with enhanced security and role-based access control
+ * All admin routes require authentication and admin role authorization
+ */
+router.use("/admin", adminRoutes);
 
 // ==================== WEBHOOK ROUTES ====================
 

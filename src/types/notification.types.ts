@@ -18,10 +18,19 @@ export enum NotificationType {
   PASSWORD_RESET = "password_reset",
   LOGIN_ALERT = "login_alert",
 
-  // Inventory Notifications (Admin)
+  // Inventory Notifications (Admin) - Enhanced Phase 2.2
   LOW_STOCK_ALERT = "low_stock_alert",
   OUT_OF_STOCK_ALERT = "out_of_stock_alert",
+  CRITICAL_STOCK_ALERT = "critical_stock_alert",
   RESTOCK_NEEDED = "restock_needed",
+  REORDER_SUGGESTION = "reorder_suggestion",
+  REORDER_APPROVED = "reorder_approved",
+  REORDER_COMPLETED = "reorder_completed",
+  SLOW_MOVING_ALERT = "slow_moving_alert",
+  FAST_MOVING_ALERT = "fast_moving_alert",
+  OVERSTOCK_ALERT = "overstock_alert",
+  NEGATIVE_STOCK_ALERT = "negative_stock_alert",
+  SUPPLIER_ALERT = "supplier_alert",
 
   // Marketing Notifications
   WELCOME_SERIES = "welcome_series",

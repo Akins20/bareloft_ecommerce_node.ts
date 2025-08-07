@@ -362,7 +362,7 @@ class BaseRepository {
      * Get the Prisma model for this repository
      */
     getModel() {
-        const modelKey = this.modelName.toLowerCase();
+        const modelKey = this.modelName;
         const model = this.prisma[modelKey];
         if (!model) {
             throw new types_1.AppError(`Model '${this.modelName}' not found in Prisma client`, types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);

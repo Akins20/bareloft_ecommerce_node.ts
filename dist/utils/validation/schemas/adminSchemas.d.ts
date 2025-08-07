@@ -22,6 +22,26 @@ export declare const inventorySchemas: {
      * Low stock report query schema
      */
     lowStockQuery: Joi.ObjectSchema<any>;
+    /**
+     * Stock reservation schema
+     */
+    stockReservation: Joi.ObjectSchema<any>;
+    /**
+     * Release stock reservation schema
+     */
+    releaseReservation: Joi.ObjectSchema<any>;
+    /**
+     * Inventory movement query schema
+     */
+    inventoryMovementQuery: Joi.ObjectSchema<any>;
+    /**
+     * Bulk stock reservation schema
+     */
+    bulkStockReservation: Joi.ObjectSchema<any>;
+    /**
+     * Inventory export schema
+     */
+    inventoryExport: Joi.ObjectSchema<any>;
 };
 /**
  * User management schemas
@@ -109,6 +129,26 @@ declare const _default: {
          * Low stock report query schema
          */
         lowStockQuery: Joi.ObjectSchema<any>;
+        /**
+         * Stock reservation schema
+         */
+        stockReservation: Joi.ObjectSchema<any>;
+        /**
+         * Release stock reservation schema
+         */
+        releaseReservation: Joi.ObjectSchema<any>;
+        /**
+         * Inventory movement query schema
+         */
+        inventoryMovementQuery: Joi.ObjectSchema<any>;
+        /**
+         * Bulk stock reservation schema
+         */
+        bulkStockReservation: Joi.ObjectSchema<any>;
+        /**
+         * Inventory export schema
+         */
+        inventoryExport: Joi.ObjectSchema<any>;
     };
     userManagementSchemas: {
         /**

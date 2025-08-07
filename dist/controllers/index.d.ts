@@ -1,4 +1,5 @@
 export { BaseController } from "./BaseController";
+export { BaseAdminController } from "./BaseAdminController";
 export { AuthController } from "./auth/AuthController";
 export { OTPController } from "./auth/OTPController";
 export { ProductController } from "./products/ProductController";
@@ -12,6 +13,7 @@ export { AddressController } from "./users/AddressController";
 export { WishlistController } from "./users/WishlistController";
 export { UploadController } from "./upload/UploadController";
 export * from "./BaseController";
+export * from "./BaseAdminController";
 export * from "./auth/AuthController";
 export * from "./auth/OTPController";
 export * from "./products/ProductController";

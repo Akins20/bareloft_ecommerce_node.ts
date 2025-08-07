@@ -39,7 +39,7 @@ import uploadRoutes from "@/routes/v1/upload";
 import paymentRoutes from "@/routes/v1/payments";
 
 // Admin routes
-// import adminRoutes from "@/routes/admin";
+import adminRoutes from "@/routes/admin";
 
 // Webhook routes
 // import webhookRoutes from "@/routes/webhooks";
@@ -225,7 +225,7 @@ class App {
     this.app.use(`${apiV1}/upload`, authenticate, uploadRoutes);
 
     // Admin routes (admin authentication required)
-    // this.app.use(`${apiV1}/admin`, adminRoutes);
+    this.app.use("/api/admin", adminRoutes);
 
     // 404 handler for undefined routes
     this.app.use("*", (req: Request, res: Response) => {

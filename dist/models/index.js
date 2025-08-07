@@ -35,11 +35,15 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ModelNames = exports.AllSchemas = exports.AllModels = exports.CommunicationModels = exports.PaymentModels = exports.AuthModels = exports.InventoryModels = exports.ShoppingModels = exports.ProductModels = exports.NotificationSchema = exports.NotificationModel = exports.CouponSchema = exports.CouponModel = exports.OrderTimelineEventSchema = exports.OrderTimelineEventModel = exports.StockReservationSchema = exports.StockReservationModel = exports.PaymentTransactionSchema = exports.PaymentTransactionModel = exports.SessionSchema = exports.SessionModel = exports.OTPCodeSchema = exports.OTPCodeModel = exports.WishlistItemSchema = exports.WishlistItemModel = exports.ProductReviewSchema = exports.ProductReviewModel = exports.ProductImageSchema = exports.ProductImageModel = exports.InventoryMovementSchema = exports.InventoryMovementModel = exports.InventorySchema = exports.InventoryModel = exports.OrderItemSchema = exports.OrderItemModel = exports.OrderSchema = exports.OrderModel = exports.CartItemSchema = exports.CartItemModel = exports.CartSchema = exports.CartModel = exports.CategorySchema = exports.CategoryModel = exports.ProductSchema = exports.ProductModel = exports.AddressSchema = exports.AddressModel = exports.UserSchema = exports.UserModel = void 0;
+exports.PaymentModels = exports.AuthModels = exports.InventoryModels = exports.ShoppingModels = exports.ProductModels = exports.ShippingZoneModel = exports.ShippingRateModel = exports.TrackingEventModel = exports.ShipmentModel = exports.ShippingCarrierModel = exports.NotificationSchema = exports.NotificationModel = exports.CouponSchema = exports.CouponModel = exports.OrderTimelineEventSchema = exports.OrderTimelineEventModel = exports.StockReservationSchema = exports.StockReservationModel = exports.PaymentTransactionSchema = exports.PaymentTransactionModel = exports.SessionSchema = exports.SessionModel = exports.OTPCodeSchema = exports.OTPCodeModel = exports.WishlistItemSchema = exports.WishlistItemModel = exports.ProductReviewSchema = exports.ProductReviewModel = exports.ProductImageSchema = exports.ProductImageModel = exports.InventoryMovementSchema = exports.InventoryMovementModel = exports.InventorySchema = exports.InventoryModel = exports.OrderItemSchema = exports.OrderItemModel = exports.OrderSchema = exports.OrderModel = exports.CartItemSchema = exports.CartItemModel = exports.CartSchema = exports.CartModel = exports.CategorySchema = exports.CategoryModel = exports.ProductSchema = exports.ProductModel = exports.AddressSchema = exports.AddressModel = exports.UserSchema = exports.UserModel = void 0;
+exports.ModelNames = exports.AllSchemas = exports.AllModels = exports.ShippingModels = exports.CommunicationModels = void 0;
 const Address_1 = __importStar(require("./Address"));
 const Cart_1 = __importStar(require("./Cart"));
 const CartItem_1 = __importStar(require("./CartItem"));
@@ -60,6 +64,14 @@ const Session_1 = __importDefault(require("./Session"));
 const StockReservation_1 = __importDefault(require("./StockReservation"));
 const User_1 = __importStar(require("./User"));
 const WishlistItem_1 = __importDefault(require("./WishlistItem"));
+// Shipping Models
+const ShippingCarrier_1 = require("./ShippingCarrier");
+const Shipment_1 = require("./Shipment");
+const TrackingEvent_1 = require("./TrackingEvent");
+const ShippingRate_1 = require("./ShippingRate");
+const ShippingZone_1 = require("./ShippingZone");
+// Returns and Refunds Models
+__exportStar(require("./ReturnRequest"), exports);
 // Core User Models
 var User_2 = require("./User");
 Object.defineProperty(exports, "UserModel", { enumerable: true, get: function () { return __importDefault(User_2).default; } });
@@ -129,6 +141,17 @@ Object.defineProperty(exports, "CouponSchema", { enumerable: true, get: function
 var Notification_2 = require("./Notification");
 Object.defineProperty(exports, "NotificationModel", { enumerable: true, get: function () { return __importDefault(Notification_2).default; } });
 Object.defineProperty(exports, "NotificationSchema", { enumerable: true, get: function () { return Notification_2.NotificationSchema; } });
+// Shipping Models
+var ShippingCarrier_2 = require("./ShippingCarrier");
+Object.defineProperty(exports, "ShippingCarrierModel", { enumerable: true, get: function () { return ShippingCarrier_2.ShippingCarrier; } });
+var Shipment_2 = require("./Shipment");
+Object.defineProperty(exports, "ShipmentModel", { enumerable: true, get: function () { return Shipment_2.Shipment; } });
+var TrackingEvent_2 = require("./TrackingEvent");
+Object.defineProperty(exports, "TrackingEventModel", { enumerable: true, get: function () { return TrackingEvent_2.TrackingEvent; } });
+var ShippingRate_2 = require("./ShippingRate");
+Object.defineProperty(exports, "ShippingRateModel", { enumerable: true, get: function () { return ShippingRate_2.ShippingRate; } });
+var ShippingZone_2 = require("./ShippingZone");
+Object.defineProperty(exports, "ShippingZoneModel", { enumerable: true, get: function () { return ShippingZone_2.ShippingZone; } });
 // Grouped exports for convenience
 exports.ProductModels = {
     Product: Product_1.default,
@@ -162,6 +185,13 @@ exports.PaymentModels = {
 exports.CommunicationModels = {
     Notification: Notification_1.default,
 };
+exports.ShippingModels = {
+    ShippingCarrier: ShippingCarrier_1.ShippingCarrier,
+    Shipment: Shipment_1.Shipment,
+    TrackingEvent: TrackingEvent_1.TrackingEvent,
+    ShippingRate: ShippingRate_1.ShippingRate,
+    ShippingZone: ShippingZone_1.ShippingZone,
+};
 // All models in one object for dynamic access
 exports.AllModels = {
     // User Management
@@ -189,6 +219,12 @@ exports.AllModels = {
     PaymentTransaction: PaymentTransaction_1.default,
     Coupon: Coupon_1.default,
     Notification: Notification_1.default,
+    // Shipping Management
+    ShippingCarrier: ShippingCarrier_1.ShippingCarrier,
+    Shipment: Shipment_1.Shipment,
+    TrackingEvent: TrackingEvent_1.TrackingEvent,
+    ShippingRate: ShippingRate_1.ShippingRate,
+    ShippingZone: ShippingZone_1.ShippingZone,
 };
 // Schema definitions for documentation/migration purposes
 exports.AllSchemas = {

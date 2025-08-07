@@ -129,6 +129,161 @@ export const inventorySchemas = {
 
     includeOutOfStock: Joi.boolean().optional().default(true),
   }),
+
+  /**
+   * Stock reservation schema
+   */
+  stockReservation: Joi.object({
+    productId: Joi.string().uuid().required().messages({
+      "string.uuid": "Product ID must be a valid UUID",
+      "any.required": "Product ID is required",
+    }),
+
+    quantity: Joi.number().integer().min(1).required().messages({
+      "number.integer": "Quantity must be a whole number",
+      "number.min": "Quantity must be at least 1",
+      "any.required": "Quantity is required",
+    }),
+
+    orderId: Joi.string().uuid().optional().messages({
+      "string.uuid": "Order ID must be a valid UUID",
+    }),
+
+    cartId: Joi.string().uuid().optional().messages({
+      "string.uuid": "Cart ID must be a valid UUID",
+    }),
+
+    reason: Joi.string().max(500).required().messages({
+      "string.max": "Reason must not exceed 500 characters",
+      "any.required": "Reason is required",
+    }),
+
+    expirationMinutes: Joi.number().integer().min(1).max(1440).optional().default(15).messages({
+      "number.integer": "Expiration minutes must be a whole number",
+      "number.min": "Expiration must be at least 1 minute",
+      "number.max": "Expiration cannot exceed 24 hours (1440 minutes)",
+    }),
+  }),
+
+  /**
+   * Release stock reservation schema
+   */
+  releaseReservation: Joi.object({
+    reservationId: Joi.string().uuid().optional().messages({
+      "string.uuid": "Reservation ID must be a valid UUID",
+    }),
+
+    orderId: Joi.string().uuid().optional().messages({
+      "string.uuid": "Order ID must be a valid UUID",
+    }),
+
+    cartId: Joi.string().uuid().optional().messages({
+      "string.uuid": "Cart ID must be a valid UUID",
+    }),
+
+    reason: Joi.string().max(500).optional().allow("").messages({
+      "string.max": "Reason must not exceed 500 characters",
+    }),
+  }).or('reservationId', 'orderId', 'cartId').messages({
+    "object.missing": "At least one of reservationId, orderId, or cartId must be provided",
+  }),
+
+  /**
+   * Inventory movement query schema
+   */
+  inventoryMovementQuery: Joi.object({
+    page: Joi.number().integer().min(1).optional().default(1),
+    limit: Joi.number().integer().min(1).max(100).optional().default(50),
+    
+    productId: Joi.string().uuid().optional().messages({
+      "string.uuid": "Product ID must be a valid UUID",
+    }),
+
+    type: Joi.string().valid(
+      "IN", "OUT", "ADJUSTMENT", "SALE", "RESTOCK", "RETURN", 
+      "TRANSFER_IN", "TRANSFER_OUT", "DAMAGE", "THEFT", "EXPIRED", 
+      "RESERVE", "RELEASE_RESERVE"
+    ).optional(),
+
+    dateFrom: Joi.date().optional(),
+    dateTo: Joi.date().min(Joi.ref("dateFrom")).optional().messages({
+      "date.min": "End date must be after start date",
+    }),
+
+    createdBy: Joi.string().uuid().optional().messages({
+      "string.uuid": "Created by must be a valid user UUID",
+    }),
+  }),
+
+  /**
+   * Bulk stock reservation schema
+   */
+  bulkStockReservation: Joi.object({
+    items: Joi.array()
+      .items(
+        Joi.object({
+          productId: Joi.string().uuid().required(),
+          quantity: Joi.number().integer().min(1).required(),
+        })
+      )
+      .min(1)
+      .max(50)
+      .required()
+      .messages({
+        "array.min": "At least 1 item is required",
+        "array.max": "Maximum 50 items allowed per bulk reservation",
+      }),
+
+    orderId: Joi.string().uuid().optional().messages({
+      "string.uuid": "Order ID must be a valid UUID",
+    }),
+
+    cartId: Joi.string().uuid().optional().messages({
+      "string.uuid": "Cart ID must be a valid UUID",
+    }),
+
+    reason: Joi.string().max(500).required().messages({
+      "string.max": "Reason must not exceed 500 characters",
+      "any.required": "Reason is required",
+    }),
+
+    expirationMinutes: Joi.number().integer().min(1).max(1440).optional().default(15).messages({
+      "number.integer": "Expiration minutes must be a whole number",
+      "number.min": "Expiration must be at least 1 minute",
+      "number.max": "Expiration cannot exceed 24 hours (1440 minutes)",
+    }),
+  }),
+
+  /**
+   * Inventory export schema
+   */
+  inventoryExport: Joi.object({
+    format: Joi.string().valid("csv", "excel", "pdf").optional().default("csv").messages({
+      "any.only": "Format must be one of: csv, excel, pdf",
+    }),
+
+    includeVAT: Joi.boolean().optional().default(true),
+
+    currency: Joi.object({
+      format: Joi.string().valid("naira", "kobo").optional().default("naira"),
+      includeSymbol: Joi.boolean().optional().default(true),
+      decimalPlaces: Joi.number().integer().min(0).max(4).optional().default(2),
+    }).optional(),
+
+    timezone: Joi.string().valid("Africa/Lagos", "UTC").optional().default("Africa/Lagos"),
+
+    includeNigerianFields: Joi.boolean().optional().default(true),
+
+    complianceLevel: Joi.string().valid("basic", "full", "nafdac").optional().default("basic"),
+
+    filters: Joi.object({
+      categoryId: Joi.string().uuid().optional(),
+      lowStock: Joi.boolean().optional(),
+      outOfStock: Joi.boolean().optional(),
+      dateFrom: Joi.date().optional(),
+      dateTo: Joi.date().min(Joi.ref("dateFrom")).optional(),
+    }).optional(),
+  }),
 };
 
 /**

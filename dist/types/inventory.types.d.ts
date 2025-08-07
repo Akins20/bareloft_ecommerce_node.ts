@@ -30,7 +30,28 @@ export declare enum StockAlert {
     OUT_OF_STOCK = "OUT_OF_STOCK",
     OVERSTOCK = "OVERSTOCK",
     NEGATIVE_STOCK = "NEGATIVE_STOCK",
-    RESERVATION_EXPIRED = "RESERVATION_EXPIRED"
+    RESERVATION_EXPIRED = "RESERVATION_EXPIRED",
+    REORDER_NEEDED = "REORDER_NEEDED",
+    CRITICAL_STOCK = "CRITICAL_STOCK",
+    SLOW_MOVING = "SLOW_MOVING",
+    FAST_MOVING = "FAST_MOVING"
+}
+export declare enum AlertSeverity {
+    INFO = "info",
+    LOW = "low",
+    MEDIUM = "medium",
+    HIGH = "high",
+    CRITICAL = "critical",
+    URGENT = "urgent"
+}
+export declare enum ReorderStatus {
+    SUGGESTED = "suggested",
+    PENDING_APPROVAL = "pending_approval",
+    APPROVED = "approved",
+    ORDER_PLACED = "order_placed",
+    COMPLETED = "completed",
+    CANCELLED = "cancelled",
+    REJECTED = "rejected"
 }
 export interface Inventory {
     id: string;
@@ -134,6 +155,93 @@ export interface InventoryAdjustmentRequest {
     notes?: string;
     unitCost?: number;
 }
+export interface CreateAlertConfigurationRequest {
+    name: string;
+    description?: string;
+    lowStockEnabled: boolean;
+    lowStockThreshold?: number;
+    criticalStockEnabled: boolean;
+    criticalStockThreshold?: number;
+    outOfStockEnabled: boolean;
+    reorderNeededEnabled: boolean;
+    slowMovingEnabled: boolean;
+    slowMovingDays?: number;
+    emailEnabled: boolean;
+    emailAddress?: string;
+    smsEnabled: boolean;
+    phoneNumber?: string;
+    pushEnabled: boolean;
+    respectBusinessHours?: boolean;
+    businessHoursStart?: string;
+    businessHoursEnd?: string;
+    businessDays?: string[];
+    timezone?: string;
+    maxAlertsPerHour?: number;
+    maxAlertsPerDay?: number;
+    categoryIds?: string[];
+    productIds?: string[];
+    minStockValue?: number;
+}
+export interface UpdateAlertRequest {
+    alertId: string;
+    action: "acknowledge" | "dismiss" | "read";
+    notes?: string;
+}
+export interface TestAlertRequest {
+    configurationId: string;
+    alertType: StockAlert;
+    productId?: string;
+}
+export interface CreateReorderSuggestionRequest {
+    productId: string;
+    quantity?: number;
+    reason?: string;
+    preferredSupplierId?: string;
+    notes?: string;
+    priority?: AlertSeverity;
+}
+export interface CreateReorderRequestRequest {
+    suggestionId?: string;
+    productId: string;
+    supplierId?: string;
+    quantity: number;
+    unitCost: number;
+    expectedDeliveryDate?: Date;
+    requiresImport?: boolean;
+    notes?: string;
+}
+export interface UpdateReorderRequestRequest {
+    action: "approve" | "reject" | "complete" | "cancel";
+    notes?: string;
+    actualDeliveryDate?: Date;
+    orderReference?: string;
+    supplierReference?: string;
+    trackingNumber?: string;
+}
+export interface CreateSupplierRequest {
+    name: string;
+    code?: string;
+    contactPerson?: string;
+    email?: string;
+    phone?: string;
+    whatsapp?: string;
+    address?: {
+        street: string;
+        city: string;
+        state: string;
+        country: string;
+        postalCode?: string;
+    };
+    isLocal: boolean;
+    businessType: "manufacturer" | "distributor" | "importer" | "wholesaler";
+    taxId?: string;
+    cacNumber?: string;
+    paymentTerms?: string;
+    currency?: string;
+    creditLimit?: number;
+    discountPercentage?: number;
+    averageLeadTimeDays: number;
+}
 export interface InventoryResponse {
     inventory: Inventory;
     movements: InventoryMovement[];
@@ -171,14 +279,173 @@ export interface InventoryListItem {
 export interface InventoryAlert {
     id: string;
     type: StockAlert;
-    severity: "low" | "medium" | "high" | "critical";
+    severity: AlertSeverity;
     productId: string;
     productName: string;
+    productSku?: string;
+    categoryName?: string;
     currentStock: number;
     threshold?: number;
+    reorderPoint?: number;
     message: string;
+    description?: string;
     isRead: boolean;
+    isAcknowledged: boolean;
+    acknowledgedBy?: string;
+    acknowledgedAt?: Date;
+    isDismissed: boolean;
+    dismissedBy?: string;
+    dismissedAt?: Date;
+    metadata?: Record<string, any>;
     createdAt: Date;
+    updatedAt: Date;
+}
+export interface AlertConfiguration {
+    id: string;
+    userId?: string;
+    name: string;
+    description?: string;
+    lowStockEnabled: boolean;
+    lowStockThreshold?: number;
+    criticalStockEnabled: boolean;
+    criticalStockThreshold?: number;
+    outOfStockEnabled: boolean;
+    reorderNeededEnabled: boolean;
+    slowMovingEnabled: boolean;
+    slowMovingDays?: number;
+    emailEnabled: boolean;
+    emailAddress?: string;
+    smsEnabled: boolean;
+    phoneNumber?: string;
+    pushEnabled: boolean;
+    respectBusinessHours: boolean;
+    businessHoursStart?: string;
+    businessHoursEnd?: string;
+    businessDays?: string[];
+    timezone: string;
+    maxAlertsPerHour?: number;
+    maxAlertsPerDay?: number;
+    categoryIds?: string[];
+    productIds?: string[];
+    minStockValue?: number;
+    isActive: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+}
+export interface ReorderSuggestion {
+    id: string;
+    productId: string;
+    productName: string;
+    productSku?: string;
+    categoryName?: string;
+    currentStock: number;
+    reservedStock: number;
+    availableStock: number;
+    reorderPoint: number;
+    suggestedQuantity: number;
+    estimatedCost: number;
+    currency: string;
+    averageDailySales: number;
+    salesVelocity: number;
+    daysOfStockLeft: number;
+    leadTimeDays: number;
+    preferredSupplierId?: string;
+    supplierName?: string;
+    supplierContact?: string;
+    lastOrderDate?: Date;
+    lastOrderQuantity?: number;
+    lastOrderCost?: number;
+    importRequired: boolean;
+    customsClearanceDays?: number;
+    localSupplierAvailable: boolean;
+    businessDaysToReorder: number;
+    status: ReorderStatus;
+    priority: AlertSeverity;
+    reason: string;
+    notes?: string;
+    createdBy?: string;
+    approvedBy?: string;
+    approvedAt?: Date;
+    rejectedBy?: string;
+    rejectedAt?: Date;
+    rejectionReason?: string;
+    createdAt: Date;
+    updatedAt: Date;
+}
+export interface ReorderRequest {
+    id: string;
+    suggestionId?: string;
+    productId: string;
+    supplierId?: string;
+    quantity: number;
+    unitCost: number;
+    totalCost: number;
+    currency: string;
+    expectedDeliveryDate?: Date;
+    actualDeliveryDate?: Date;
+    deliveryAddress?: string;
+    requiresImport: boolean;
+    customsValue?: number;
+    customsDuty?: number;
+    localPurchaseOrder?: string;
+    supplierInvoice?: string;
+    status: ReorderStatus;
+    orderReference?: string;
+    supplierReference?: string;
+    trackingNumber?: string;
+    requestedBy: string;
+    approvedBy?: string;
+    approvedAt?: Date;
+    completedBy?: string;
+    completedAt?: Date;
+    notes?: string;
+    history?: ReorderHistoryEntry[];
+    createdAt: Date;
+    updatedAt: Date;
+}
+export interface ReorderHistoryEntry {
+    action: string;
+    performedBy: string;
+    performedAt: Date;
+    notes?: string;
+    previousStatus?: ReorderStatus;
+    newStatus?: ReorderStatus;
+}
+export interface Supplier {
+    id: string;
+    name: string;
+    code?: string;
+    contactPerson?: string;
+    email?: string;
+    phone?: string;
+    whatsapp?: string;
+    address?: {
+        street: string;
+        city: string;
+        state: string;
+        country: string;
+        postalCode?: string;
+    };
+    isLocal: boolean;
+    businessType: "manufacturer" | "distributor" | "importer" | "wholesaler";
+    taxId?: string;
+    cacNumber?: string;
+    rating?: number;
+    reliability?: number;
+    averageLeadTimeDays: number;
+    onTimeDeliveryRate?: number;
+    qualityRating?: number;
+    paymentTerms?: string;
+    currency: string;
+    creditLimit?: number;
+    discountPercentage?: number;
+    isActive: boolean;
+    isPreferred: boolean;
+    lastOrderDate?: Date;
+    totalOrders?: number;
+    totalValue?: number;
+    createdAt: Date;
+    updatedAt: Date;
 }
 export interface InventoryAnalytics {
     totalProducts: number;

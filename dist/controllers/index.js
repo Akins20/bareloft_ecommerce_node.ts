@@ -16,10 +16,12 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UploadController = exports.WishlistController = exports.AddressController = exports.UserController = exports.OrderController = exports.CartController = exports.SearchController = exports.ReviewController = exports.CategoryController = exports.ProductController = exports.OTPController = exports.AuthController = exports.BaseController = void 0;
-// Base Controller
+exports.UploadController = exports.WishlistController = exports.AddressController = exports.UserController = exports.OrderController = exports.CartController = exports.SearchController = exports.ReviewController = exports.CategoryController = exports.ProductController = exports.OTPController = exports.AuthController = exports.BaseAdminController = exports.BaseController = void 0;
+// Base Controllers
 var BaseController_1 = require("./BaseController");
 Object.defineProperty(exports, "BaseController", { enumerable: true, get: function () { return BaseController_1.BaseController; } });
+var BaseAdminController_1 = require("./BaseAdminController");
+Object.defineProperty(exports, "BaseAdminController", { enumerable: true, get: function () { return BaseAdminController_1.BaseAdminController; } });
 // Authentication Controllers
 var AuthController_1 = require("./auth/AuthController");
 Object.defineProperty(exports, "AuthController", { enumerable: true, get: function () { return AuthController_1.AuthController; } });
@@ -51,6 +53,7 @@ var UploadController_1 = require("./upload/UploadController");
 Object.defineProperty(exports, "UploadController", { enumerable: true, get: function () { return UploadController_1.UploadController; } });
 // Re-export for convenience
 __exportStar(require("./BaseController"), exports);
+__exportStar(require("./BaseAdminController"), exports);
 __exportStar(require("./auth/AuthController"), exports);
 __exportStar(require("./auth/OTPController"), exports);
 __exportStar(require("./products/ProductController"), exports);

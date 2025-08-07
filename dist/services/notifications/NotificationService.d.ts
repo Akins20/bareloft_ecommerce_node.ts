@@ -71,5 +71,38 @@ export declare class NotificationService extends BaseService {
     private getAnalyticsByChannel;
     private getAnalyticsByType;
     private transformNotification;
+    /**
+     * Send return request created notification
+     */
+    sendReturnRequestCreatedNotification(customerId: string, returnRequest: any): Promise<void>;
+    /**
+     * Send return request cancelled notification
+     */
+    sendReturnRequestCancelledNotification(customerId: string, returnRequest: any): Promise<void>;
+    /**
+     * Send pickup scheduled notification
+     */
+    sendPickupScheduledNotification(customerId: string, pickupDetails: {
+        confirmationNumber: string;
+        scheduledDate: Date;
+        timeSlot: string;
+        contactPhone: string;
+    }): Promise<void>;
+    /**
+     * Send support ticket created notification
+     */
+    sendSupportTicketCreatedNotification(customerId: string, ticket: any): Promise<void>;
+    /**
+     * Send new customer message notification (to agent)
+     */
+    sendNewCustomerMessageNotification(agentId: string, ticket: any, message: string): Promise<void>;
+    /**
+     * Send ticket assignment notification (to agent)
+     */
+    sendTicketAssignmentNotification(agentId: string, ticketId: string): Promise<void>;
+    /**
+     * Get expected response time based on ticket priority
+     */
+    private getExpectedResponseTime;
 }
 //# sourceMappingURL=NotificationService.d.ts.map

@@ -102,6 +102,35 @@ export declare class IDGenerators {
     static validateSKU(sku: string): boolean;
     static validateTrackingNumber(trackingNumber: string): boolean;
     static validateBarcode(barcode: string): boolean;
+    /**
+     * Generate unique ticket number
+     * Format: TKT-YYYYMMDD-XXXXX
+     */
+    static generateTicketNumber(): string;
+    /**
+     * Generate unique agent number based on department
+     * Format: [DEPT_CODE]-XXXXX
+     */
+    static generateAgentNumber(department: string): string;
+    /**
+     * Generate return request number
+     * Format: RET-YYYYMMDD-XXXXX
+     */
+    static generateReturnNumber(): string;
+    /**
+     * Generate refund number
+     * Format: REF-YYYYMMDD-XXXXX
+     */
+    static generateRefundNumber(): string;
+    /**
+     * Generate Nigerian-specific transaction reference
+     */
+    static generateNigerianTransactionRef(): string;
+    /**
+     * Generate knowledge base article ID
+     * Format: KB-CATEGORY-XXXXX
+     */
+    static generateKnowledgeBaseId(category: string): string;
 }
 export default IDGenerators;
 //# sourceMappingURL=generators.d.ts.map
