@@ -1,19 +1,49 @@
 import { BaseRepository } from './BaseRepository';
 import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { 
   Refund,
   RefundListQuery,
   RefundStatus,
   RefundMethod,
+} from '../types/return.types';
+import {
   AppError,
   HTTP_STATUS,
   ERROR_CODES,
   PaginationMeta 
 } from '../types';
 
-export class RefundRepository extends BaseRepository<Refund> {
+interface CreateRefundData {
+  refundNumber: string;
+  returnRequestId?: string;
+  orderId: string;
+  transactionId?: string;
+  customerId: string;
+  refundMethod: RefundMethod;
+  amount: number;
+  reason: string;
+  description?: string;
+  bankAccountDetails?: any;
+  processedBy?: string;
+  adminNotes?: string;
+  metadata?: Record<string, any>;
+}
+
+interface UpdateRefundData {
+  status?: RefundStatus;
+  providerRefundId?: string;
+  providerReference?: string;
+  processedAt?: Date;
+  completedAt?: Date;
+  failureReason?: string;
+  adminNotes?: string;
+  metadata?: Record<string, any>;
+}
+
+export class RefundRepository extends BaseRepository<Refund, CreateRefundData, UpdateRefundData> {
   constructor(prisma?: PrismaClient) {
-    super(prisma);
+    super(prisma || new PrismaClient(), 'refund');
   }
 
   /**

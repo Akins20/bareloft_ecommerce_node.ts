@@ -1,5 +1,20 @@
 import { Request, Response } from 'express';
-import { BaseAdminController } from './BaseAdminController';
+
+// Extend Request to include user property
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    phoneNumber: string;
+    email?: string;
+    firstName: string;
+    lastName: string;
+    role: 'CUSTOMER' | 'ADMIN' | 'SUPER_ADMIN';
+    isVerified: boolean;
+    sessionId?: string;
+  };
+}
+
+import { BaseAdminController } from '../BaseAdminController';
 import { ReturnsService } from '../../services/returns/ReturnsService';
 import { RefundsService } from '../../services/returns/RefundsService';
 import {
@@ -34,7 +49,7 @@ export class AdminReturnsController extends BaseAdminController {
    * GET /api/admin/returns
    * List all return requests with filtering and pagination
    */
-  async getReturnRequests(req: Request, res: Response): Promise<void> {
+  async getReturnRequests(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const query: ReturnListQuery = {
         page: Number(req.query.page) || 1,
@@ -45,7 +60,7 @@ export class AdminReturnsController extends BaseAdminController {
         startDate: req.query.startDate as string,
         endDate: req.query.endDate as string,
         search: req.query.search as string,
-        sortBy: req.query.sortBy as string,
+        sortBy: req.query.sortBy as 'createdAt' | 'status' | 'amount' | 'estimatedPickupDate',
         sortOrder: req.query.sortOrder as 'asc' | 'desc',
         state: req.query.state as string,
         priority: req.query.priority as 'high' | 'medium' | 'low',
@@ -54,17 +69,22 @@ export class AdminReturnsController extends BaseAdminController {
       const result = await this.returnsService.getReturnRequests(query);
 
       // Log admin activity
-      await this.logActivity(req, 'VIEW_RETURNS', {
-        filters: query,
-        resultCount: result.returns.length,
+      this.logAdminActivity(req, 'analytics_access', 'view_returns', {
+        description: 'Viewed return requests list with filters',
+        severity: 'low',
+        resourceType: 'returns',
+        metadata: {
+          filters: query,
+          resultCount: result.returns.length,
+        },
       });
 
-      res.json(createSuccessResponse(
-        'Return requests retrieved successfully',
-        result
-      ));
+      this.sendAdminSuccess(res, result, 'Return requests retrieved successfully', 200, {
+        activity: 'analytics_access',
+        includeMetrics: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error retrieving return requests');
+      this.handleError(error, req, res);
     }
   }
 
@@ -72,25 +92,31 @@ export class AdminReturnsController extends BaseAdminController {
    * GET /api/admin/returns/:returnId
    * Get detailed return request information
    */
-  async getReturnRequest(req: Request, res: Response): Promise<void> {
+  async getReturnRequest(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { returnId } = req.params;
 
       const returnRequest = await this.returnsService.getReturnRequest(returnId);
 
       // Log admin activity
-      await this.logActivity(req, 'VIEW_RETURN_DETAILS', {
-        returnId,
-        returnNumber: returnRequest.returnNumber,
-        customerId: returnRequest.customerId,
+      this.logAdminActivity(req, 'analytics_access', 'view_return_details', {
+        description: `Viewed return request details for ${returnId}`,
+        severity: 'low',
+        resourceType: 'return',
+        resourceId: returnId,
+        metadata: {
+          returnId,
+          returnNumber: returnRequest.returnNumber,
+          customerId: returnRequest.customerId,
+        },
       });
 
-      res.json(createSuccessResponse(
-        'Return request details retrieved successfully',
-        { returnRequest }
-      ));
+      this.sendAdminSuccess(res, { returnRequest }, 'Return request details retrieved successfully', 200, {
+        activity: 'analytics_access',
+        includeMetrics: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error retrieving return request');
+      this.handleError(error, req, res);
     }
   }
 
@@ -98,7 +124,7 @@ export class AdminReturnsController extends BaseAdminController {
    * PUT /api/admin/returns/:returnId/status
    * Update return request status
    */
-  async updateReturnStatus(req: Request, res: Response): Promise<void> {
+  async updateReturnStatus(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { returnId } = req.params;
       const { status, adminNotes, estimatedPickupDate, returnTrackingNumber } = req.body;
@@ -160,20 +186,26 @@ export class AdminReturnsController extends BaseAdminController {
       }
 
       // Log admin activity
-      await this.logActivity(req, 'UPDATE_RETURN_STATUS', {
-        returnId,
-        returnNumber: returnRequest.returnNumber,
-        oldStatus: returnRequest.status,
-        newStatus: status,
-        adminNotes,
+      this.logAdminActivity(req, 'order_management', 'update_return_status', {
+        description: `Updated return ${returnId} status from ${returnRequest.status} to ${status}`,
+        severity: 'medium',
+        resourceType: 'return',
+        resourceId: returnId,
+        metadata: {
+          returnId,
+          returnNumber: returnRequest.returnNumber,
+          oldStatus: returnRequest.status,
+          newStatus: status,
+          adminNotes,
+        },
       });
 
-      res.json(createSuccessResponse(
-        'Return status updated successfully',
-        updatedReturn
-      ));
+      this.sendAdminSuccess(res, updatedReturn, 'Return status updated successfully', 200, {
+        activity: 'order_management',
+        includeMetrics: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error updating return status');
+      this.handleError(error, req, res);
     }
   }
 
@@ -181,7 +213,7 @@ export class AdminReturnsController extends BaseAdminController {
    * POST /api/admin/returns/:returnId/approve
    * Approve return request
    */
-  async approveReturn(req: Request, res: Response): Promise<void> {
+  async approveReturn(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { returnId } = req.params;
       const {
@@ -211,19 +243,25 @@ export class AdminReturnsController extends BaseAdminController {
       );
 
       // Log admin activity
-      await this.logActivity(req, 'APPROVE_RETURN', {
-        returnId,
-        returnNumber: result.returnRequest.returnNumber,
-        approvalNotes,
-        estimatedPickupDate,
+      this.logAdminActivity(req, 'order_management', 'approve_return', {
+        description: `Approved return request ${returnId}`,
+        severity: 'high',
+        resourceType: 'return',
+        resourceId: returnId,
+        metadata: {
+          returnId,
+          returnNumber: result.returnRequest.returnNumber,
+          approvalNotes,
+          estimatedPickupDate,
+        },
       });
 
-      res.json(createSuccessResponse(
-        'Return request approved successfully',
-        result
-      ));
+      this.sendAdminSuccess(res, result, 'Return request approved successfully', 200, {
+        activity: 'order_management',
+        includeMetrics: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error approving return request');
+      this.handleError(error, req, res);
     }
   }
 
@@ -231,7 +269,7 @@ export class AdminReturnsController extends BaseAdminController {
    * POST /api/admin/returns/:returnId/reject
    * Reject return request
    */
-  async rejectReturn(req: Request, res: Response): Promise<void> {
+  async rejectReturn(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { returnId } = req.params;
       const { rejectionReason, detailedExplanation, alternativeOptions } = req.body;
@@ -259,19 +297,25 @@ export class AdminReturnsController extends BaseAdminController {
       );
 
       // Log admin activity
-      await this.logActivity(req, 'REJECT_RETURN', {
-        returnId,
-        returnNumber: result.returnRequest.returnNumber,
-        rejectionReason,
-        detailedExplanation,
+      this.logAdminActivity(req, 'order_management', 'reject_return', {
+        description: `Rejected return request ${returnId}`,
+        severity: 'high',
+        resourceType: 'return',
+        resourceId: returnId,
+        metadata: {
+          returnId,
+          returnNumber: result.returnRequest.returnNumber,
+          rejectionReason,
+          detailedExplanation,
+        },
       });
 
-      res.json(createSuccessResponse(
-        'Return request rejected',
-        result
-      ));
+      this.sendAdminSuccess(res, result, 'Return request rejected', 200, {
+        activity: 'order_management',
+        includeMetrics: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error rejecting return request');
+      this.handleError(error, req, res);
     }
   }
 
@@ -279,7 +323,7 @@ export class AdminReturnsController extends BaseAdminController {
    * POST /api/admin/returns/:returnId/inspect
    * Inspect returned items and update condition
    */
-  async inspectReturn(req: Request, res: Response): Promise<void> {
+  async inspectReturn(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { returnId } = req.params;
       const {
@@ -339,20 +383,26 @@ export class AdminReturnsController extends BaseAdminController {
       );
 
       // Log admin activity
-      await this.logActivity(req, 'INSPECT_RETURN', {
-        returnId,
-        returnNumber: result.returnRequest.returnNumber,
-        inspectedItems: items.length,
-        inspectorName,
-        recommendRefundAmount,
+      this.logAdminActivity(req, 'order_management', 'inspect_return', {
+        description: `Inspected returned items for return ${returnId}`,
+        severity: 'medium',
+        resourceType: 'return',
+        resourceId: returnId,
+        metadata: {
+          returnId,
+          returnNumber: result.returnRequest.returnNumber,
+          inspectedItems: items.length,
+          inspectorName,
+          recommendRefundAmount,
+        },
       });
 
-      res.json(createSuccessResponse(
-        'Return inspection completed successfully',
-        result
-      ));
+      this.sendAdminSuccess(res, result, 'Return inspection completed successfully', 200, {
+        activity: 'order_management',
+        includeMetrics: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error inspecting return');
+      this.handleError(error, req, res);
     }
   }
 
@@ -360,7 +410,7 @@ export class AdminReturnsController extends BaseAdminController {
    * POST /api/admin/returns/:returnId/complete
    * Complete return request processing
    */
-  async completeReturn(req: Request, res: Response): Promise<void> {
+  async completeReturn(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { returnId } = req.params;
       const { completionNotes } = req.body;
@@ -373,18 +423,24 @@ export class AdminReturnsController extends BaseAdminController {
       );
 
       // Log admin activity
-      await this.logActivity(req, 'COMPLETE_RETURN', {
-        returnId,
-        returnNumber: result.returnRequest.returnNumber,
-        completionNotes,
+      this.logAdminActivity(req, 'order_management', 'complete_return', {
+        description: `Completed return request ${returnId}`,
+        severity: 'medium',
+        resourceType: 'return',
+        resourceId: returnId,
+        metadata: {
+          returnId,
+          returnNumber: result.returnRequest.returnNumber,
+          completionNotes,
+        },
       });
 
-      res.json(createSuccessResponse(
-        'Return request completed successfully',
-        result
-      ));
+      this.sendAdminSuccess(res, result, 'Return request completed successfully', 200, {
+        activity: 'order_management',
+        includeMetrics: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error completing return request');
+      this.handleError(error, req, res);
     }
   }
 
@@ -392,7 +448,7 @@ export class AdminReturnsController extends BaseAdminController {
    * GET /api/admin/returns/analytics
    * Get returns analytics and insights
    */
-  async getReturnAnalytics(req: Request, res: Response): Promise<void> {
+  async getReturnAnalytics(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const {
         startDate,
@@ -407,17 +463,23 @@ export class AdminReturnsController extends BaseAdminController {
       });
 
       // Log admin activity
-      await this.logActivity(req, 'VIEW_RETURN_ANALYTICS', {
-        period: { startDate, endDate },
-        state,
+      this.logAdminActivity(req, 'analytics_access', 'view_return_analytics', {
+        description: 'Viewed return analytics',
+        severity: 'low',
+        resourceType: 'analytics',
+        metadata: {
+          period: { startDate, endDate },
+          state,
+        },
       });
 
-      res.json(createSuccessResponse(
-        'Return analytics retrieved successfully',
-        analytics
-      ));
+      this.sendAdminSuccess(res, analytics, 'Return analytics retrieved successfully', 200, {
+        activity: 'analytics_access',
+        includeMetrics: true,
+        includeCurrencyInfo: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error retrieving return analytics');
+      this.handleError(error, req, res);
     }
   }
 
@@ -425,7 +487,7 @@ export class AdminReturnsController extends BaseAdminController {
    * GET /api/admin/returns/dashboard
    * Get return management dashboard data
    */
-  async getReturnDashboard(req: Request, res: Response): Promise<void> {
+  async getReturnDashboard(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { period = '30' } = req.query;
       const days = parseInt(period as string, 10);
@@ -517,18 +579,24 @@ export class AdminReturnsController extends BaseAdminController {
       };
 
       // Log admin activity
-      await this.logActivity(req, 'VIEW_RETURN_DASHBOARD', {
-        period: days,
-        totalReturns,
-        pendingCount,
+      this.logAdminActivity(req, 'analytics_access', 'view_return_dashboard', {
+        description: `Viewed return dashboard for ${days} days`,
+        severity: 'low',
+        resourceType: 'dashboard',
+        metadata: {
+          period: days,
+          totalReturns,
+          pendingCount,
+        },
       });
 
-      res.json(createSuccessResponse(
-        'Return dashboard data retrieved successfully',
-        dashboardData
-      ));
+      this.sendAdminSuccess(res, dashboardData, 'Return dashboard data retrieved successfully', 200, {
+        activity: 'analytics_access',
+        includeMetrics: true,
+        includeCurrencyInfo: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error retrieving return dashboard');
+      this.handleError(error, req, res);
     }
   }
 
@@ -536,7 +604,7 @@ export class AdminReturnsController extends BaseAdminController {
    * POST /api/admin/returns/bulk-update
    * Bulk update return statuses
    */
-  async bulkUpdateReturns(req: Request, res: Response): Promise<void> {
+  async bulkUpdateReturns(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { returnIds, action, data } = req.body;
       const adminId = req.user?.id;
@@ -609,27 +677,32 @@ export class AdminReturnsController extends BaseAdminController {
       }
 
       // Log admin activity
-      await this.logActivity(req, 'BULK_UPDATE_RETURNS', {
-        action,
-        returnIds,
-        successCount: results.length,
-        failureCount: failures.length,
+      this.logAdminActivity(req, 'bulk_operations', 'bulk_update_returns', {
+        description: `Bulk ${action} on ${returnIds.length} returns`,
+        severity: 'high',
+        resourceType: 'returns',
+        metadata: {
+          action,
+          returnIds,
+          successCount: results.length,
+          failureCount: failures.length,
+        },
       });
 
-      res.json(createSuccessResponse(
-        `Bulk ${action} completed. ${results.length} successful, ${failures.length} failed.`,
-        {
-          successful: results,
-          failed: failures,
-          summary: {
-            total: returnIds.length,
-            successful: results.length,
-            failed: failures.length,
-          },
+      this.sendAdminSuccess(res, {
+        successful: results,
+        failed: failures,
+        summary: {
+          total: returnIds.length,
+          successful: results.length,
+          failed: failures.length,
         }
-      ));
+      }, `Bulk ${action} completed. ${results.length} successful, ${failures.length} failed.`, 200, {
+        activity: 'bulk_operations',
+        includeMetrics: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error performing bulk update');
+      this.handleError(error, req, res);
     }
   }
 
@@ -637,7 +710,7 @@ export class AdminReturnsController extends BaseAdminController {
    * GET /api/admin/returns/export
    * Export returns data
    */
-  async exportReturns(req: Request, res: Response): Promise<void> {
+  async exportReturns(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const {
         format = 'csv',
@@ -674,10 +747,15 @@ export class AdminReturnsController extends BaseAdminController {
       }));
 
       // Log admin activity
-      await this.logActivity(req, 'EXPORT_RETURNS', {
-        format,
-        recordCount: exportData.length,
-        filters: { startDate, endDate, status, reason },
+      this.logAdminActivity(req, 'data_export', 'export_returns', {
+        description: `Exported ${exportData.length} return records`,
+        severity: 'medium',
+        resourceType: 'returns',
+        metadata: {
+          format,
+          recordCount: exportData.length,
+          filters: { startDate, endDate, status, reason },
+        },
       });
 
       if (format === 'csv') {
@@ -695,13 +773,13 @@ export class AdminReturnsController extends BaseAdminController {
         
         res.send(csvContent);
       } else {
-        res.json(createSuccessResponse(
-          'Returns data exported successfully',
-          exportData
-        ));
+        this.sendAdminSuccess(res, exportData, 'Returns data exported successfully', 200, {
+          activity: 'data_export',
+          includeMetrics: true
+        });
       }
     } catch (error) {
-      await this.handleError(req, res, error, 'Error exporting returns data');
+      this.handleError(error, req, res);
     }
   }
 }

@@ -1,11 +1,23 @@
 import { Request, Response } from 'express';
-import { BaseAdminController } from './BaseAdminController';
+
+// Extend Request to include user property
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    phoneNumber: string;
+    email?: string;
+    firstName: string;
+    lastName: string;
+    role: 'CUSTOMER' | 'ADMIN' | 'SUPER_ADMIN';
+    isVerified: boolean;
+    sessionId?: string;
+  };
+}
+import { BaseAdminController } from '../BaseAdminController';
 import { RefundsService } from '../../services/returns/RefundsService';
 import {
-  RefundStatus,
   RefundMethod,
   ProcessRefundRequest,
-  BulkRefundRequest,
   RefundListQuery,
   createSuccessResponse,
   createErrorResponse,
@@ -13,6 +25,7 @@ import {
   HTTP_STATUS,
   ERROR_CODES,
 } from '../../types';
+import { RefundStatus, BulkRefundRequest } from '../../types/return.types';
 
 export class AdminRefundsController extends BaseAdminController {
   private refundsService: RefundsService;
@@ -26,7 +39,7 @@ export class AdminRefundsController extends BaseAdminController {
    * GET /api/admin/refunds
    * List all refunds with filtering and pagination
    */
-  async getRefunds(req: Request, res: Response): Promise<void> {
+  async getRefunds(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const query: RefundListQuery = {
         page: Number(req.query.page) || 1,
@@ -37,7 +50,7 @@ export class AdminRefundsController extends BaseAdminController {
         startDate: req.query.startDate as string,
         endDate: req.query.endDate as string,
         search: req.query.search as string,
-        sortBy: req.query.sortBy as string,
+        sortBy: req.query.sortBy as 'createdAt' | 'amount' | 'status' | 'processedAt',
         sortOrder: req.query.sortOrder as 'asc' | 'desc',
         minAmount: req.query.minAmount ? Number(req.query.minAmount) : undefined,
         maxAmount: req.query.maxAmount ? Number(req.query.maxAmount) : undefined,
@@ -46,17 +59,22 @@ export class AdminRefundsController extends BaseAdminController {
       const result = await this.refundsService.getRefunds(query);
 
       // Log admin activity
-      await this.logActivity(req, 'VIEW_REFUNDS', {
-        filters: query,
-        resultCount: result.refunds.length,
+      this.logAdminActivity(req, 'analytics_access', 'view_refunds', {
+        description: 'Viewed refunds list with filters',
+        severity: 'low',
+        resourceType: 'refunds',
+        metadata: {
+          filters: query,
+          resultCount: result.refunds.length,
+        }
       });
 
-      res.json(createSuccessResponse(
-        'Refunds retrieved successfully',
-        result
-      ));
+      this.sendAdminSuccess(res, result, 'Refunds retrieved successfully', 200, {
+        activity: 'analytics_access',
+        includeMetrics: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error retrieving refunds');
+      this.handleError(error, req, res);
     }
   }
 
@@ -64,26 +82,30 @@ export class AdminRefundsController extends BaseAdminController {
    * GET /api/admin/refunds/:refundId
    * Get detailed refund information
    */
-  async getRefund(req: Request, res: Response): Promise<void> {
+  async getRefund(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { refundId } = req.params;
 
       const refund = await this.refundsService.getRefund(refundId);
 
       // Log admin activity
-      await this.logActivity(req, 'VIEW_REFUND_DETAILS', {
-        refundId,
-        refundNumber: refund.refundNumber,
-        customerId: refund.customerId,
-        amount: refund.amount / 100,
+      this.logAdminActivity(req, 'analytics_access', 'view_refund_details', {
+        description: `Viewed refund details for refund ${refundId}`,
+        severity: 'low',
+        resourceType: 'refund',
+        resourceId: refundId,
+        metadata: {
+          refundId,
+          amount: refund.amount / 100,
+        }
       });
 
-      res.json(createSuccessResponse(
-        'Refund details retrieved successfully',
-        { refund }
-      ));
+      this.sendAdminSuccess(res, { refund }, 'Refund details retrieved successfully', 200, {
+        activity: 'analytics_access',
+        includeMetrics: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error retrieving refund');
+      this.handleError(error, req, res);
     }
   }
 
@@ -91,7 +113,7 @@ export class AdminRefundsController extends BaseAdminController {
    * POST /api/admin/refunds/process
    * Process a new refund
    */
-  async processRefund(req: Request, res: Response): Promise<void> {
+  async processRefund(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const {
         returnRequestId,
@@ -145,21 +167,27 @@ export class AdminRefundsController extends BaseAdminController {
       const result = await this.refundsService.processRefund(refundRequest, adminId!);
 
       // Log admin activity
-      await this.logActivity(req, 'PROCESS_REFUND', {
-        refundId: result.refund.id,
-        refundNumber: result.refund.refundNumber,
-        orderId,
-        amount,
-        refundMethod,
-        reason,
+      this.logAdminActivity(req, 'financial_operations', 'process_refund', {
+        description: `Processed refund for order ${orderId}`,
+        severity: 'high',
+        resourceType: 'refund',
+        resourceId: result.refund.id,
+        metadata: {
+          refundId: result.refund.id,
+          orderId,
+          amount,
+          refundMethod,
+          reason,
+        }
       });
 
-      res.status(HTTP_STATUS.CREATED).json(createSuccessResponse(
-        'Refund processed successfully',
-        result
-      ));
+      this.sendAdminSuccess(res, result, 'Refund processed successfully', HTTP_STATUS.CREATED, {
+        activity: 'financial_operations',
+        includeMetrics: true,
+        includeCurrencyInfo: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error processing refund');
+      this.handleError(error, req, res);
     }
   }
 
@@ -167,7 +195,7 @@ export class AdminRefundsController extends BaseAdminController {
    * POST /api/admin/refunds/bulk-process
    * Process multiple refunds in bulk
    */
-  async processBulkRefunds(req: Request, res: Response): Promise<void> {
+  async processBulkRefunds(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const {
         refundRequests,
@@ -217,20 +245,26 @@ export class AdminRefundsController extends BaseAdminController {
       const result = await this.refundsService.processBulkRefunds(bulkRequest, adminId!);
 
       // Log admin activity
-      await this.logActivity(req, 'BULK_PROCESS_REFUNDS', {
-        jobId: result.jobId,
-        totalRequests: refundRequests.length,
-        successful: result.summary.successful,
-        failed: result.summary.failed,
-        totalAmount: result.summary.totalAmount,
+      this.logAdminActivity(req, 'bulk_operations', 'bulk_process_refunds', {
+        description: `Processed ${refundRequests.length} refunds in bulk`,
+        severity: 'high',
+        resourceType: 'refunds',
+        metadata: {
+          jobId: result.jobId,
+          totalRequests: refundRequests.length,
+          successful: result.summary.successful,
+          failed: result.summary.failed,
+          totalAmount: result.summary.totalAmount,
+        }
       });
 
-      res.status(HTTP_STATUS.CREATED).json(createSuccessResponse(
-        'Bulk refund processing initiated',
-        result
-      ));
+      this.sendAdminSuccess(res, result, 'Bulk refund processing initiated', HTTP_STATUS.CREATED, {
+        activity: 'bulk_operations',
+        includeMetrics: true,
+        includeCurrencyInfo: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error processing bulk refunds');
+      this.handleError(error, req, res);
     }
   }
 
@@ -238,7 +272,7 @@ export class AdminRefundsController extends BaseAdminController {
    * POST /api/admin/refunds/:refundId/approve
    * Approve a pending refund
    */
-  async approveRefund(req: Request, res: Response): Promise<void> {
+  async approveRefund(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { refundId } = req.params;
       const { approvalNotes } = req.body;
@@ -247,18 +281,24 @@ export class AdminRefundsController extends BaseAdminController {
       const result = await this.refundsService.approveRefund(refundId, adminId!, approvalNotes);
 
       // Log admin activity
-      await this.logActivity(req, 'APPROVE_REFUND', {
-        refundId,
-        refundNumber: result.refund.refundNumber,
-        approvalNotes,
+      this.logAdminActivity(req, 'financial_operations', 'approve_refund', {
+        description: `Approved refund ${refundId}`,
+        severity: 'high',
+        resourceType: 'refund',
+        resourceId: refundId,
+        metadata: {
+          refundId,
+          approvalNotes,
+        }
       });
 
-      res.json(createSuccessResponse(
-        'Refund approved successfully',
-        result
-      ));
+      this.sendAdminSuccess(res, result, 'Refund approved successfully', 200, {
+        activity: 'financial_operations',
+        includeMetrics: true,
+        includeCurrencyInfo: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error approving refund');
+      this.handleError(error, req, res);
     }
   }
 
@@ -266,7 +306,7 @@ export class AdminRefundsController extends BaseAdminController {
    * GET /api/admin/refunds/pending
    * Get all pending refunds that need processing
    */
-  async getPendingRefunds(req: Request, res: Response): Promise<void> {
+  async getPendingRefunds(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { limit } = req.query;
       const limitNum = limit ? Number(limit) : undefined;
@@ -274,17 +314,22 @@ export class AdminRefundsController extends BaseAdminController {
       const pendingRefunds = await this.refundsService.getPendingRefunds(limitNum);
 
       // Log admin activity
-      await this.logActivity(req, 'VIEW_PENDING_REFUNDS', {
-        count: pendingRefunds.length,
-        limit: limitNum,
+      this.logAdminActivity(req, 'analytics_access', 'view_pending_refunds', {
+        description: 'Viewed pending refunds list',
+        severity: 'low',
+        resourceType: 'refunds',
+        metadata: {
+          count: pendingRefunds.length,
+          limit: limitNum,
+        }
       });
 
-      res.json(createSuccessResponse(
-        'Pending refunds retrieved successfully',
-        { refunds: pendingRefunds }
-      ));
+      this.sendAdminSuccess(res, { refunds: pendingRefunds }, 'Pending refunds retrieved successfully', 200, {
+        activity: 'analytics_access',
+        includeMetrics: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error retrieving pending refunds');
+      this.handleError(error, req, res);
     }
   }
 
@@ -292,7 +337,7 @@ export class AdminRefundsController extends BaseAdminController {
    * GET /api/admin/refunds/analytics
    * Get refunds analytics and insights
    */
-  async getRefundAnalytics(req: Request, res: Response): Promise<void> {
+  async getRefundAnalytics(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const {
         startDate,
@@ -307,17 +352,23 @@ export class AdminRefundsController extends BaseAdminController {
       });
 
       // Log admin activity
-      await this.logActivity(req, 'VIEW_REFUND_ANALYTICS', {
-        period: { startDate, endDate },
-        customerId,
+      this.logAdminActivity(req, 'analytics_access', 'view_refund_analytics', {
+        description: 'Viewed refund analytics',
+        severity: 'low',
+        resourceType: 'analytics',
+        metadata: {
+          period: { startDate, endDate },
+          customerId,
+        }
       });
 
-      res.json(createSuccessResponse(
-        'Refund analytics retrieved successfully',
-        analytics
-      ));
+      this.sendAdminSuccess(res, analytics, 'Refund analytics retrieved successfully', 200, {
+        activity: 'analytics_access',
+        includeMetrics: true,
+        includeCurrencyInfo: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error retrieving refund analytics');
+      this.handleError(error, req, res);
     }
   }
 
@@ -325,7 +376,7 @@ export class AdminRefundsController extends BaseAdminController {
    * POST /api/admin/refunds/validate-bank-account
    * Validate Nigerian bank account details
    */
-  async validateBankAccount(req: Request, res: Response): Promise<void> {
+  async validateBankAccount(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { accountNumber, bankCode } = req.body;
 
@@ -343,18 +394,26 @@ export class AdminRefundsController extends BaseAdminController {
       });
 
       // Log admin activity
-      await this.logActivity(req, 'VALIDATE_BANK_ACCOUNT', {
-        accountNumber: accountNumber.replace(/\d(?=\d{4})/g, '*'), // Mask account number
-        bankCode,
-        isValid: validation.isValid,
+      this.logAdminActivity(req, 'security_operations', 'validate_bank_account', {
+        description: 'Validated bank account details',
+        severity: 'medium',
+        resourceType: 'bank_account',
+        metadata: {
+          accountNumber: accountNumber.replace(/\d(?=\d{4})/g, '*'), // Mask account number
+          bankCode,
+          isValid: validation.isValid,
+        }
       });
 
-      res.json(createSuccessResponse(
-        validation.isValid ? 'Bank account is valid' : 'Bank account validation failed',
-        validation
-      ));
+      this.sendAdminSuccess(res, validation, 
+        validation.isValid ? 'Bank account is valid' : 'Bank account validation failed', 
+        200, {
+          activity: 'security_operations',
+          includeMetrics: true
+        }
+      );
     } catch (error) {
-      await this.handleError(req, res, error, 'Error validating bank account');
+      this.handleError(error, req, res);
     }
   }
 
@@ -362,7 +421,7 @@ export class AdminRefundsController extends BaseAdminController {
    * GET /api/admin/refunds/dashboard
    * Get refund management dashboard data
    */
-  async getRefundDashboard(req: Request, res: Response): Promise<void> {
+  async getRefundDashboard(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { period = '30' } = req.query;
       const days = parseInt(period as string, 10);
@@ -499,19 +558,25 @@ export class AdminRefundsController extends BaseAdminController {
       };
 
       // Log admin activity
-      await this.logActivity(req, 'VIEW_REFUND_DASHBOARD', {
-        period: days,
-        totalRefunds,
-        pendingCount,
-        completedCount,
+      this.logAdminActivity(req, 'analytics_access', 'view_refund_dashboard', {
+        description: `Viewed refund dashboard for ${days} days`,
+        severity: 'low',
+        resourceType: 'dashboard',
+        metadata: {
+          period: days,
+          totalRefunds,
+          pendingCount,
+          completedCount,
+        }
       });
 
-      res.json(createSuccessResponse(
-        'Refund dashboard data retrieved successfully',
-        dashboardData
-      ));
+      this.sendAdminSuccess(res, dashboardData, 'Refund dashboard data retrieved successfully', 200, {
+        activity: 'analytics_access',
+        includeMetrics: true,
+        includeCurrencyInfo: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error retrieving refund dashboard');
+      this.handleError(error, req, res);
     }
   }
 
@@ -519,7 +584,7 @@ export class AdminRefundsController extends BaseAdminController {
    * GET /api/admin/refunds/export
    * Export refunds data
    */
-  async exportRefunds(req: Request, res: Response): Promise<void> {
+  async exportRefunds(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const {
         format = 'csv',
@@ -560,10 +625,15 @@ export class AdminRefundsController extends BaseAdminController {
       }));
 
       // Log admin activity
-      await this.logActivity(req, 'EXPORT_REFUNDS', {
-        format,
-        recordCount: exportData.length,
-        filters: { startDate, endDate, status, refundMethod },
+      this.logAdminActivity(req, 'data_export', 'export_refunds', {
+        description: `Exported ${exportData.length} refund records`,
+        severity: 'medium',
+        resourceType: 'refunds',
+        metadata: {
+          format,
+          recordCount: exportData.length,
+          filters: { startDate, endDate, status, refundMethod },
+        }
       });
 
       if (format === 'csv') {
@@ -581,13 +651,13 @@ export class AdminRefundsController extends BaseAdminController {
         
         res.send(csvContent);
       } else {
-        res.json(createSuccessResponse(
-          'Refunds data exported successfully',
-          exportData
-        ));
+        this.sendAdminSuccess(res, exportData, 'Refunds data exported successfully', 200, {
+          activity: 'data_export',
+          includeMetrics: true
+        });
       }
     } catch (error) {
-      await this.handleError(req, res, error, 'Error exporting refunds data');
+      this.handleError(error, req, res);
     }
   }
 
@@ -595,7 +665,7 @@ export class AdminRefundsController extends BaseAdminController {
    * GET /api/admin/refunds/stats/summary
    * Get refund summary statistics
    */
-  async getRefundStats(req: Request, res: Response): Promise<void> {
+  async getRefundStats(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { period = '30' } = req.query;
       const days = parseInt(period as string, 10);
@@ -649,18 +719,24 @@ export class AdminRefundsController extends BaseAdminController {
       };
 
       // Log admin activity
-      await this.logActivity(req, 'VIEW_REFUND_STATS', {
-        period: days,
-        totalRefunds: stats.totalRefunds,
-        totalAmount: stats.totalRefundAmount,
+      this.logAdminActivity(req, 'analytics_access', 'view_refund_stats', {
+        description: `Viewed refund statistics for ${days} days`,
+        severity: 'low',
+        resourceType: 'statistics',
+        metadata: {
+          period: days,
+          totalRefunds: stats.totalRefunds,
+          totalAmount: stats.totalRefundAmount,
+        }
       });
 
-      res.json(createSuccessResponse(
-        'Refund statistics retrieved successfully',
-        stats
-      ));
+      this.sendAdminSuccess(res, stats, 'Refund statistics retrieved successfully', 200, {
+        activity: 'analytics_access',
+        includeMetrics: true,
+        includeCurrencyInfo: true
+      });
     } catch (error) {
-      await this.handleError(req, res, error, 'Error retrieving refund statistics');
+      this.handleError(error, req, res);
     }
   }
 }
