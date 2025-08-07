@@ -6,9 +6,9 @@ const BaseService_1 = require("../BaseService");
 const types_1 = require("../../types");
 class CategoryService extends BaseService_1.BaseService {
     categoryRepository;
-    constructor() {
+    constructor(categoryRepository) {
         super();
-        this.categoryRepository = {}; // Mock repository
+        this.categoryRepository = categoryRepository || {}; // Accept injected repository or use mock
     }
     /**
      * Create new category with validation
@@ -210,7 +210,27 @@ class CategoryService extends BaseService_1.BaseService {
      */
     async getCategories(params) {
         try {
-            const { categories, total } = await this.categoryRepository.findWithFilters(params);
+            // Direct Prisma call for now
+            const where = {
+                isActive: params.isActive !== undefined ? params.isActive : true,
+            };
+            if (params.parentId !== undefined) {
+                where.parentId = params.parentId;
+            }
+            const [categories, total] = await Promise.all([
+                this.categoryRepository.prisma.category.findMany({
+                    where,
+                    include: {
+                        products: params.hasProducts ? true : false,
+                        parent: true,
+                        children: true,
+                    },
+                    orderBy: params.sortBy === 'name' ? { name: 'asc' } : { sortOrder: 'asc' },
+                    skip: params.page ? (params.page - 1) * (params.limit || 50) : 0,
+                    take: params.limit || 50,
+                }),
+                this.categoryRepository.prisma.category.count({ where })
+            ]);
             const enrichedCategories = categories.map(category => this.enrichCategory(category));
             // Build pagination if needed
             let pagination;
@@ -405,7 +425,7 @@ class CategoryService extends BaseService_1.BaseService {
      */
     async getFeaturedCategories(limit = 10) {
         try {
-            const categories = await this.categoryRepository.findMany({
+            const categories = await this.categoryRepository.prisma.category.findMany({
                 where: {
                     isActive: true,
                     // Add logic for featured categories - for now just get active ones
@@ -424,7 +444,7 @@ class CategoryService extends BaseService_1.BaseService {
      */
     async searchCategories(query, limit = 20) {
         try {
-            const categories = await this.categoryRepository.findMany({
+            const categories = await this.categoryRepository.prisma.category.findMany({
                 where: {
                     OR: [
                         { name: { contains: query, mode: 'insensitive' } },
@@ -477,7 +497,7 @@ class CategoryService extends BaseService_1.BaseService {
      */
     async getFlatCategoryList() {
         try {
-            const categories = await this.categoryRepository.findMany({
+            const categories = await this.categoryRepository.prisma.category.findMany({
                 where: { isActive: true },
                 orderBy: { name: 'asc' }
             });

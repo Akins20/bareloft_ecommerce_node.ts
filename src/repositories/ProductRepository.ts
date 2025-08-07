@@ -77,7 +77,6 @@ export class ProductRepository extends BaseRepository<
             orderBy: { createdAt: "desc" },
             take: 10,
           },
-          inventory: true,
         }
       );
     } catch (error) {
@@ -95,8 +94,9 @@ export class ProductRepository extends BaseRepository<
         { sku },
         {
           category: true,
-          images: true,
-          inventory: true,
+          images: {
+            orderBy: { position: "asc" },
+          },
         }
       );
     } catch (error) {

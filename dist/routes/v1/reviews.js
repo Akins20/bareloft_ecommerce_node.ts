@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.initializeReviewRoutes = void 0;
 const express_1 = require("express");
+const ReviewController_1 = require("../../controllers/products/ReviewController");
 const authenticate_1 = require("../../middleware/auth/authenticate");
 const authorize_1 = require("../../middleware/auth/authorize");
 const rateLimiter_1 = require("../../middleware/security/rateLimiter");
@@ -10,13 +10,12 @@ const createReviewSchema = {};
 const updateReviewSchema = {};
 const reportReviewSchema = {};
 const router = (0, express_1.Router)();
-// Initialize controller
-let reviewController;
-const initializeReviewRoutes = (controller) => {
-    reviewController = controller;
-    return router;
-};
-exports.initializeReviewRoutes = initializeReviewRoutes;
+// Service imports
+const serviceContainer_1 = require("../../config/serviceContainer");
+// Initialize controller with service container
+const serviceContainer = (0, serviceContainer_1.getServiceContainer)();
+const reviewService = serviceContainer.getService('reviewService');
+const reviewController = new ReviewController_1.ReviewController(reviewService);
 // Rate limiting for review operations
 const reviewActionLimit = rateLimiter_1.rateLimiter.authenticated;
 const reviewInteractionLimit = rateLimiter_1.rateLimiter.authenticated;

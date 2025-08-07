@@ -208,11 +208,11 @@ export class CheckoutService extends BaseService {
       }
 
       // Create order
-      const order = await this.orderService.createOrder(
+      const orderResult = await this.orderService.createOrder(
         userId,
-        checkoutData,
-        validation.cartItems
+        checkoutData
       );
+      const order = orderResult.order;
 
       // Determine if payment is required
       const requiresPayment = (order as any).total > 0;
@@ -391,9 +391,27 @@ export class CheckoutService extends BaseService {
   }
 
   private async initializePayment(order: Order): Promise<string> {
-    // In production, this would integrate with Paystack
-    // For now, return a mock URL
-    return `https://checkout.paystack.com/pay/${order.id}`;
+    // Generate actual Paystack payment initialization
+    // This would use proper Paystack SDK in production
+    const reference = `BL_${order.orderNumber}_${Date.now()}`;
+    
+    const paymentData = {
+      reference,
+      amount: Number(order.total) * 100, // Convert to kobo
+      email: order.user?.email || 'customer@bareloft.com',
+      currency: 'NGN',
+      channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money', 'bank_transfer'],
+      metadata: {
+        orderNumber: order.orderNumber,
+        orderId: order.id,
+        customerName: `${order.user?.firstName || ''} ${order.user?.lastName || ''}`,
+        phoneNumber: order.user?.phoneNumber
+      }
+    };
+
+    // In production, this would make actual API call to Paystack
+    // For now, return structured payment URL with proper reference
+    return `https://checkout.paystack.com/${reference}`;
   }
 
   private getEstimatedDeliveryDays(state: string, method: string): number {

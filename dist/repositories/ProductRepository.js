@@ -22,7 +22,6 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
                     orderBy: { createdAt: "desc" },
                     take: 10,
                 },
-                inventory: true,
             });
         }
         catch (error) {
@@ -37,8 +36,9 @@ class ProductRepository extends BaseRepository_1.BaseRepository {
         try {
             return await this.findFirst({ sku }, {
                 category: true,
-                images: true,
-                inventory: true,
+                images: {
+                    orderBy: { position: "asc" },
+                },
             });
         }
         catch (error) {

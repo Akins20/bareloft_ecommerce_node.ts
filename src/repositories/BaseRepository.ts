@@ -476,8 +476,18 @@ export abstract class BaseRepository<T, CreateData, UpdateData> {
    * Get the Prisma model for this repository
    */
   protected getModel(): any {
-    const modelKey = this.modelName.toLowerCase() as keyof PrismaClient;
-    return this.prisma[modelKey];
+    const modelKey = this.modelName as keyof PrismaClient;
+    const model = (this.prisma as any)[modelKey];
+    
+    if (!model) {
+      throw new AppError(
+        `Model '${this.modelName}' not found in Prisma client`,
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
+    }
+    
+    return model;
   }
 
   /**

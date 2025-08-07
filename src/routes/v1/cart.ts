@@ -25,6 +25,7 @@ import { CartController } from "../../controllers/cart/CartController";
 
 // Middleware imports
 import { authenticate } from "../../middleware/auth/authenticate";
+import { optionalAuth } from "../../middleware/auth/optionalAuth";
 import { rateLimiter } from "../../middleware/security/rateLimiter";
 import { validateRequest } from "../../middleware/validation/validateRequest";
 // Note: Cart schemas not yet created, using placeholder validation
@@ -37,10 +38,21 @@ const cartSchemas = {
   updateShipping: {},
 };
 
-// Services (dependency injection) - using placeholder for now
-const cartService = {} as any;
+// Services (dependency injection)
+import { CartService } from "../../services/cart/CartService";
+import { CartRepository } from "../../repositories/CartRepository";
+import { ProductRepository } from "../../repositories/ProductRepository";
+import { CouponRepository } from "../../repositories/CouponRepository";
+import { PrismaClient } from "@prisma/client";
 
 const router = Router();
+
+// Initialize dependencies for production
+const prisma = new PrismaClient();
+const cartRepository = new CartRepository(prisma);
+const productRepository = new ProductRepository(prisma);
+const couponRepository = new CouponRepository(prisma);
+const cartService = new CartService(cartRepository, productRepository, couponRepository);
 
 // Initialize controller
 const cartController = new CartController(cartService);
@@ -98,7 +110,7 @@ const cartController = new CartController(cartService);
  *   }
  * }
  */
-router.get("/", cartController.getCart);
+router.get("/", optionalAuth, cartController.getCart);
 
 /**
  * @route   POST /api/v1/cart/add
@@ -129,6 +141,7 @@ router.get("/", cartController.getCart);
  */
 router.post(
   "/add",
+  optionalAuth,
   rateLimiter.authenticated,
   // validateRequest(cartSchemas.addToCart), // Skip validation for now due to empty schema
   cartController.addToCart
@@ -163,6 +176,7 @@ router.post(
  */
 router.put(
   "/update",
+  optionalAuth,
   rateLimiter.authenticated,
   // validateRequest(cartSchemas.updateCartItem), // Skip validation for now due to empty schema
   cartController.updateCartItem
@@ -195,6 +209,7 @@ router.put(
  */
 router.delete(
   "/remove/:productId",
+  optionalAuth,
   rateLimiter.authenticated,
   cartController.removeFromCart
 );
@@ -219,7 +234,7 @@ router.delete(
  *   }
  * }
  */
-router.delete("/clear", cartController.clearCart);
+router.delete("/clear", optionalAuth, cartController.clearCart);
 
 /**
  * @route   GET /api/v1/cart/count
@@ -242,6 +257,7 @@ router.delete("/clear", cartController.clearCart);
  */
 router.get(
   "/count",
+  optionalAuth,
   rateLimiter.general,
   cartController.getCartItemCount
 );
@@ -273,7 +289,7 @@ router.get(
  *   }
  * }
  */
-router.post("/validate", cartController.validateCart);
+router.post("/validate", optionalAuth, cartController.validateCart);
 
 /**
  * @route   POST /api/v1/cart/merge
@@ -350,6 +366,7 @@ router.post(
  */
 router.post(
   "/coupon/apply",
+  optionalAuth,
   rateLimiter.authenticated,
   // validateRequest(cartSchemas.applyCoupon), // Skip validation for now due to empty schema
   cartController.applyCoupon
@@ -375,7 +392,7 @@ router.post(
  *   }
  * }
  */
-router.delete("/coupon/remove", cartController.removeCoupon);
+router.delete("/coupon/remove", optionalAuth, cartController.removeCoupon);
 
 /**
  * Shipping Management Routes
@@ -415,6 +432,7 @@ router.delete("/coupon/remove", cartController.removeCoupon);
  */
 router.put(
   "/shipping",
+  optionalAuth,
   // validateRequest(cartSchemas.updateShipping), // Skip validation for now due to empty schema
   cartController.updateShipping
 );
@@ -454,7 +472,8 @@ router.put(
  */
 router.post(
   "/shipping/calculate",
-  validateRequest(cartSchemas.calculateShipping),
+  optionalAuth,
+  // validateRequest(cartSchemas.calculateShipping), // Skip validation for now due to empty schema
   cartController.calculateShipping
 );
 

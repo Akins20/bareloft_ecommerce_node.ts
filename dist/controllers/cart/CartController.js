@@ -16,33 +16,60 @@ class CartController extends BaseController_1.BaseController {
         try {
             const userId = req.user?.userId;
             const sessionId = req.sessionId || req.headers["x-session-id"];
-            if (!userId && !sessionId) {
-                res.status(400).json({
-                    success: false,
-                    message: "User ID or session ID is required",
-                });
+            const isGuest = req.isGuest;
+            // Handle authenticated users
+            if (userId) {
+                const cartSummary = await this.cartService.getCart(userId);
+                // Convert CartSummary to Cart type for compatibility
+                const cart = {
+                    id: `cart_${userId}`,
+                    userId,
+                    items: cartSummary.items,
+                    subtotal: cartSummary.subtotal,
+                    estimatedTax: cartSummary.tax,
+                    estimatedShipping: 0,
+                    estimatedTotal: cartSummary.total,
+                    currency: "NGN",
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                };
+                const response = {
+                    success: true,
+                    message: "Cart retrieved successfully",
+                    data: { cart },
+                };
+                res.json(response);
                 return;
             }
-            const cartSummary = await this.cartService.getCart(userId);
-            // Convert CartSummary to Cart type for compatibility
-            const cart = {
-                id: `cart_${userId}`,
-                userId,
-                items: cartSummary.items,
-                subtotal: cartSummary.subtotal,
-                estimatedTax: cartSummary.tax,
+            // Handle guest users
+            if (isGuest && sessionId) {
+                const guestCart = await this.cartService.getGuestCart(sessionId);
+                const response = {
+                    success: true,
+                    message: "Guest cart retrieved successfully",
+                    data: { cart: guestCart },
+                };
+                res.json(response);
+                return;
+            }
+            // No valid user or session - return empty cart
+            const emptyCart = {
+                id: `guest_${sessionId || 'new'}`,
+                items: [],
+                subtotal: 0,
+                estimatedTax: 0,
                 estimatedShipping: 0,
-                estimatedTotal: cartSummary.total,
+                estimatedTotal: 0,
                 currency: "NGN",
+                itemCount: 0,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
-            const response = {
+            res.json({
                 success: true,
-                message: "Cart retrieved successfully",
-                data: { cart },
-            };
-            res.json(response);
+                message: "Empty cart created",
+                data: { cart: emptyCart },
+            });
         }
         catch (error) {
             this.handleError(error, req, res);
@@ -56,6 +83,7 @@ class CartController extends BaseController_1.BaseController {
         try {
             const userId = req.user?.userId;
             const sessionId = req.sessionId || req.headers["x-session-id"];
+            const isGuest = req.isGuest;
             const { productId, quantity } = req.body;
             // Validate input
             const validationErrors = this.validateAddToCartRequest({
@@ -70,40 +98,57 @@ class CartController extends BaseController_1.BaseController {
                 });
                 return;
             }
-            if (!userId) {
-                res.status(401).json({
-                    success: false,
-                    message: "Authentication required",
+            // Handle authenticated users
+            if (userId) {
+                const cartItem = await this.cartService.addToCart(userId, {
+                    productId,
+                    quantity,
                 });
-                return;
-            }
-            const cartItem = await this.cartService.addToCart(userId, {
-                productId,
-                quantity,
-            });
-            // Create mock cart object for response
-            const cart = {
-                id: `cart_${userId}`,
-                userId,
-                items: [cartItem],
-                subtotal: cartItem.unitPrice * cartItem.quantity,
-                estimatedTax: 0,
-                estimatedShipping: 0,
-                estimatedTotal: cartItem.unitPrice * cartItem.quantity,
-                currency: "NGN",
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            };
-            const response = {
-                success: true,
-                message: "Item added to cart successfully",
-                data: {
+                // Get updated cart summary
+                const cartSummary = await this.cartService.getCart(userId);
+                const cart = {
+                    id: `cart_${userId}`,
+                    userId,
+                    items: cartSummary.items,
+                    subtotal: cartSummary.subtotal,
+                    estimatedTax: cartSummary.tax,
+                    estimatedShipping: 0,
+                    estimatedTotal: cartSummary.total,
+                    currency: "NGN",
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                };
+                const response = {
                     success: true,
                     message: "Item added to cart successfully",
-                    cart,
-                },
-            };
-            res.status(200).json(response);
+                    data: {
+                        success: true,
+                        message: "Item added to cart successfully",
+                        cart,
+                    },
+                };
+                res.status(200).json(response);
+                return;
+            }
+            // Handle guest users
+            if (isGuest && sessionId) {
+                const result = await this.cartService.addToGuestCart(sessionId, {
+                    productId,
+                    quantity,
+                });
+                const response = {
+                    success: true,
+                    message: "Item added to guest cart successfully",
+                    data: result,
+                };
+                res.status(200).json(response);
+                return;
+            }
+            // Neither authenticated nor valid guest session
+            res.status(400).json({
+                success: false,
+                message: "Valid user session required",
+            });
         }
         catch (error) {
             this.handleError(error, req, res);
@@ -117,15 +162,9 @@ class CartController extends BaseController_1.BaseController {
         try {
             const userId = req.user?.userId;
             const sessionId = req.sessionId || req.headers["x-session-id"];
+            const isGuest = req.isGuest;
             const { productId, quantity } = req.body;
             const { itemId } = req.params;
-            if (!userId) {
-                res.status(401).json({
-                    success: false,
-                    message: "Authentication required",
-                });
-                return;
-            }
             // Validate input
             const validationErrors = this.validateUpdateCartRequest({
                 productId,
@@ -139,18 +178,47 @@ class CartController extends BaseController_1.BaseController {
                 });
                 return;
             }
-            const result = await this.cartService.updateCartItem(userId, sessionId, {
-                productId,
-                quantity,
+            // Handle authenticated users
+            if (userId) {
+                const result = await this.cartService.updateCartItem(userId, sessionId, {
+                    productId,
+                    quantity,
+                });
+                const response = {
+                    success: true,
+                    message: result.success
+                        ? "Cart item updated successfully"
+                        : "Failed to update cart item",
+                    data: result,
+                };
+                res.status(result.success ? 200 : 400).json(response);
+                return;
+            }
+            // Handle guest users - update guest cart
+            if (isGuest && sessionId) {
+                try {
+                    const result = await this.cartService.updateGuestCartItem(sessionId, productId, quantity);
+                    const response = {
+                        success: true,
+                        message: "Guest cart item updated successfully",
+                        data: result,
+                    };
+                    res.json(response);
+                    return;
+                }
+                catch (error) {
+                    res.status(400).json({
+                        success: false,
+                        message: "Failed to update guest cart item",
+                    });
+                    return;
+                }
+            }
+            // No user or session
+            res.status(401).json({
+                success: false,
+                message: "Authentication or session required",
             });
-            const response = {
-                success: true,
-                message: result.success
-                    ? "Cart item updated successfully"
-                    : "Failed to update cart item",
-                data: result,
-            };
-            res.status(result.success ? 200 : 400).json(response);
         }
         catch (error) {
             this.handleError(error, req, res);
@@ -164,6 +232,7 @@ class CartController extends BaseController_1.BaseController {
         try {
             const userId = req.user?.userId;
             const sessionId = req.sessionId || req.headers["x-session-id"];
+            const isGuest = req.isGuest;
             const { productId } = req.params;
             if (!productId) {
                 res.status(400).json({
@@ -172,29 +241,42 @@ class CartController extends BaseController_1.BaseController {
                 });
                 return;
             }
-            if (!userId) {
+            // Handle authenticated users
+            if (userId) {
+                const result = await this.cartService.removeFromCart(userId, sessionId, { productId });
                 const response = {
-                    success: false,
-                    message: "Authentication required",
-                    error: {
-                        code: "AUTHENTICATION_REQUIRED",
-                        details: "User must be authenticated to perform this action"
-                    }
+                    success: true,
+                    message: result.success ? "Item removed successfully" : "Failed to remove item",
+                    data: result,
                 };
-                res.status(401).json(response);
+                res.status(result.success ? 200 : 400).json(response);
                 return;
             }
-            const result = await this.cartService.removeFromCart(userId, sessionId, {
-                productId,
+            // Handle guest users
+            if (isGuest && sessionId) {
+                try {
+                    const result = await this.cartService.removeFromGuestCart(sessionId, productId);
+                    const response = {
+                        success: true,
+                        message: "Item removed from guest cart successfully",
+                        data: result,
+                    };
+                    res.json(response);
+                    return;
+                }
+                catch (error) {
+                    res.status(400).json({
+                        success: false,
+                        message: "Failed to remove item from guest cart",
+                    });
+                    return;
+                }
+            }
+            // No user or session
+            res.status(401).json({
+                success: false,
+                message: "Authentication or session required",
             });
-            const response = {
-                success: true,
-                message: result.success
-                    ? "Item removed from cart successfully"
-                    : "Failed to remove item from cart",
-                data: result,
-            };
-            res.status(result.success ? 200 : 400).json(response);
         }
         catch (error) {
             this.handleError(error, req, res);
@@ -208,25 +290,43 @@ class CartController extends BaseController_1.BaseController {
         try {
             const userId = req.user?.userId;
             const sessionId = req.sessionId || req.headers["x-session-id"];
-            if (!userId) {
+            const isGuest = req.isGuest;
+            // Handle authenticated users
+            if (userId) {
+                const result = await this.cartService.clearCart(userId, sessionId);
                 const response = {
-                    success: false,
-                    message: "Authentication required",
-                    error: {
-                        code: "AUTHENTICATION_REQUIRED",
-                        details: "User must be authenticated to perform this action"
-                    }
+                    success: true,
+                    message: result.success ? "Cart cleared successfully" : "Failed to clear cart",
+                    data: result,
                 };
-                res.status(401).json(response);
+                res.status(result.success ? 200 : 400).json(response);
                 return;
             }
-            const result = await this.cartService.clearCart(userId, sessionId);
-            const response = {
-                success: true,
-                message: "Cart cleared successfully",
-                data: result,
-            };
-            res.json(response);
+            // Handle guest users
+            if (isGuest && sessionId) {
+                try {
+                    const result = await this.cartService.clearGuestCart(sessionId);
+                    const response = {
+                        success: true,
+                        message: "Guest cart cleared successfully",
+                        data: result,
+                    };
+                    res.json(response);
+                    return;
+                }
+                catch (error) {
+                    res.status(400).json({
+                        success: false,
+                        message: "Failed to clear guest cart",
+                    });
+                    return;
+                }
+            }
+            // No user or session
+            res.status(401).json({
+                success: false,
+                message: "Authentication or session required",
+            });
         }
         catch (error) {
             this.handleError(error, req, res);
@@ -240,19 +340,8 @@ class CartController extends BaseController_1.BaseController {
         try {
             const userId = req.user?.userId;
             const sessionId = req.sessionId || req.headers["x-session-id"];
+            const isGuest = req.isGuest;
             const { couponCode } = req.body;
-            if (!userId) {
-                const response = {
-                    success: false,
-                    message: "Authentication required",
-                    error: {
-                        code: "AUTHENTICATION_REQUIRED",
-                        details: "User must be authenticated to perform this action"
-                    }
-                };
-                res.status(401).json(response);
-                return;
-            }
             if (!couponCode || couponCode.trim().length === 0) {
                 res.status(400).json({
                     success: false,
@@ -260,17 +349,44 @@ class CartController extends BaseController_1.BaseController {
                 });
                 return;
             }
-            const result = await this.cartService.applyCoupon(userId, sessionId, {
-                couponCode: couponCode.trim().toUpperCase(),
-            });
+            // Handle authenticated users
+            if (userId) {
+                const result = await this.cartService.applyCoupon(userId, sessionId, {
+                    couponCode: couponCode.trim().toUpperCase(),
+                });
+                const response = {
+                    success: true,
+                    message: result.success
+                        ? "Coupon applied successfully"
+                        : "Failed to apply coupon",
+                    data: result,
+                };
+                res.json(response);
+                return;
+            }
+            // Handle guest users - coupons not supported for guests yet
+            if (isGuest && sessionId) {
+                const response = {
+                    success: false,
+                    message: "Coupon application not supported for guest carts yet",
+                    error: {
+                        code: "FEATURE_NOT_AVAILABLE",
+                        details: "Please create an account to use coupon codes"
+                    }
+                };
+                res.status(400).json(response);
+                return;
+            }
+            // No user or session
             const response = {
-                success: true,
-                message: result.success
-                    ? "Coupon applied successfully"
-                    : "Failed to apply coupon",
-                data: result,
+                success: false,
+                message: "Authentication or session required",
+                error: {
+                    code: "AUTHENTICATION_REQUIRED",
+                    details: "Please log in or provide a session ID"
+                }
             };
-            res.status(result.success ? 200 : 400).json(response);
+            res.status(401).json(response);
         }
         catch (error) {
             this.handleError(error, req, res);
@@ -316,6 +432,7 @@ class CartController extends BaseController_1.BaseController {
         try {
             const userId = req.user?.userId;
             const sessionId = req.sessionId || req.headers["x-session-id"];
+            const isGuest = req.isGuest;
             const { state, city, postalCode } = req.body;
             // Validate Nigerian states
             const validationData = {
@@ -334,32 +451,29 @@ class CartController extends BaseController_1.BaseController {
                 });
                 return;
             }
-            if (!userId) {
-                const response = {
-                    success: false,
-                    message: "Authentication required",
-                    error: {
-                        code: "AUTHENTICATION_REQUIRED",
-                        details: "User must be authenticated to perform this action"
-                    }
+            // Handle both authenticated and guest users
+            if (userId || (isGuest && sessionId)) {
+                const shippingData = {
+                    state,
+                    city,
                 };
-                res.status(401).json(response);
+                if (postalCode) {
+                    shippingData.postalCode = postalCode;
+                }
+                const result = await this.cartService.updateShipping(userId || sessionId, sessionId, shippingData);
+                const response = {
+                    success: true,
+                    message: result.success ? "Shipping updated successfully" : "Failed to update shipping",
+                    data: result,
+                };
+                res.status(result.success ? 200 : 400).json(response);
                 return;
             }
-            const shippingData = {
-                state,
-                city,
-            };
-            if (postalCode) {
-                shippingData.postalCode = postalCode;
-            }
-            const result = await this.cartService.updateShipping(userId, sessionId, shippingData);
-            const response = {
-                success: true,
-                message: "Shipping address updated successfully",
-                data: result,
-            };
-            res.json(response);
+            // No user or session
+            res.status(401).json({
+                success: false,
+                message: "Authentication or session required",
+            });
         }
         catch (error) {
             this.handleError(error, req, res);
@@ -373,23 +487,66 @@ class CartController extends BaseController_1.BaseController {
         try {
             const userId = req.user?.userId;
             const sessionId = req.sessionId || req.headers["x-session-id"];
-            if (!userId) {
+            const isGuest = req.isGuest;
+            // Handle authenticated users
+            if (userId) {
+                const validation = await this.cartService.validateCart(userId, sessionId);
                 const response = {
-                    success: false,
-                    message: "Authentication required",
-                    error: {
-                        code: "AUTHENTICATION_REQUIRED",
-                        details: "User must be authenticated to perform this action"
-                    }
+                    success: true,
+                    message: "Cart validation completed",
+                    data: validation,
                 };
-                res.status(401).json(response);
+                res.json(response);
                 return;
             }
-            const validation = await this.cartService.validateCart(userId, sessionId);
+            // Handle guest users - return simple validation (no cart validation for guests for now)
+            if (isGuest && sessionId) {
+                const response = {
+                    success: true,
+                    message: "Guest cart validation completed",
+                    data: {
+                        isValid: true,
+                        issues: [],
+                        cart: {
+                            id: `guest_${sessionId}`,
+                            sessionId,
+                            items: [],
+                            subtotal: 0,
+                            estimatedTax: 0,
+                            estimatedShipping: 0,
+                            estimatedTotal: 0,
+                            currency: "NGN",
+                            itemCount: 0,
+                            isValid: true,
+                            hasOutOfStockItems: false,
+                            hasPriceChanges: false,
+                        }
+                    },
+                };
+                res.json(response);
+                return;
+            }
+            // No user or session - return empty validation
             const response = {
                 success: true,
-                message: "Cart validation completed",
-                data: validation,
+                message: "Empty cart validation completed",
+                data: {
+                    isValid: true,
+                    issues: [],
+                    cart: {
+                        id: `guest_new`,
+                        items: [],
+                        subtotal: 0,
+                        estimatedTax: 0,
+                        estimatedShipping: 0,
+                        estimatedTotal: 0,
+                        currency: "NGN",
+                        itemCount: 0,
+                        isValid: true,
+                        hasOutOfStockItems: false,
+                        hasPriceChanges: false,
+                    }
+                },
             };
             res.json(response);
         }
@@ -405,23 +562,33 @@ class CartController extends BaseController_1.BaseController {
         try {
             const userId = req.user?.userId;
             const sessionId = req.sessionId || req.headers["x-session-id"];
-            if (!userId) {
+            const isGuest = req.isGuest;
+            // Handle authenticated users
+            if (userId) {
+                const countResult = await this.cartService.getCartItemCount(userId, sessionId);
                 const response = {
-                    success: false,
-                    message: "Authentication required",
-                    error: {
-                        code: "AUTHENTICATION_REQUIRED",
-                        details: "User must be authenticated to perform this action"
-                    }
+                    success: true,
+                    message: "Cart item count retrieved successfully",
+                    data: countResult,
                 };
-                res.status(401).json(response);
+                res.json(response);
                 return;
             }
-            const countResult = await this.cartService.getCartItemCount(userId, sessionId);
+            // Handle guest users - return 0 for now since guest cart counting needs implementation
+            if (isGuest && sessionId) {
+                const response = {
+                    success: true,
+                    message: "Guest cart item count retrieved successfully",
+                    data: { count: 0 },
+                };
+                res.json(response);
+                return;
+            }
+            // No user or session - return 0
             const response = {
                 success: true,
-                message: "Cart item count retrieved successfully",
-                data: countResult,
+                message: "Cart is empty",
+                data: { count: 0 },
             };
             res.json(response);
         }
@@ -474,6 +641,7 @@ class CartController extends BaseController_1.BaseController {
         try {
             const userId = req.user?.userId;
             const sessionId = req.sessionId || req.headers["x-session-id"];
+            const isGuest = req.isGuest;
             const { state, city, postalCode } = req.body;
             if (!state || !city) {
                 res.status(400).json({
@@ -482,25 +650,22 @@ class CartController extends BaseController_1.BaseController {
                 });
                 return;
             }
-            if (!userId) {
+            // Handle both authenticated and guest users
+            if (userId || (isGuest && sessionId)) {
+                const shippingOptions = await this.cartService.calculateShipping(userId || sessionId, { state, city, postalCode });
                 const response = {
-                    success: false,
-                    message: "Authentication required",
-                    error: {
-                        code: "AUTHENTICATION_REQUIRED",
-                        details: "User must be authenticated to perform this action"
-                    }
+                    success: true,
+                    message: "Shipping options calculated successfully",
+                    data: shippingOptions,
                 };
-                res.status(401).json(response);
+                res.json(response);
                 return;
             }
-            const shippingOptions = await this.cartService.calculateShipping(userId, { state, city, postalCode });
-            const response = {
-                success: true,
-                message: "Shipping options calculated successfully",
-                data: shippingOptions,
-            };
-            res.json(response);
+            // No user or session
+            res.status(401).json({
+                success: false,
+                message: "Authentication or session required",
+            });
         }
         catch (error) {
             this.handleError(error, req, res);

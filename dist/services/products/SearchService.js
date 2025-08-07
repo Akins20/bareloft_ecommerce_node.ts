@@ -9,14 +9,12 @@ exports.SearchService = void 0;
 const ProductRepository_1 = require("../../repositories/ProductRepository");
 const CategoryRepository_1 = require("../../repositories/CategoryRepository");
 const BaseService_1 = require("../BaseService");
-const CacheService_1 = require("../cache/CacheService");
-const RedisService_1 = require("../cache/RedisService");
-const connection_1 = require("../../database/connection");
-const winston_1 = require("../../utils/logger/winston");
+const client_1 = require("@prisma/client");
+const redis_1 = require("../../config/redis");
 class SearchService extends BaseService_1.BaseService {
     productRepo;
     categoryRepo;
-    cacheService;
+    prisma;
     // 🇳🇬 Nigerian market specific search terms
     NIGERIAN_PRODUCT_ALIASES = {
         ankara: ["african print", "wax print", "traditional fabric"],
@@ -39,11 +37,11 @@ class SearchService extends BaseService_1.BaseService {
         quality: /\b(original|authentic|quality|durable|lasting)\b/i,
         urgency: /\b(urgent|asap|quick|fast|immediate|today)\b/i,
     };
-    constructor() {
+    constructor(productRepository, categoryRepository) {
         super();
-        this.productRepo = new ProductRepository_1.ProductRepository(connection_1.prisma);
-        this.categoryRepo = new CategoryRepository_1.CategoryRepository(connection_1.prisma);
-        this.cacheService = new CacheService_1.CacheService(new RedisService_1.RedisService());
+        this.prisma = new client_1.PrismaClient();
+        this.productRepo = productRepository || new ProductRepository_1.ProductRepository(this.prisma);
+        this.categoryRepo = categoryRepository || new CategoryRepository_1.CategoryRepository(this.prisma);
     }
     /**
      * 🔍 Search products with advanced filtering
@@ -53,9 +51,11 @@ class SearchService extends BaseService_1.BaseService {
             const startTime = Date.now();
             const processedQuery = this.processSearchQuery(query.query);
             // Execute search with filters
-            const products = await this.productRepo.findMany({
-                page: query.page || 1,
-                limit: query.limit || 20,
+            const products = await this.productRepo.findMany({}, {
+                pagination: {
+                    page: query.page || 1,
+                    limit: query.limit || 20,
+                }
                 // Add search filters as needed
             });
             const suggestions = await this.getSuggestions(query.query, 5);
@@ -73,7 +73,7 @@ class SearchService extends BaseService_1.BaseService {
             };
         }
         catch (error) {
-            winston_1.logger.error('Search products error', { error, query });
+            console.error('Search products error', { error, query });
             throw error;
         }
     }
@@ -88,9 +88,9 @@ class SearchService extends BaseService_1.BaseService {
             const searchIntent = this.analyzeSearchIntent(query.query);
             // Check cache first
             const cacheKey = this.generateCacheKey(query);
-            const cachedResult = await this.cacheService.get(cacheKey);
+            const cachedResult = await redis_1.redisClient.get(cacheKey);
             if (cachedResult) {
-                winston_1.logger.info("Search cache hit", { query: query.query, cacheKey });
+                console.log("Search cache hit", { query: query.query, cacheKey });
                 return {
                     ...cachedResult,
                     searchTime: Date.now() - startTime,
@@ -118,13 +118,13 @@ class SearchService extends BaseService_1.BaseService {
                 },
             };
             // Cache result for 5 minutes
-            await this.cacheService.set(cacheKey, result);
+            await redis_1.redisClient.set(cacheKey, result, 300);
             // Track search for analytics
             this.trackSearch(query.query, result.products.length, searchIntent);
             return result;
         }
         catch (error) {
-            winston_1.logger.error("Search error", {
+            console.error("Search error", {
                 error: error instanceof Error ? error.message : "Unknown error",
                 query: query.query,
             });
@@ -147,9 +147,11 @@ class SearchService extends BaseService_1.BaseService {
             }
             const suggestions = [];
             // Product name suggestions (mock implementation)
-            const productSuggestions = await this.productRepo.findMany({
-                search: partialQuery,
-                limit: Math.ceil(limit * 0.6),
+            const productSuggestions = await this.productRepo.findMany({}, {
+                pagination: {
+                    page: 1,
+                    limit: Math.ceil(limit * 0.6),
+                }
             });
             suggestions.push(...productSuggestions.data.map((product) => ({
                 text: product.name,
@@ -160,9 +162,11 @@ class SearchService extends BaseService_1.BaseService {
                 highlight: this.highlightMatch(product.name, partialQuery),
             })));
             // Category suggestions (mock implementation)
-            const categorySuggestions = await this.categoryRepo.findMany({
-                search: partialQuery,
-                limit: Math.ceil(limit * 0.4),
+            const categorySuggestions = await this.categoryRepo.findMany({}, {
+                pagination: {
+                    page: 1,
+                    limit: Math.ceil(limit * 0.4),
+                }
             });
             suggestions.push(...categorySuggestions.data.map((category) => ({
                 text: category.name,
@@ -187,7 +191,7 @@ class SearchService extends BaseService_1.BaseService {
                 .slice(0, limit);
         }
         catch (error) {
-            winston_1.logger.error("Error getting search suggestions", {
+            console.error("Error getting search suggestions", {
                 error: error instanceof Error ? error.message : "Unknown error",
                 partialQuery,
             });
@@ -200,7 +204,7 @@ class SearchService extends BaseService_1.BaseService {
     async getPopularSearches(limit = 10) {
         try {
             const cacheKey = "popular_searches";
-            const cached = await this.cacheService.get(cacheKey);
+            const cached = await redis_1.redisClient.get(cacheKey);
             if (cached) {
                 return cached.slice(0, limit);
             }
@@ -218,11 +222,11 @@ class SearchService extends BaseService_1.BaseService {
                 { text: "Perfume", type: "suggestion", count: 290, relevance: 0.45 },
             ];
             // Cache for 1 hour
-            await this.cacheService.set(cacheKey, popularSearches);
+            await redis_1.redisClient.set(cacheKey, popularSearches, 3600);
             return popularSearches.slice(0, limit);
         }
         catch (error) {
-            winston_1.logger.error("Error getting popular searches", {
+            console.error("Error getting popular searches", {
                 error: error instanceof Error ? error.message : "Unknown error",
             });
             return [];
@@ -235,7 +239,7 @@ class SearchService extends BaseService_1.BaseService {
         try {
             // Get search analytics from cache or database
             const cacheKey = `search_analytics_${timeframe}`;
-            const cached = await this.cacheService?.get?.(cacheKey);
+            const cached = await redis_1.redisClient.get(cacheKey);
             if (cached) {
                 return JSON.parse(cached);
             }
@@ -280,13 +284,11 @@ class SearchService extends BaseService_1.BaseService {
                 peakSearchHours: [],
             };
             // Cache the analytics for future requests
-            if (this.cacheService?.set) {
-                await this.cacheService.set(cacheKey, JSON.stringify(analytics), { ttl: 3600 });
-            }
+            await redis_1.redisClient.set(cacheKey, JSON.stringify(analytics), 3600);
             return analytics;
         }
         catch (error) {
-            winston_1.logger.error("Error getting search analytics", {
+            console.error("Error getting search analytics", {
                 error: error instanceof Error ? error.message : "Unknown error",
                 timeframe,
             });
@@ -437,9 +439,11 @@ class SearchService extends BaseService_1.BaseService {
                     limit: filters.limit || 20,
                 },
             };
-            const results = await this.productRepo.findMany({
-                page: filters.page || 1,
-                limit: filters.limit || 20,
+            const results = await this.productRepo.findMany({}, {
+                pagination: {
+                    page: filters.page || 1,
+                    limit: filters.limit || 20,
+                }
                 // Add search filters as needed
             });
             // Apply Nigerian market ranking adjustments
@@ -447,7 +451,7 @@ class SearchService extends BaseService_1.BaseService {
             return results;
         }
         catch (error) {
-            winston_1.logger.error("Error executing search", {
+            console.error("Error executing search", {
                 error: error instanceof Error ? error.message : "Unknown error",
                 processedQuery,
                 filters,
@@ -647,7 +651,7 @@ class SearchService extends BaseService_1.BaseService {
      */
     trackSearch(query, resultCount, searchIntent) {
         // This would typically save to analytics database
-        winston_1.logger.info("Search tracked", {
+        console.log("Search tracked", {
             query,
             resultCount,
             intent: searchIntent.type,
@@ -675,7 +679,7 @@ class SearchService extends BaseService_1.BaseService {
             return terms.slice(0, limit);
         }
         catch (error) {
-            winston_1.logger.error("Error getting popular search terms", { error, timeframe });
+            console.error("Error getting popular search terms", { error, timeframe });
             return [];
         }
     }
@@ -693,7 +697,7 @@ class SearchService extends BaseService_1.BaseService {
             }));
         }
         catch (error) {
-            winston_1.logger.error("Error getting personalized suggestions", { error, userId });
+            console.error("Error getting personalized suggestions", { error, userId });
             return this.getPopularSuggestions(limit);
         }
     }
@@ -741,7 +745,7 @@ class SearchService extends BaseService_1.BaseService {
             };
         }
         catch (error) {
-            winston_1.logger.error("Error getting available filters", { error, query });
+            console.error("Error getting available filters", { error, query });
             return { brands: [], categories: [], priceRanges: [] };
         }
     }
@@ -780,7 +784,7 @@ class SearchService extends BaseService_1.BaseService {
             };
         }
         catch (error) {
-            winston_1.logger.error("Error getting user search history", { error, userId });
+            console.error("Error getting user search history", { error, userId });
             throw error;
         }
     }
@@ -791,11 +795,11 @@ class SearchService extends BaseService_1.BaseService {
         try {
             // This would typically delete from database
             const clearedCount = 5; // Mock result
-            winston_1.logger.info("User search history cleared", { userId, clearedCount });
+            console.log("User search history cleared", { userId, clearedCount });
             return { clearedCount };
         }
         catch (error) {
-            winston_1.logger.error("Error clearing user search history", { error, userId });
+            console.error("Error clearing user search history", { error, userId });
             throw error;
         }
     }
@@ -813,7 +817,7 @@ class SearchService extends BaseService_1.BaseService {
             return trending.slice(0, limit);
         }
         catch (error) {
-            winston_1.logger.error("Error getting trending searches", { error, hours });
+            console.error("Error getting trending searches", { error, hours });
             return [];
         }
     }
@@ -823,10 +827,10 @@ class SearchService extends BaseService_1.BaseService {
     async saveSearchToHistory(userId, searchData) {
         try {
             // This would typically save to database
-            winston_1.logger.info("Search saved to history", { userId, searchData });
+            console.log("Search saved to history", { userId, searchData });
         }
         catch (error) {
-            winston_1.logger.error("Error saving search to history", { error, userId, searchData });
+            console.error("Error saving search to history", { error, userId, searchData });
             throw error;
         }
     }

@@ -4,16 +4,14 @@ import { authenticate } from "../../middleware/auth/authenticate";
 import { authorize } from "../../middleware/auth/authorize";
 import { rateLimiter } from "../../middleware/security/rateLimiter";
 import { cacheMiddleware } from "../../middleware/cache/cacheMiddleware";
+import { getServiceContainer } from "../../config/serviceContainer";
 
 const router = Router();
 
-// Initialize controller
-let searchController: SearchController;
-
-export const initializeSearchRoutes = (controller: SearchController) => {
-  searchController = controller;
-  return router;
-};
+// Initialize controller with dependency injection
+const serviceContainer = getServiceContainer();
+const searchService = serviceContainer.getSearchService();
+const searchController = new SearchController(searchService);
 
 // Rate limiting for search operations
 const searchRateLimit = rateLimiter.general;

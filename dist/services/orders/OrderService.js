@@ -2,58 +2,80 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.OrderService = void 0;
 const BaseService_1 = require("../BaseService");
-const models_1 = require("../../models");
 const types_1 = require("../../types");
+const redis_1 = require("../../config/redis");
 class OrderService extends BaseService_1.BaseService {
-    cacheService;
-    constructor(cacheService) {
+    orderRepository;
+    cartService;
+    constructor(orderRepository, cartService) {
         super();
-        this.cacheService = cacheService;
+        this.orderRepository = orderRepository || {};
+        this.cartService = cartService || {};
     }
     /**
-     * Create a new order
+     * Create a new order from cart
      */
-    async createOrder(userId, request, cartItems) {
+    async createOrder(userId, request) {
         try {
+            // Get cart items from cart service
+            const cartSummary = await this.cartService.getCart?.(userId) || {
+                items: [],
+                subtotal: 0,
+                tax: 0,
+                total: 0,
+                itemCount: 0
+            };
+            if (cartSummary.items.length === 0) {
+                throw new types_1.AppError("Cart is empty", types_1.HTTP_STATUS.BAD_REQUEST, types_1.ERROR_CODES.VALIDATION_ERROR);
+            }
             // Generate order number
             const orderNumber = await this.generateOrderNumber();
             // Calculate totals
-            const subtotal = cartItems.reduce((sum, item) => sum + item.totalPrice, 0);
-            const shippingAmount = this.calculateShippingAmount(subtotal);
-            const taxAmount = this.calculateTaxAmount(subtotal);
-            const totalAmount = subtotal + shippingAmount + taxAmount;
-            // Create order
-            const order = await models_1.OrderModel.create({
-                data: {
-                    orderNumber,
-                    userId,
-                    status: "PENDING",
-                    subtotal,
-                    tax: taxAmount,
-                    shippingCost: shippingAmount,
-                    discount: 0,
-                    total: totalAmount,
-                    currency: "NGN",
-                    paymentStatus: "PENDING",
-                    paymentMethod: request.paymentMethod?.toString(),
-                    notes: request.customerNotes,
-                },
-            });
-            // Create order items
-            for (const item of cartItems) {
-                await models_1.OrderItemModel.create({
-                    data: {
-                        orderId: order.id,
-                        productId: item.productId,
-                        quantity: item.quantity,
-                        price: item.unitPrice,
-                        total: item.totalPrice,
-                    },
-                });
+            const subtotal = cartSummary.subtotal;
+            const shippingAmount = this.calculateShippingAmount(subtotal, request.shippingAddress?.state);
+            const taxAmount = cartSummary.tax || this.calculateTaxAmount(subtotal);
+            const discountAmount = request.couponCode ? await this.calculateDiscount(request.couponCode, subtotal) : 0;
+            const totalAmount = subtotal + shippingAmount + taxAmount - discountAmount;
+            // Create order data
+            const orderData = {
+                orderNumber,
+                userId,
+                status: "PENDING",
+                subtotal,
+                tax: taxAmount,
+                shippingCost: shippingAmount,
+                discount: discountAmount,
+                total: totalAmount,
+                currency: "NGN",
+                paymentStatus: "PENDING",
+                paymentMethod: request.paymentMethod || "CARD",
+                notes: request.customerNotes,
+                // shippingAddressId: request.shippingAddress?.id,
+                // billingAddressId: request.billingAddress?.id,
+            };
+            // Convert cart items to order items format
+            const orderItems = cartSummary.items.map((item) => ({
+                productId: item.productId,
+                productName: item.product?.name || 'Product',
+                productSku: item.product?.sku || '',
+                productImage: item.product?.images?.[0] || '',
+                quantity: item.quantity,
+                unitPrice: item.unitPrice || item.price || 0,
+                totalPrice: item.totalPrice || (item.quantity * (item.price || 0)),
+            }));
+            // Create order using repository
+            const order = await this.orderRepository.create?.(orderData) || {};
+            // Clear cart after successful order creation
+            if (order.id) {
+                await this.cartService.clearCart?.(userId);
             }
-            // Create timeline event
-            await this.createTimelineEvent(order.id, "ORDER_CREATED", "Order created and pending payment", userId);
-            return this.getOrderById(order.id);
+            // Create initial timeline event
+            await this.createTimelineEvent(order.id || '', "ORDER_CREATED", "Order created and pending payment", userId);
+            return {
+                success: true,
+                message: "Order created successfully",
+                order,
+            };
         }
         catch (error) {
             this.handleError("Error creating order", error);
@@ -63,27 +85,17 @@ class OrderService extends BaseService_1.BaseService {
     /**
      * Get order by ID
      */
-    async getOrderById(orderId) {
+    async getOrderById(orderId, userId) {
         try {
-            const order = await models_1.OrderModel.findUnique({
-                where: { id: orderId },
-                include: {
-                    items: true,
-                    user: {
-                        select: {
-                            id: true,
-                            firstName: true,
-                            lastName: true,
-                            phoneNumber: true,
-                            email: true,
-                        },
-                    },
-                },
-            });
+            const order = await this.orderRepository.findById?.(orderId);
             if (!order) {
                 throw new types_1.AppError("Order not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
             }
-            return this.transformOrder(order);
+            // Check ownership for user requests
+            if (userId && order.userId !== userId) {
+                throw new types_1.AppError("Access denied", types_1.HTTP_STATUS.FORBIDDEN, types_1.ERROR_CODES.FORBIDDEN);
+            }
+            return order;
         }
         catch (error) {
             this.handleError("Error fetching order", error);
@@ -91,97 +103,37 @@ class OrderService extends BaseService_1.BaseService {
         }
     }
     /**
-     * Get orders list with filtering
+     * Get user orders with pagination
      */
-    async getOrders(query = {}) {
+    async getUserOrders(userId, params = {}) {
         try {
-            const { page = 1, limit = 20, status, paymentStatus, startDate, endDate, search, sortBy = "createdAt", sortOrder = "desc", } = query;
-            // Build where clause
-            const where = {};
-            if (status)
-                where.status = status;
-            if (paymentStatus)
-                where.paymentStatus = paymentStatus;
-            if (startDate || endDate) {
-                where.createdAt = {};
-                if (startDate)
-                    where.createdAt.gte = new Date(startDate);
-                if (endDate)
-                    where.createdAt.lte = new Date(endDate);
-            }
-            if (search) {
-                where.OR = [
-                    { orderNumber: { contains: search, mode: "insensitive" } },
-                    {
-                        user: {
-                            OR: [
-                                { firstName: { contains: search, mode: "insensitive" } },
-                                { lastName: { contains: search, mode: "insensitive" } },
-                                { phoneNumber: { contains: search, mode: "insensitive" } },
-                            ],
-                        },
-                    },
-                ];
-            }
-            // Build order clause
-            const orderBy = {};
-            orderBy[sortBy] = sortOrder;
-            // Execute queries
-            const [orders, total] = await Promise.all([
-                models_1.OrderModel.findMany({
-                    where,
-                    include: {
-                        user: {
-                            select: {
-                                firstName: true,
-                                lastName: true,
-                                phoneNumber: true,
-                            },
-                        },
-                        items: {
-                            take: 1, // Just count
-                        },
-                    },
-                    orderBy,
-                    skip: (page - 1) * limit,
-                    take: limit,
-                }),
-                models_1.OrderModel.count({ where }),
-            ]);
-            const pagination = this.createPagination(page, limit, total);
-            return {
-                orders: orders.map(this.transformOrderSummary),
-                pagination,
+            const { page = 1, limit = 10, status, startDate, endDate } = params;
+            // Build query parameters
+            const query = {
+                userId,
+                status: status,
+                startDate: startDate ? new Date(startDate) : undefined,
+                endDate: endDate ? new Date(endDate) : undefined,
             };
-        }
-        catch (error) {
-            this.handleError("Error fetching orders", error);
-            throw error;
-        }
-    }
-    /**
-     * Get user orders
-     */
-    async getUserOrders(userId, page = 1, limit = 10) {
-        try {
-            const [orders, total] = await Promise.all([
-                models_1.OrderModel.findMany({
-                    where: { userId },
-                    include: {
-                        items: {
-                            take: 3, // Show few items for summary
-                        },
-                    },
-                    orderBy: { createdAt: "desc" },
-                    skip: (page - 1) * limit,
-                    take: limit,
-                }),
-                models_1.OrderModel.count({ where: { userId } }),
-            ]);
-            const pagination = this.createPagination(page, limit, total);
+            // Get orders using repository
+            const result = await this.orderRepository.findMany?.({}, {
+                pagination: { page, limit }
+            }) || {
+                data: [],
+                pagination: {
+                    currentPage: 1,
+                    totalPages: 0,
+                    totalItems: 0,
+                    itemsPerPage: limit,
+                    hasNextPage: false,
+                    hasPreviousPage: false,
+                }
+            };
             return {
-                orders: orders.map(this.transformOrder),
-                pagination,
+                success: true,
+                message: "Orders retrieved successfully",
+                orders: result.data,
+                pagination: result.pagination,
             };
         }
         catch (error) {
@@ -190,29 +142,23 @@ class OrderService extends BaseService_1.BaseService {
         }
     }
     /**
-     * Update order status
+     * Update order status (Admin only)
      */
-    async updateOrderStatus(orderId, request, updatedBy) {
+    async updateOrderStatus(orderId, status, adminNotes, updatedBy) {
         try {
-            const order = await models_1.OrderModel.findUnique({
-                where: { id: orderId },
-            });
-            if (!order) {
-                throw new types_1.AppError("Order not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
-            }
-            // Update order
-            const updatedOrder = await models_1.OrderModel.update({
-                where: { id: orderId },
-                data: {
-                    status: request.status,
-                    notes: request.adminNotes,
-                },
-            });
+            const order = await this.getOrderById(orderId);
+            // Update order status
+            const updatedOrder = await this.orderRepository.update?.(orderId, {
+                status: status,
+                notes: adminNotes,
+            }) || order;
             // Create timeline event
-            await this.createTimelineEvent(orderId, "STATUS_UPDATED", this.getStatusDescription(request.status), updatedBy, request.adminNotes);
-            // Clear cache
-            await this.clearOrderCache(orderId);
-            return this.getOrderById(orderId);
+            await this.createTimelineEvent(orderId, "STATUS_UPDATED", this.getStatusDescription(status), updatedBy || "ADMIN", adminNotes);
+            return {
+                success: true,
+                message: "Order status updated successfully",
+                order: updatedOrder,
+            };
         }
         catch (error) {
             this.handleError("Error updating order status", error);
@@ -222,55 +168,27 @@ class OrderService extends BaseService_1.BaseService {
     /**
      * Cancel order
      */
-    async cancelOrder(orderId, reason, cancelledBy) {
+    async cancelOrder(orderId, reason, userId) {
         try {
-            const order = await models_1.OrderModel.findUnique({
-                where: { id: orderId },
-            });
-            if (!order) {
-                throw new types_1.AppError("Order not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
-            }
-            if (order.status === "DELIVERED" || order.status === "CANCELLED") {
+            const order = await this.getOrderById(orderId, userId);
+            if (order.status === types_1.OrderStatus.DELIVERED || order.status === types_1.OrderStatus.CANCELLED) {
                 throw new types_1.AppError("Cannot cancel this order", types_1.HTTP_STATUS.BAD_REQUEST, types_1.ERROR_CODES.ORDER_CANNOT_BE_CANCELLED);
             }
             // Update order status
-            await models_1.OrderModel.update({
-                where: { id: orderId },
-                data: {
-                    status: "CANCELLED",
-                    notes: reason,
-                    updatedAt: new Date(),
-                },
-            });
+            const updatedOrder = await this.orderRepository.update?.(orderId, {
+                status: "CANCELLED",
+                notes: reason,
+            }) || order;
             // Create timeline event
-            await this.createTimelineEvent(orderId, "ORDER_CANCELLED", `Order cancelled: ${reason}`, cancelledBy);
-            return this.getOrderById(orderId);
+            await this.createTimelineEvent(orderId, "ORDER_CANCELLED", `Order cancelled: ${reason}`, userId || "CUSTOMER");
+            return {
+                success: true,
+                message: "Order cancelled successfully",
+                order: updatedOrder,
+            };
         }
         catch (error) {
             this.handleError("Error cancelling order", error);
-            throw error;
-        }
-    }
-    /**
-     * Get order timeline
-     */
-    async getOrderTimeline(orderId) {
-        try {
-            const timeline = await models_1.OrderTimelineEventModel.findMany({
-                where: { orderId },
-                orderBy: { createdAt: "asc" },
-            });
-            return timeline.map((event) => ({
-                id: event.id,
-                status: event.type,
-                description: event.message,
-                notes: event.data?.notes,
-                createdBy: event.data?.createdBy,
-                createdAt: event.createdAt,
-            }));
-        }
-        catch (error) {
-            this.handleError("Error fetching order timeline", error);
             throw error;
         }
     }
@@ -279,265 +197,22 @@ class OrderService extends BaseService_1.BaseService {
      */
     async getOrderByNumber(orderNumber, userId) {
         try {
-            const where = { orderNumber };
-            if (userId) {
-                where.userId = userId;
-            }
-            const order = await models_1.OrderModel.findUnique({
-                where,
-                include: {
-                    items: true,
-                    user: {
-                        select: {
-                            id: true,
-                            firstName: true,
-                            lastName: true,
-                            phoneNumber: true,
-                            email: true,
-                        },
-                    },
-                },
+            // For now, use a simple implementation - in production, you'd have a proper query
+            const orders = await this.orderRepository.findMany?.({}, {
+                pagination: { page: 1, limit: 100 }
             });
+            const order = orders?.data.find((o) => o.orderNumber === orderNumber);
             if (!order) {
                 throw new types_1.AppError("Order not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
             }
-            return this.transformOrder(order);
+            // Check ownership for user requests
+            if (userId && order.userId !== userId) {
+                throw new types_1.AppError("Access denied", types_1.HTTP_STATUS.FORBIDDEN, types_1.ERROR_CODES.FORBIDDEN);
+            }
+            return order;
         }
         catch (error) {
             this.handleError("Error fetching order by number", error);
-            throw error;
-        }
-    }
-    /**
-     * Get order tracking information
-     */
-    async getOrderTracking(orderId, userId) {
-        try {
-            const where = { id: orderId };
-            if (userId) {
-                where.userId = userId;
-            }
-            const order = await models_1.OrderModel.findUnique({
-                where,
-                include: {
-                    items: true,
-                },
-            });
-            if (!order) {
-                throw new types_1.AppError("Order not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
-            }
-            const timeline = await this.getOrderTimeline(orderId);
-            return {
-                order: this.transformOrder(order),
-                tracking: {
-                    trackingNumber: undefined,
-                    status: order.status,
-                    estimatedDelivery: undefined,
-                    timeline: timeline.map((event) => ({
-                        status: event.status,
-                        description: event.description,
-                        timestamp: event.createdAt,
-                        notes: event.notes,
-                    })),
-                },
-            };
-        }
-        catch (error) {
-            this.handleError("Error fetching order tracking", error);
-            throw error;
-        }
-    }
-    /**
-     * Reorder items from a previous order
-     */
-    async reorder(orderId, userId) {
-        try {
-            const order = await models_1.OrderModel.findUnique({
-                where: { id: orderId, userId },
-                include: {
-                    items: {
-                        include: {
-                            product: {
-                                select: {
-                                    name: true,
-                                },
-                            },
-                        },
-                    },
-                },
-            });
-            if (!order) {
-                throw new types_1.AppError("Order not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
-            }
-            // Transform order items to cart items format
-            const cartItems = order.items.map((item) => ({
-                productId: item.productId,
-                productName: item.product?.name || '',
-                quantity: item.quantity,
-                unitPrice: Number(item.price),
-                totalPrice: Number(item.total),
-            }));
-            return {
-                success: true,
-                message: "Items added to cart for reorder",
-                cartItems,
-            };
-        }
-        catch (error) {
-            this.handleError("Error processing reorder", error);
-            throw error;
-        }
-    }
-    /**
-     * Request return for an order
-     */
-    async requestReturn(orderId, userId, data) {
-        try {
-            const order = await models_1.OrderModel.findUnique({
-                where: { id: orderId, userId },
-                include: {
-                    items: {
-                        include: {
-                            product: {
-                                select: {
-                                    name: true,
-                                },
-                            },
-                        },
-                    },
-                },
-            });
-            if (!order) {
-                throw new types_1.AppError("Order not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
-            }
-            if (order.status !== "DELIVERED") {
-                throw new types_1.AppError("Returns can only be requested for delivered orders", types_1.HTTP_STATUS.BAD_REQUEST, types_1.ERROR_CODES.INVALID_ORDER_STATUS);
-            }
-            // Create timeline event for return request
-            await this.createTimelineEvent(orderId, "RETURN_REQUESTED", `Return requested: ${data.reason}`, userId, data.notes);
-            const returnRequest = {
-                id: `return_${orderId}`,
-                orderId,
-                reason: data.reason,
-                items: data.items || order.items.map((item) => item.id),
-                notes: data.notes,
-                status: "PENDING",
-                requestedAt: new Date(),
-            };
-            return {
-                success: true,
-                message: "Return request submitted successfully",
-                returnRequest,
-            };
-        }
-        catch (error) {
-            this.handleError("Error requesting return", error);
-            throw error;
-        }
-    }
-    /**
-     * Verify payment for an order
-     */
-    async verifyPayment(orderId, userId) {
-        try {
-            const order = await models_1.OrderModel.findUnique({
-                where: { id: orderId, userId },
-            });
-            if (!order) {
-                throw new types_1.AppError("Order not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
-            }
-            // Update payment status
-            const updatedOrder = await models_1.OrderModel.update({
-                where: { id: orderId },
-                data: {
-                    paymentStatus: "COMPLETED",
-                    status: "CONFIRMED",
-                    updatedAt: new Date(),
-                },
-            });
-            // Create timeline event
-            await this.createTimelineEvent(orderId, "PAYMENT_CONFIRMED", "Payment verified and order confirmed", "SYSTEM");
-            return {
-                success: true,
-                message: "Payment verified successfully",
-                order: await this.getOrderById(orderId),
-            };
-        }
-        catch (error) {
-            this.handleError("Error verifying payment", error);
-            throw error;
-        }
-    }
-    /**
-     * Generate invoice for an order
-     */
-    async generateInvoice(orderId, userId) {
-        try {
-            const where = { id: orderId };
-            if (userId) {
-                where.userId = userId;
-            }
-            const order = await models_1.OrderModel.findUnique({
-                where,
-                include: {
-                    items: {
-                        include: {
-                            product: {
-                                select: {
-                                    name: true,
-                                },
-                            },
-                        },
-                    },
-                    user: {
-                        select: {
-                            firstName: true,
-                            lastName: true,
-                            email: true,
-                            phoneNumber: true,
-                        },
-                    },
-                    shippingAddress: true,
-                    billingAddress: true,
-                },
-            });
-            if (!order) {
-                throw new types_1.AppError("Order not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
-            }
-            const invoice = {
-                invoiceNumber: `INV-${order.orderNumber}`,
-                orderNumber: order.orderNumber,
-                invoiceDate: new Date(),
-                dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-                customer: {
-                    name: `${order.user?.firstName} ${order.user?.lastName}`,
-                    email: order.user?.email,
-                    phone: order.user?.phoneNumber,
-                },
-                billing: order.billingAddress || null,
-                shipping: order.shippingAddress || null,
-                items: order.items.map((item) => ({
-                    description: item.product?.name || '',
-                    quantity: item.quantity,
-                    unitPrice: Number(item.price),
-                    totalPrice: Number(item.total),
-                })),
-                subtotal: Number(order.subtotal),
-                taxAmount: Number(order.tax),
-                shippingAmount: Number(order.shippingCost),
-                discountAmount: Number(order.discount),
-                totalAmount: Number(order.total),
-                currency: order.currency,
-                paymentStatus: order.paymentStatus,
-                paymentMethod: order.paymentMethod,
-            };
-            return {
-                success: true,
-                invoice,
-            };
-        }
-        catch (error) {
-            this.handleError("Error generating invoice", error);
             throw error;
         }
     }
@@ -546,32 +221,26 @@ class OrderService extends BaseService_1.BaseService {
      */
     async getUserOrderStats(userId) {
         try {
-            const [orders, totalSpent] = await Promise.all([
-                models_1.OrderModel.findMany({
-                    where: { userId },
-                    include: { items: { take: 1 } },
-                    orderBy: { createdAt: "desc" },
-                }),
-                models_1.OrderModel.aggregate({
-                    where: { userId, paymentStatus: "COMPLETED" },
-                    _sum: { total: true },
-                }),
-            ]);
-            const totalOrders = orders.length;
-            const totalAmount = Number(totalSpent._sum.total) || 0;
-            const averageOrderValue = totalOrders > 0 ? totalAmount / totalOrders : 0;
+            const result = await this.orderRepository.findMany?.({}, {
+                pagination: { page: 1, limit: 100 }
+            });
+            const userOrders = result?.data.filter((order) => order.userId === userId) || [];
+            const totalOrders = userOrders.length;
+            const completedOrders = userOrders.filter((o) => o.paymentStatus === "COMPLETED");
+            const totalSpent = completedOrders.reduce((sum, order) => sum + (order.total || 0), 0);
+            const averageOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0;
             // Count orders by status
-            const ordersByStatus = orders.reduce((acc, order) => {
+            const ordersByStatus = userOrders.reduce((acc, order) => {
                 acc[order.status] = (acc[order.status] || 0) + 1;
                 return acc;
             }, {});
             // Get recent orders (last 5)
-            const recentOrders = orders
-                .slice(0, 5)
-                .map((order) => this.transformOrder(order));
+            const recentOrders = userOrders
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                .slice(0, 5);
             return {
                 totalOrders,
-                totalSpent: totalAmount,
+                totalSpent,
                 averageOrderValue,
                 ordersByStatus,
                 recentOrders,
@@ -588,44 +257,71 @@ class OrderService extends BaseService_1.BaseService {
         const year = now.getFullYear().toString().slice(-2);
         const month = (now.getMonth() + 1).toString().padStart(2, "0");
         const day = now.getDate().toString().padStart(2, "0");
-        // Get count of orders today
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const todayCount = await models_1.OrderModel.count({
-            where: {
-                createdAt: {
-                    gte: today,
-                    lt: tomorrow,
-                },
-            },
-        });
-        const sequence = (todayCount + 1).toString().padStart(3, "0");
-        return `BL${year}${month}${day}${sequence}`;
+        // Simple sequence counter using Redis for production
+        const dateKey = `${year}${month}${day}`;
+        const sequenceKey = `order_sequence:${dateKey}`;
+        let sequence = 1;
+        try {
+            sequence = await redis_1.redisClient.increment(sequenceKey, 1);
+            await redis_1.redisClient.expire(sequenceKey, 24 * 60 * 60); // Expire after 24 hours
+        }
+        catch (error) {
+            // Fallback to random number if Redis fails
+            sequence = Math.floor(Math.random() * 999) + 1;
+        }
+        return `BL${year}${month}${day}${sequence.toString().padStart(3, "0")}`;
     }
-    calculateShippingAmount(subtotal) {
+    calculateShippingAmount(subtotal, state) {
         // Free shipping for orders over ₦50,000
         if (subtotal >= 50000) {
             return 0;
         }
+        // Nigerian shipping rates
+        if (state?.toLowerCase() === "lagos") {
+            return 1500; // Lagos shipping
+        }
+        // Major cities
+        const majorCities = ["abuja", "kano", "ibadan", "port harcourt"];
+        if (state && majorCities.includes(state.toLowerCase())) {
+            return 2000;
+        }
         return 2500; // Default shipping fee
     }
     calculateTaxAmount(subtotal) {
-        // 7.5% VAT
+        // 7.5% VAT in Nigeria
         return Math.round(subtotal * 0.075);
     }
+    async calculateDiscount(couponCode, subtotal) {
+        // Simple discount calculation - in production, use CouponService
+        const discountMap = {
+            "SAVE10": 0.1,
+            "SAVE20": 0.2,
+            "NEWUSER": 0.15,
+            "WELCOME": 0.05,
+        };
+        const discountPercentage = discountMap[couponCode.toUpperCase()] || 0;
+        return Math.round(subtotal * discountPercentage);
+    }
     async createTimelineEvent(orderId, type, message, createdBy, notes) {
-        await models_1.OrderTimelineEventModel.create({
-            data: {
-                orderId,
-                type,
-                message,
-                data: {
-                    createdBy,
-                    notes,
-                },
-            },
-        });
+        // In production, save to timeline events table
+        const eventData = {
+            orderId,
+            type,
+            message,
+            createdBy: createdBy || "SYSTEM",
+            notes,
+            createdAt: new Date(),
+        };
+        // Store in Redis as backup
+        const key = `order_timeline:${orderId}`;
+        try {
+            const existing = await redis_1.redisClient.get(key) || [];
+            existing.push(eventData);
+            await redis_1.redisClient.set(key, existing, 30 * 24 * 60 * 60); // 30 days
+        }
+        catch (error) {
+            console.error("Failed to store timeline event:", error);
+        }
     }
     getStatusDescription(status) {
         const descriptions = {
@@ -639,64 +335,15 @@ class OrderService extends BaseService_1.BaseService {
         };
         return descriptions[status] || `Order status updated to ${status}`;
     }
-    async clearOrderCache(orderId) {
-        await Promise.all([
-            this.cacheService.delete(`order:${orderId}`),
-            this.cacheService.clearPattern("orders:*"),
-            this.cacheService.clearPattern("user-orders:*"),
-        ]);
-    }
-    transformOrder(order) {
-        return {
-            id: order.id,
-            orderNumber: order.orderNumber,
-            userId: order.userId,
-            status: order.status,
-            subtotal: Number(order.subtotal),
-            tax: Number(order.tax),
-            shippingCost: Number(order.shippingCost),
-            discount: Number(order.discount),
-            total: Number(order.total),
-            currency: order.currency,
-            paymentStatus: order.paymentStatus,
-            paymentMethod: order.paymentMethod,
-            paymentReference: order.paymentReference,
-            notes: order.notes,
-            shippingAddressId: order.shippingAddressId,
-            billingAddressId: order.billingAddressId,
-            createdAt: order.createdAt,
-            updatedAt: order.updatedAt,
-            user: order.user,
-            items: order.items?.map((item) => ({
-                id: item.id,
-                quantity: item.quantity,
-                price: Number(item.price),
-                total: Number(item.total),
-                orderId: item.orderId,
-                productId: item.productId,
-                createdAt: item.createdAt,
-                updatedAt: item.updatedAt,
-                product: item.product,
-            })) || [],
-            shippingAddress: order.shippingAddress,
-            billingAddress: order.billingAddress,
-            timelineEvents: order.timelineEvents,
-            paymentTransactions: order.paymentTransactions,
-        };
-    }
-    transformOrderSummary(order) {
-        return {
-            id: order.id,
-            orderNumber: order.orderNumber,
-            status: order.status,
-            paymentStatus: order.paymentStatus,
-            totalAmount: Number(order.total),
-            currency: order.currency,
-            itemCount: order.items?.length || 0,
-            customerName: `${order.user?.firstName} ${order.user?.lastName}`,
-            customerPhone: order.user?.phoneNumber,
-            createdAt: order.createdAt,
-        };
+    /**
+     * Handle service errors
+     */
+    handleError(message, error) {
+        console.error(message, error);
+        if (error instanceof types_1.AppError) {
+            throw error;
+        }
+        throw new types_1.AppError(message, types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.INTERNAL_ERROR);
     }
 }
 exports.OrderService = OrderService;

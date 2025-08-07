@@ -176,18 +176,18 @@ class App {
         this.app.use(`${apiV1}/products`, products_1.default);
         this.app.use(`${apiV1}/categories`, categories_1.default);
         this.app.use(`${apiV1}/search`, search_1.default);
+        // Cart routes (supports both authenticated and guest users)
+        this.app.use(`${apiV1}/cart`, cart_1.default);
+        // Order routes (mixed public and protected endpoints)
+        this.app.use(`${apiV1}/orders`, orders_1.default);
         // Protected routes (authentication required)
         this.app.use(`${apiV1}/users`, authenticate_1.authenticate, users_1.default);
-        this.app.use(`${apiV1}/cart`, authenticate_1.authenticate, cart_1.default);
-        this.app.use(`${apiV1}/orders`, authenticate_1.authenticate, orders_1.default);
         this.app.use(`${apiV1}/addresses`, authenticate_1.authenticate, addresses_1.default);
         this.app.use(`${apiV1}/reviews`, authenticate_1.authenticate, reviews_1.default);
         this.app.use(`${apiV1}/wishlist`, authenticate_1.authenticate, wishlist_1.default);
         this.app.use(`${apiV1}/upload`, authenticate_1.authenticate, upload_1.default);
         // Admin routes (admin authentication required)
         // this.app.use(`${apiV1}/admin`, adminRoutes);
-        // Webhook routes (special authentication for external services)
-        // this.app.use("/webhooks", webhookRoutes);
         // 404 handler for undefined routes
         this.app.use("*", (req, res) => {
             res

@@ -284,6 +284,7 @@ class AuthService extends BaseService_1.BaseService {
                 phoneNumber: user.phoneNumber,
                 role: user.role,
                 sessionId: session.sessionId,
+                type: 'access'
             });
             // Update session with new access token
             await this.sessionRepository.updateTokens(session.id, newAccessToken, refreshToken);

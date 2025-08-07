@@ -12,11 +12,11 @@ class ProductService extends BaseService_1.BaseService {
     productRepo;
     categoryRepo;
     inventoryRepo;
-    constructor() {
+    constructor(productRepo, categoryRepo, inventoryRepo) {
         super();
-        this.productRepo = {}; // Mock repository
-        this.categoryRepo = {}; // Mock repository
-        this.inventoryRepo = {}; // Mock repository
+        this.productRepo = productRepo || {}; // Accept injected repository or use mock
+        this.categoryRepo = categoryRepo || {}; // Accept injected repository or use mock
+        this.inventoryRepo = inventoryRepo || {}; // Accept injected repository or use mock
     }
     /**
      * 📋 Get products with filtering, search, and pagination
@@ -34,7 +34,11 @@ class ProductService extends BaseService_1.BaseService {
                 isActive: true,
             };
             if (search) {
-                queryFilters.search = search;
+                queryFilters.OR = [
+                    { name: { contains: search, mode: 'insensitive' } },
+                    { description: { contains: search, mode: 'insensitive' } },
+                    { shortDescription: { contains: search, mode: 'insensitive' } }
+                ];
             }
             if (categoryId) {
                 // Verify category exists
@@ -44,34 +48,54 @@ class ProductService extends BaseService_1.BaseService {
                 }
                 queryFilters.categoryId = categoryId;
             }
-            if (priceMin !== undefined) {
-                queryFilters.priceMin = priceMin;
-            }
-            if (priceMax !== undefined) {
-                queryFilters.priceMax = priceMax;
+            if (priceMin !== undefined || priceMax !== undefined) {
+                queryFilters.price = {};
+                if (priceMin !== undefined) {
+                    queryFilters.price.gte = priceMin;
+                }
+                if (priceMax !== undefined) {
+                    queryFilters.price.lte = priceMax;
+                }
             }
             if (featured !== undefined) {
                 queryFilters.isFeatured = featured;
             }
             if (inStock) {
-                queryFilters.inStock = true;
+                queryFilters.stock = { gt: 0 };
             }
-            // Get products with pagination
-            const products = await this.productRepo.findMany({
-                filters: queryFilters,
-                pagination: { page, limit },
-                sort: { field: sortBy, order: sortOrder },
-                include: {
-                    category: true,
-                    images: true,
-                    inventory: true,
-                    reviews: {
-                        select: {
-                            rating: true,
+            // Direct Prisma call for now (bypassing BaseRepository complexity)
+            const skip = (page - 1) * limit;
+            const [productData, total] = await Promise.all([
+                this.productRepo.prisma.product.findMany({
+                    where: queryFilters,
+                    include: {
+                        category: true,
+                        images: true,
+                        reviews: {
+                            select: {
+                                rating: true,
+                            },
                         },
                     },
+                    orderBy: { [sortBy]: sortOrder },
+                    skip,
+                    take: limit,
+                }),
+                this.productRepo.prisma.product.count({
+                    where: queryFilters,
+                }),
+            ]);
+            const products = {
+                data: productData,
+                pagination: {
+                    currentPage: page,
+                    totalPages: Math.ceil(total / limit),
+                    totalItems: total,
+                    itemsPerPage: limit,
+                    hasNextPage: page < Math.ceil(total / limit),
+                    hasPreviousPage: page > 1,
                 },
-            });
+            };
             // Calculate Nigerian market insights
             const productInsights = this.calculateMarketInsights(products.data);
             return {
@@ -100,9 +124,11 @@ class ProductService extends BaseService_1.BaseService {
     async getProduct(identifier) {
         try {
             let product;
-            // Check if identifier is UUID (ID) or slug
+            // Check if identifier is CUID (ID) or slug
+            // CUID format: starts with 'c' followed by 24 alphanumeric characters
+            const isCUID = /^c[a-z0-9]{24}$/i.test(identifier);
             const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
-            if (isUUID) {
+            if (isCUID || isUUID) {
                 product = await this.productRepo.findById?.(identifier) || null;
             }
             else {
@@ -339,21 +365,21 @@ class ProductService extends BaseService_1.BaseService {
      */
     async getFeaturedProducts(limit = 12) {
         try {
-            const products = await this.productRepo.findMany({
-                filters: {
-                    isActive: true,
-                    isFeatured: true,
-                    inStock: true,
-                },
-                pagination: { page: 1, limit },
-                sort: { field: "updatedAt", order: "desc" },
+            const result = await this.productRepo.findMany({
+                isActive: true,
+                isFeatured: true,
+            }, {
                 include: {
                     category: true,
-                    images: true,
-                    inventory: true,
+                    images: {
+                        orderBy: { position: "asc" },
+                    },
                 },
+                orderBy: { updatedAt: "desc" },
+                pagination: { page: 1, limit },
             });
-            return products.data.map((product) => this.formatProductForResponse(product));
+            const products = result.data;
+            return products.map((product) => this.formatProductForResponse(product));
         }
         catch (error) {
             winston_1.logger.error("Error fetching featured products", {
@@ -368,22 +394,23 @@ class ProductService extends BaseService_1.BaseService {
      */
     async getRelatedProducts(productId, categoryId, limit = 8) {
         try {
-            const products = await this.productRepo.findMany({
-                filters: {
-                    isActive: true,
-                    categoryId,
-                    excludeIds: [productId],
-                    inStock: true,
-                },
-                pagination: { page: 1, limit },
-                sort: { field: "createdAt", order: "desc" },
+            const result = await this.productRepo.findMany({
+                isActive: true,
+                categoryId,
+                id: { not: productId },
+                stock: { gt: 0 },
+            }, {
                 include: {
                     category: true,
-                    images: true,
-                    inventory: true,
+                    images: {
+                        orderBy: { position: "asc" },
+                    },
                 },
+                orderBy: { createdAt: "desc" },
+                pagination: { page: 1, limit },
             });
-            return products.data;
+            const products = result.data;
+            return products.map((product) => this.formatProductForResponse(product));
         }
         catch (error) {
             winston_1.logger.error("Error fetching related products", {
@@ -514,10 +541,12 @@ class ProductService extends BaseService_1.BaseService {
      */
     async getAvailableCategories() {
         try {
-            const result = await this.categoryRepo.findMany?.({
-                filters: { isActive: true }
-            }) || { data: [] };
-            return result.data || [];
+            // Direct Prisma call to avoid BaseRepository complexity
+            const categories = await this.categoryRepo.prisma.category.findMany({
+                where: { isActive: true },
+                orderBy: { name: 'asc' }
+            });
+            return categories || [];
         }
         catch (error) {
             winston_1.logger.error("Error fetching available categories", {
@@ -565,12 +594,16 @@ class ProductService extends BaseService_1.BaseService {
      */
     async checkMultipleStock(productIds) {
         try {
-            const products = await this.productRepo.findMany?.({
-                filters: {
-                    ids: productIds,
-                    isActive: true
+            const result = await this.productRepo.findMany?.({
+                id: { in: productIds },
+                isActive: true
+            }, {
+                include: {
+                    category: true,
+                    images: true,
                 }
             }) || { data: [] };
+            const products = result;
             return products.data.map((product) => ({
                 productId: product.id,
                 inStock: (product.stock || 0) > 0,

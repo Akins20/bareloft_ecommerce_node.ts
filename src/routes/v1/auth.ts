@@ -19,8 +19,10 @@
  */
 
 import { Router } from "express";
+import jwt from "jsonwebtoken";
 import { AuthController } from "../../controllers/auth/AuthController";
 import { OTPController } from "../../controllers/auth/OTPController";
+import { config } from "../../config/environment";
 
 // Service imports
 import { AuthService } from "../../services/auth/AuthService";
@@ -478,24 +480,50 @@ router.post(
         });
       }
 
-      // Generate tokens using JWT service
+      // Generate proper tokens with all required fields
       const jwtService = serviceContainer.getService('jwtService') as any;
-      const accessToken = await jwtService.generateAccessToken({ 
-        userId: user.id, 
-        role: user.role 
-      });
-      const refreshToken = await jwtService.generateRefreshToken({ 
-        userId: user.id 
+      
+      // Create a temporary session ID
+      const tempSessionId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      
+      const accessToken = jwt.sign({
+        userId: user.id,
+        sessionId: tempSessionId,
+        role: user.role,
+        type: 'access'
+      }, process.env.JWT_SECRET || config.jwt.secret, {
+        expiresIn: '15m',
+        issuer: 'bareloft-api',
+        audience: 'bareloft-client'
       });
 
-      // Create session
-      const sessionService = serviceContainer.getService('sessionService') as any;
-      await sessionService.createSession({
+      const refreshToken = jwt.sign({
         userId: user.id,
-        refreshToken,
-        deviceInfo: {
-          userAgent: req.headers['user-agent'] || 'Test Client',
-          ipAddress: req.ip || '127.0.0.1'
+        sessionId: tempSessionId,
+        role: user.role,
+        type: 'refresh'
+      }, process.env.JWT_REFRESH_SECRET || config.jwt.refreshSecret, {
+        expiresIn: '7d',
+        issuer: 'bareloft-api',
+        audience: 'bareloft-client'
+      });
+
+      // Create session record
+      const sessionRepository = serviceContainer.getService('sessionRepository') as any;
+      await sessionRepository.prisma.session.create({
+        data: {
+          id: tempSessionId,
+          sessionId: tempSessionId,
+          userId: user.id,
+          accessToken,
+          refreshToken,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+          deviceInfo: JSON.stringify({
+            userAgent: req.headers['user-agent'] || 'Test Client',
+            ipAddress: req.ip || '127.0.0.1'
+          }),
+          isActive: true,
+          lastUsedAt: new Date()
         }
       });
 

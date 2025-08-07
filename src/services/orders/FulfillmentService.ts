@@ -325,8 +325,8 @@ export class FulfillmentService extends BaseService {
         );
       }
 
-      // Generate mock tracking number since trackingNumber field doesn't exist
-      const trackingNumber = `TRK-${order.orderNumber}`;
+      // Generate production tracking number with carrier prefix
+      const trackingNumber = `BLF-${order.orderNumber}-${Date.now().toString().slice(-6)}`;
 
       const shippingAddress = { 
         firstName: 'John', 

@@ -170,13 +170,12 @@ export class ProductService extends BaseService {
     try {
       let product;
 
-      // Check if identifier is UUID (ID) or slug
-      const isUUID =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          identifier
-        );
+      // Check if identifier is CUID (ID) or slug
+      // CUID format: starts with 'c' followed by 24 alphanumeric characters
+      const isCUID = /^c[a-z0-9]{24}$/i.test(identifier);
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
 
-      if (isUUID) {
+      if (isCUID || isUUID) {
         product = await this.productRepo.findById?.(identifier) || null;
       } else {
         product = await this.productRepo.findBySlug?.(identifier) || null;
@@ -463,22 +462,26 @@ export class ProductService extends BaseService {
    */
   async getFeaturedProducts(limit: number = 12): Promise<Product[]> {
     try {
-      const products = await this.productRepo.findMany({
-        filters: {
+      const result = await this.productRepo.findMany(
+        {
           isActive: true,
           isFeatured: true,
-          inStock: true,
         },
-        pagination: { page: 1, limit },
-        sort: { field: "updatedAt", order: "desc" },
-        include: {
-          category: true,
-          images: true,
-          inventory: true,
-        },
-      });
+        {
+          include: {
+            category: true,
+            images: {
+              orderBy: { position: "asc" },
+            },
+          },
+          orderBy: { updatedAt: "desc" },
+          pagination: { page: 1, limit },
+        }
+      );
 
-      return products.data.map((product) =>
+      const products = result.data;
+
+      return products.map((product) =>
         this.formatProductForResponse(product)
       );
     } catch (error) {
@@ -499,23 +502,27 @@ export class ProductService extends BaseService {
     limit: number = 8
   ): Promise<Product[]> {
     try {
-      const products = await this.productRepo.findMany({
-        filters: {
+      const result = await this.productRepo.findMany(
+        {
           isActive: true,
           categoryId,
-          excludeIds: [productId],
-          inStock: true,
+          id: { not: productId },
+          stock: { gt: 0 },
         },
-        pagination: { page: 1, limit },
-        sort: { field: "createdAt", order: "desc" },
-        include: {
-          category: true,
-          images: true,
-          inventory: true,
-        },
-      });
+        {
+          include: {
+            category: true,
+            images: {
+              orderBy: { position: "asc" },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          pagination: { page: 1, limit },
+        }
+      );
 
-      return products.data;
+      const products = result.data;
+      return products.map((product) => this.formatProductForResponse(product));
     } catch (error) {
       logger.error("Error fetching related products", {
         error: error instanceof Error ? error.message : "Unknown error",
@@ -721,12 +728,20 @@ export class ProductService extends BaseService {
    */
   async checkMultipleStock(productIds: string[]): Promise<any[]> {
     try {
-      const products = await this.productRepo.findMany?.({
-        filters: { 
-          ids: productIds,
+      const result = await this.productRepo.findMany?.(
+        { 
+          id: { in: productIds },
           isActive: true 
+        },
+        {
+          include: {
+            category: true,
+            images: true,
+          }
         }
-      }) || { data: [] };
+      ) || { data: [] };
+      
+      const products = result;
 
       return products.data.map((product: any) => ({
         productId: product.id,

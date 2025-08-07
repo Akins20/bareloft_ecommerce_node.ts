@@ -363,7 +363,11 @@ class BaseRepository {
      */
     getModel() {
         const modelKey = this.modelName.toLowerCase();
-        return this.prisma[modelKey];
+        const model = this.prisma[modelKey];
+        if (!model) {
+            throw new types_1.AppError(`Model '${this.modelName}' not found in Prisma client`, types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
+        }
+        return model;
     }
     /**
      * Check if model supports soft delete

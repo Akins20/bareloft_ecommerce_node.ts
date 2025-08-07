@@ -22,6 +22,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const ProductController_1 = require("../../controllers/products/ProductController");
+// Service imports
+const serviceContainer_1 = require("../../config/serviceContainer");
 // Middleware imports
 const authenticate_1 = require("../../middleware/auth/authenticate");
 const authorize_1 = require("../../middleware/auth/authorize");
@@ -32,8 +34,9 @@ const productSchemas = {
     updateProduct: {},
     checkStock: {},
 };
-// Services (dependency injection) - using placeholder for now
-const productService = {};
+// Get services from container
+const serviceContainer = (0, serviceContainer_1.getServiceContainer)();
+const productService = serviceContainer.getService('productService');
 const router = (0, express_1.Router)();
 // Initialize controller
 const productController = new ProductController_1.ProductController(productService);

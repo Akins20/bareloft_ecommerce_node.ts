@@ -3,16 +3,18 @@
  * Advanced product search with Nigerian market optimization
  * Supports fuzzy search, autocomplete, and intelligent filtering
  */
+import { ProductRepository } from "../../repositories/ProductRepository";
+import { CategoryRepository } from "../../repositories/CategoryRepository";
 import { BaseService } from "../BaseService";
 import { SearchQuery, SearchResult, SearchSuggestion, SearchFilters, SearchAnalytics, SearchResponse, SearchHistoryResponse, ClearHistoryResult, TrendingSearch } from "../../types/product.types";
 import { PaginationParams } from "../../types/common.types";
 export declare class SearchService extends BaseService {
     private productRepo;
     private categoryRepo;
-    private cacheService;
+    private prisma;
     private readonly NIGERIAN_PRODUCT_ALIASES;
     private readonly SEARCH_INTENT_PATTERNS;
-    constructor();
+    constructor(productRepository?: ProductRepository, categoryRepository?: CategoryRepository);
     /**
      * 🔍 Search products with advanced filtering
      */

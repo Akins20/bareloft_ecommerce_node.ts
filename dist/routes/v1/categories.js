@@ -1,20 +1,20 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.initializeCategoryRoutes = void 0;
 const express_1 = require("express");
+const CategoryController_1 = require("../../controllers/products/CategoryController");
 const authenticate_1 = require("../../middleware/auth/authenticate");
 const authorize_1 = require("../../middleware/auth/authorize");
+// Service imports
+const serviceContainer_1 = require("../../config/serviceContainer");
 // Note: Category schemas not yet created, using placeholder validation
 const createCategorySchema = {};
 const updateCategorySchema = {};
 const router = (0, express_1.Router)();
-// Initialize controller (will be injected via dependency injection)
-let categoryController;
-const initializeCategoryRoutes = (controller) => {
-    categoryController = controller;
-    return router;
-};
-exports.initializeCategoryRoutes = initializeCategoryRoutes;
+// Get services from container
+const serviceContainer = (0, serviceContainer_1.getServiceContainer)();
+const categoryService = serviceContainer.getService('categoryService');
+// Initialize controller with service
+const categoryController = new CategoryController_1.CategoryController(categoryService);
 // ==================== PUBLIC CATEGORY ENDPOINTS ====================
 /**
  * @route   GET /api/v1/categories

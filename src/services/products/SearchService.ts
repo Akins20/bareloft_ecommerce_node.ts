@@ -7,10 +7,8 @@
 import { ProductRepository } from "../../repositories/ProductRepository";
 import { CategoryRepository } from "../../repositories/CategoryRepository";
 import { BaseService } from "../BaseService";
-import { CacheService } from "../cache/CacheService";
-import { RedisService } from "../cache/RedisService";
-import { prisma } from "../../database/connection";
-import { logger } from "../../utils/logger/winston";
+import { PrismaClient } from "@prisma/client";
+import { redisClient } from "../../config/redis";
 // import { CurrencyUtils, NigerianUtils } from "../../utils/helpers/nigerian";
 import {
   SearchQuery,
@@ -31,7 +29,7 @@ import { PaginationParams } from "../../types/common.types";
 export class SearchService extends BaseService {
   private productRepo: ProductRepository;
   private categoryRepo: CategoryRepository;
-  private cacheService: CacheService;
+  private prisma: PrismaClient;
 
   // 🇳🇬 Nigerian market specific search terms
   private readonly NIGERIAN_PRODUCT_ALIASES = {
@@ -58,11 +56,11 @@ export class SearchService extends BaseService {
     urgency: /\b(urgent|asap|quick|fast|immediate|today)\b/i,
   };
 
-  constructor() {
+  constructor(productRepository?: ProductRepository, categoryRepository?: CategoryRepository) {
     super();
-    this.productRepo = new ProductRepository(prisma);
-    this.categoryRepo = new CategoryRepository(prisma);
-    this.cacheService = new CacheService(new RedisService());
+    this.prisma = new PrismaClient();
+    this.productRepo = productRepository || new ProductRepository(this.prisma);
+    this.categoryRepo = categoryRepository || new CategoryRepository(this.prisma);
   }
 
   /**
@@ -74,9 +72,11 @@ export class SearchService extends BaseService {
       const processedQuery = this.processSearchQuery(query.query);
       
       // Execute search with filters
-      const products = await this.productRepo.findMany({
-        page: query.page || 1,
-        limit: query.limit || 20,
+      const products = await this.productRepo.findMany({}, {
+        pagination: {
+          page: query.page || 1,
+          limit: query.limit || 20,
+        }
         // Add search filters as needed
       });
 
@@ -95,7 +95,7 @@ export class SearchService extends BaseService {
         searchTime: Date.now() - startTime,
       };
     } catch (error) {
-      logger.error('Search products error', { error, query });
+      console.error('Search products error', { error, query });
       throw error;
     }
   }
@@ -113,10 +113,10 @@ export class SearchService extends BaseService {
 
       // Check cache first
       const cacheKey = this.generateCacheKey(query);
-      const cachedResult = await this.cacheService.get<SearchResult>(cacheKey);
+      const cachedResult = await redisClient.get<SearchResult>(cacheKey);
 
       if (cachedResult) {
-        logger.info("Search cache hit", { query: query.query, cacheKey });
+        console.log("Search cache hit", { query: query.query, cacheKey });
         return {
           ...cachedResult,
           searchTime: Date.now() - startTime,
@@ -158,14 +158,14 @@ export class SearchService extends BaseService {
       };
 
       // Cache result for 5 minutes
-      await this.cacheService.set(cacheKey, result);
+      await redisClient.set(cacheKey, result, 300);
 
       // Track search for analytics
       this.trackSearch(query.query, result.products.length, searchIntent);
 
       return result;
     } catch (error) {
-      logger.error("Search error", {
+      console.error("Search error", {
         error: error instanceof Error ? error.message : "Unknown error",
         query: query.query,
       });
@@ -198,9 +198,11 @@ export class SearchService extends BaseService {
       const suggestions: SearchSuggestion[] = [];
 
       // Product name suggestions (mock implementation)
-      const productSuggestions = await this.productRepo.findMany({
-        search: partialQuery,
-        limit: Math.ceil(limit * 0.6),
+      const productSuggestions = await this.productRepo.findMany({}, {
+        pagination: {
+          page: 1,
+          limit: Math.ceil(limit * 0.6),
+        }
       });
       suggestions.push(
         ...productSuggestions.data.map((product: any) => ({
@@ -214,9 +216,11 @@ export class SearchService extends BaseService {
       );
 
       // Category suggestions (mock implementation)
-      const categorySuggestions = await this.categoryRepo.findMany({
-        search: partialQuery,
-        limit: Math.ceil(limit * 0.4),
+      const categorySuggestions = await this.categoryRepo.findMany({}, {
+        pagination: {
+          page: 1,
+          limit: Math.ceil(limit * 0.4),
+        }
       });
       suggestions.push(
         ...categorySuggestions.data.map((category: any) => ({
@@ -249,7 +253,7 @@ export class SearchService extends BaseService {
         )
         .slice(0, limit);
     } catch (error) {
-      logger.error("Error getting search suggestions", {
+      console.error("Error getting search suggestions", {
         error: error instanceof Error ? error.message : "Unknown error",
         partialQuery,
       });
@@ -263,7 +267,7 @@ export class SearchService extends BaseService {
   async getPopularSearches(limit: number = 10): Promise<SearchSuggestion[]> {
     try {
       const cacheKey = "popular_searches";
-      const cached = await this.cacheService.get<SearchSuggestion[]>(cacheKey);
+      const cached = await redisClient.get<SearchSuggestion[]>(cacheKey);
 
       if (cached) {
         return cached.slice(0, limit);
@@ -284,11 +288,11 @@ export class SearchService extends BaseService {
       ];
 
       // Cache for 1 hour
-      await this.cacheService.set(cacheKey, popularSearches);
+      await redisClient.set(cacheKey, popularSearches, 3600);
 
       return popularSearches.slice(0, limit);
     } catch (error) {
-      logger.error("Error getting popular searches", {
+      console.error("Error getting popular searches", {
         error: error instanceof Error ? error.message : "Unknown error",
       });
       return [];
@@ -304,7 +308,7 @@ export class SearchService extends BaseService {
     try {
       // Get search analytics from cache or database
       const cacheKey = `search_analytics_${timeframe}`;
-      const cached = await this.cacheService?.get?.(cacheKey);
+      const cached = await redisClient.get<string>(cacheKey);
       
       if (cached) {
         return JSON.parse(cached as string);
@@ -354,13 +358,11 @@ export class SearchService extends BaseService {
       };
 
       // Cache the analytics for future requests
-      if (this.cacheService?.set) {
-        await this.cacheService.set(cacheKey, JSON.stringify(analytics), { ttl: 3600 });
-      }
+      await redisClient.set(cacheKey, JSON.stringify(analytics), 3600);
 
       return analytics;
     } catch (error) {
-      logger.error("Error getting search analytics", {
+      console.error("Error getting search analytics", {
         error: error instanceof Error ? error.message : "Unknown error",
         timeframe,
       });
@@ -552,9 +554,11 @@ export class SearchService extends BaseService {
         },
       };
 
-      const results = await this.productRepo.findMany({
-        page: filters.page || 1,
-        limit: filters.limit || 20,
+      const results = await this.productRepo.findMany({}, {
+        pagination: {
+          page: filters.page || 1,
+          limit: filters.limit || 20,
+        }
         // Add search filters as needed
       });
 
@@ -566,7 +570,7 @@ export class SearchService extends BaseService {
 
       return results;
     } catch (error) {
-      logger.error("Error executing search", {
+      console.error("Error executing search", {
         error: error instanceof Error ? error.message : "Unknown error",
         processedQuery,
         filters,
@@ -828,7 +832,7 @@ export class SearchService extends BaseService {
     searchIntent: any
   ): void {
     // This would typically save to analytics database
-    logger.info("Search tracked", {
+    console.log("Search tracked", {
       query,
       resultCount,
       intent: searchIntent.type,
@@ -860,7 +864,7 @@ export class SearchService extends BaseService {
 
       return terms.slice(0, limit);
     } catch (error) {
-      logger.error("Error getting popular search terms", { error, timeframe });
+      console.error("Error getting popular search terms", { error, timeframe });
       return [];
     }
   }
@@ -882,7 +886,7 @@ export class SearchService extends BaseService {
         relevance: s.relevance || 0.8,
       }));
     } catch (error) {
-      logger.error("Error getting personalized suggestions", { error, userId });
+      console.error("Error getting personalized suggestions", { error, userId });
       return this.getPopularSuggestions(limit);
     }
   }
@@ -937,7 +941,7 @@ export class SearchService extends BaseService {
         ],
       };
     } catch (error) {
-      logger.error("Error getting available filters", { error, query });
+      console.error("Error getting available filters", { error, query });
       return { brands: [], categories: [], priceRanges: [] };
     }
   }
@@ -981,7 +985,7 @@ export class SearchService extends BaseService {
         },
       };
     } catch (error) {
-      logger.error("Error getting user search history", { error, userId });
+      console.error("Error getting user search history", { error, userId });
       throw error;
     }
   }
@@ -994,11 +998,11 @@ export class SearchService extends BaseService {
       // This would typically delete from database
       const clearedCount = 5; // Mock result
       
-      logger.info("User search history cleared", { userId, clearedCount });
+      console.log("User search history cleared", { userId, clearedCount });
       
       return { clearedCount };
     } catch (error) {
-      logger.error("Error clearing user search history", { error, userId });
+      console.error("Error clearing user search history", { error, userId });
       throw error;
     }
   }
@@ -1020,7 +1024,7 @@ export class SearchService extends BaseService {
 
       return trending.slice(0, limit);
     } catch (error) {
-      logger.error("Error getting trending searches", { error, hours });
+      console.error("Error getting trending searches", { error, hours });
       return [];
     }
   }
@@ -1038,9 +1042,9 @@ export class SearchService extends BaseService {
   ): Promise<void> {
     try {
       // This would typically save to database
-      logger.info("Search saved to history", { userId, searchData });
+      console.log("Search saved to history", { userId, searchData });
     } catch (error) {
-      logger.error("Error saving search to history", { error, userId, searchData });
+      console.error("Error saving search to history", { error, userId, searchData });
       throw error;
     }
   }

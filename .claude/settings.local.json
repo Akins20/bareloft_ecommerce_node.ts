@@ -30,7 +30,12 @@
       "Bash(curl:*)",
       "Bash(powershell:*)",
       "Bash(timeout 3s npm run dev)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(createdb:*)",
+      "Bash(docker:*)",
+      "Bash(where psql)",
+      "Bash(echo:*)",
+      "Bash(timeout 30 npm run dev)"
     ],
     "deny": []
   }

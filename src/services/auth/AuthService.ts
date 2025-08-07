@@ -463,6 +463,7 @@ export class AuthService extends BaseService {
         phoneNumber: user.phoneNumber,
         role: user.role,
         sessionId: session.sessionId,
+        type: 'access'
       });
 
       // Update session with new access token

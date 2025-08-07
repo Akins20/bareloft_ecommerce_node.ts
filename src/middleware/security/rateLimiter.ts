@@ -117,6 +117,14 @@ export const rateLimiter = {
     max: 20, // 20 uploads per hour
     message: "Upload limit exceeded, please try again later",
   }),
+
+  // Webhook rate limit (high limit for external services)
+  webhook: createRateLimiter({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 1000, // 1000 requests per minute for webhooks
+    message: "Webhook rate limit exceeded",
+    keyGenerator: (req: Request) => req.ip || 'webhook', // Use IP for webhooks
+  }),
 };
 
 export { createRateLimiter };

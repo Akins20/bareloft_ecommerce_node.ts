@@ -1,18 +1,16 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.initializeSearchRoutes = void 0;
 const express_1 = require("express");
+const SearchController_1 = require("../../controllers/products/SearchController");
 const authenticate_1 = require("../../middleware/auth/authenticate");
 const authorize_1 = require("../../middleware/auth/authorize");
 const rateLimiter_1 = require("../../middleware/security/rateLimiter");
+const serviceContainer_1 = require("../../config/serviceContainer");
 const router = (0, express_1.Router)();
-// Initialize controller
-let searchController;
-const initializeSearchRoutes = (controller) => {
-    searchController = controller;
-    return router;
-};
-exports.initializeSearchRoutes = initializeSearchRoutes;
+// Initialize controller with dependency injection
+const serviceContainer = (0, serviceContainer_1.getServiceContainer)();
+const searchService = serviceContainer.getSearchService();
+const searchController = new SearchController_1.SearchController(searchService);
 // Rate limiting for search operations
 const searchRateLimit = rateLimiter_1.rateLimiter.general;
 const autocompleteRateLimit = rateLimiter_1.rateLimiter.general;

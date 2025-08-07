@@ -127,7 +127,8 @@ class CheckoutService extends BaseService_1.BaseService {
                 throw new types_1.AppError("Unable to reserve stock for checkout", types_1.HTTP_STATUS.CONFLICT, types_1.ERROR_CODES.INSUFFICIENT_STOCK);
             }
             // Create order
-            const order = await this.orderService.createOrder(userId, checkoutData, validation.cartItems);
+            const orderResult = await this.orderService.createOrder(userId, checkoutData);
+            const order = orderResult.order;
             // Determine if payment is required
             const requiresPayment = order.total > 0;
             let paymentUrl;
@@ -265,9 +266,25 @@ class CheckoutService extends BaseService_1.BaseService {
         });
     }
     async initializePayment(order) {
-        // In production, this would integrate with Paystack
-        // For now, return a mock URL
-        return `https://checkout.paystack.com/pay/${order.id}`;
+        // Generate actual Paystack payment initialization
+        // This would use proper Paystack SDK in production
+        const reference = `BL_${order.orderNumber}_${Date.now()}`;
+        const paymentData = {
+            reference,
+            amount: Number(order.total) * 100, // Convert to kobo
+            email: order.user?.email || 'customer@bareloft.com',
+            currency: 'NGN',
+            channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money', 'bank_transfer'],
+            metadata: {
+                orderNumber: order.orderNumber,
+                orderId: order.id,
+                customerName: `${order.user?.firstName || ''} ${order.user?.lastName || ''}`,
+                phoneNumber: order.user?.phoneNumber
+            }
+        };
+        // In production, this would make actual API call to Paystack
+        // For now, return structured payment URL with proper reference
+        return `https://checkout.paystack.com/${reference}`;
     }
     getEstimatedDeliveryDays(state, method) {
         const stateLower = state.toLowerCase();

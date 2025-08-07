@@ -2,7 +2,7 @@ import { BaseService } from '../BaseService';
 import { Category, CreateCategoryRequest, UpdateCategoryRequest, CategoryQueryParams } from '../../types';
 export declare class CategoryService extends BaseService {
     private categoryRepository;
-    constructor();
+    constructor(categoryRepository?: any);
     /**
      * Create new category with validation
      */

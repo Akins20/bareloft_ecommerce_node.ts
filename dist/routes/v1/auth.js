@@ -18,10 +18,15 @@
  *
  * Author: Bareloft Development Team
  */
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const AuthController_1 = require("../../controllers/auth/AuthController");
 const OTPController_1 = require("../../controllers/auth/OTPController");
+const environment_1 = require("../../config/environment");
 // Middleware imports
 const authenticate_1 = require("../../middleware/auth/authenticate");
 const rateLimiter_1 = require("../../middleware/security/rateLimiter");
@@ -343,6 +348,147 @@ router.get("/otp/attempts/:phoneNumber", rateLimiter_1.rateLimiter.authenticated
         otpController.getAttemptsRemaining(req, res, next);
     }
     catch (error) {
+        next(error);
+    }
+});
+/**
+ * @route   POST /api/v1/auth/test-login
+ * @desc    Test login bypass for development - bypasses OTP verification
+ * @access  Public (Development Only)
+ * @dev_only This endpoint should be removed in production
+ *
+ * @body {
+ *   phoneNumber: string     // Test user phone number
+ * }
+ *
+ * @response {
+ *   success: true,
+ *   message: "Test login successful",
+ *   data: {
+ *     user: User,
+ *     accessToken: string,
+ *     refreshToken: string,
+ *     expiresIn: number
+ *   }
+ * }
+ */
+router.post("/test-login", rateLimiter_1.rateLimiter.auth, async (req, res, next) => {
+    try {
+        // Only allow in development mode
+        if (process.env.NODE_ENV === 'production') {
+            return res.status(404).json({
+                success: false,
+                error: "ENDPOINT_NOT_FOUND",
+                message: "Endpoint not available in production"
+            });
+        }
+        const { phoneNumber } = req.body;
+        if (!phoneNumber) {
+            return res.status(400).json({
+                success: false,
+                error: "VALIDATION_ERROR",
+                message: "Phone number is required"
+            });
+        }
+        // Find test user by phone number
+        const serviceContainer = (0, serviceContainer_1.getServiceContainer)();
+        const userRepository = serviceContainer.getService('userRepository');
+        const user = await userRepository.prisma.user.findUnique({
+            where: { phoneNumber },
+            select: {
+                id: true,
+                phoneNumber: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                role: true,
+                status: true,
+                isVerified: true,
+                isActive: true
+            }
+        });
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: "USER_NOT_FOUND",
+                message: "Test user not found with this phone number"
+            });
+        }
+        if (!user.isActive || user.status !== 'ACTIVE') {
+            return res.status(403).json({
+                success: false,
+                error: "USER_INACTIVE",
+                message: "User account is not active"
+            });
+        }
+        // Generate proper tokens with all required fields
+        const jwtService = serviceContainer.getService('jwtService');
+        // Create a temporary session ID
+        const tempSessionId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        const accessToken = jsonwebtoken_1.default.sign({
+            userId: user.id,
+            sessionId: tempSessionId,
+            role: user.role,
+            type: 'access'
+        }, process.env.JWT_SECRET || environment_1.config.jwt.secret, {
+            expiresIn: '15m',
+            issuer: 'bareloft-api',
+            audience: 'bareloft-client'
+        });
+        const refreshToken = jsonwebtoken_1.default.sign({
+            userId: user.id,
+            sessionId: tempSessionId,
+            role: user.role,
+            type: 'refresh'
+        }, process.env.JWT_REFRESH_SECRET || environment_1.config.jwt.refreshSecret, {
+            expiresIn: '7d',
+            issuer: 'bareloft-api',
+            audience: 'bareloft-client'
+        });
+        // Create session record
+        const sessionRepository = serviceContainer.getService('sessionRepository');
+        await sessionRepository.prisma.session.create({
+            data: {
+                id: tempSessionId,
+                sessionId: tempSessionId,
+                userId: user.id,
+                accessToken,
+                refreshToken,
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+                deviceInfo: JSON.stringify({
+                    userAgent: req.headers['user-agent'] || 'Test Client',
+                    ipAddress: req.ip || '127.0.0.1'
+                }),
+                isActive: true,
+                lastUsedAt: new Date()
+            }
+        });
+        // Update last login
+        await userRepository.prisma.user.update({
+            where: { id: user.id },
+            data: { lastLoginAt: new Date() }
+        });
+        res.json({
+            success: true,
+            message: "Test login successful",
+            data: {
+                user: {
+                    id: user.id,
+                    phoneNumber: user.phoneNumber,
+                    email: user.email,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    role: user.role,
+                    isVerified: user.isVerified
+                },
+                accessToken,
+                refreshToken,
+                expiresIn: 900 // 15 minutes
+            }
+        });
+    }
+    catch (error) {
+        console.error('Test login error:', error);
         next(error);
     }
 });

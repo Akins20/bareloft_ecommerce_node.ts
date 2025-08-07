@@ -1,5 +1,6 @@
 import { BaseService } from "../BaseService";
 import { CartItem, UpdateShippingRequest, CartValidationResult, ShippingCalculationResponse, MergeCartRequest } from "../../types";
+import { CouponRepository } from "../../repositories/CouponRepository";
 export interface AddToCartRequest {
     productId: string;
     quantity: number;
@@ -14,10 +15,23 @@ export interface CartSummary {
     total: number;
     itemCount: number;
 }
+export interface GuestCartItem {
+    productId: string;
+    quantity: number;
+    addedAt: Date;
+}
+export interface GuestCart {
+    sessionId: string;
+    items: GuestCartItem[];
+    createdAt: Date;
+    updatedAt: Date;
+    expiresAt: Date;
+}
 export declare class CartService extends BaseService {
     private cartRepository;
     private productRepository;
-    constructor(cartRepository?: any, productRepository?: any);
+    private couponService;
+    constructor(cartRepository?: any, productRepository?: any, couponRepository?: CouponRepository);
     /**
      * Get user's cart
      */
@@ -131,6 +145,26 @@ export declare class CartService extends BaseService {
      * Calculate shipping cost based on destination
      */
     private calculateShippingCost;
+    /**
+     * Get guest cart from Redis
+     */
+    getGuestCart(sessionId: string): Promise<any>;
+    /**
+     * Add item to guest cart
+     */
+    addToGuestCart(sessionId: string, data: AddToCartRequest): Promise<any>;
+    /**
+     * Update guest cart item
+     */
+    updateGuestCartItem(sessionId: string, productId: string, quantity: number): Promise<any>;
+    /**
+     * Remove item from guest cart
+     */
+    removeFromGuestCart(sessionId: string, productId: string): Promise<any>;
+    /**
+     * Clear guest cart
+     */
+    clearGuestCart(sessionId: string): Promise<any>;
     /**
      * Handle service errors
      */

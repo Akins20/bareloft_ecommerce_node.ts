@@ -27,6 +27,8 @@ import { AddressService } from "../services/users/AddressService";
 import { ReviewService } from "../services/products/ReviewService";
 import { WishlistService } from "../services/users/WishlistService";
 import { SearchService } from "../services/products/SearchService";
+import { PaymentService } from "../services/payments/PaymentService";
+import { PaystackService } from "../services/payments/PaystackService";
 
 /**
  * Service Container for Dependency Injection
@@ -88,19 +90,23 @@ export class ServiceContainer {
     // Initialize product services with proper repositories
     const productService = new ProductService(productRepository, categoryRepository, inventoryRepository);
     const categoryService = new CategoryService(categoryRepository);
-    const searchService = new SearchService();
+    const searchService = new SearchService(productRepository, categoryRepository);
     const reviewService = {} as any; // TODO: Fix dependencies - needs UserRepository, ProductRepository, OrderRepository, CacheService, NotificationService
 
-    // Initialize cart service
-    const cartService = new CartService();
+    // Initialize cart service with proper dependencies
+    const cartService = new CartService(cartRepository, productRepository);
 
-    // Initialize order service (using empty object for missing CacheService dependency for now)
-    const orderService = {} as any; // TODO: Fix dependencies - needs CacheService
+    // Initialize order service with proper dependencies
+    const orderService = new OrderService(orderRepository, cartService);
 
     // Initialize user services
     const userService = new UserService();
     const addressService = new AddressService();
     const wishlistService = new WishlistService();
+
+    // Initialize payment services
+    const paystackService = new PaystackService();
+    const paymentService = new PaymentService(paystackService);
 
     // Store repositories in container
     this.services.set('userRepository', userRepository);
@@ -131,6 +137,8 @@ export class ServiceContainer {
     this.services.set('userService', userService);
     this.services.set('addressService', addressService);
     this.services.set('wishlistService', wishlistService);
+    this.services.set('paymentService', paymentService);
+    this.services.set('paystackService', paystackService);
   }
 
   public getService<T>(serviceName: string): T {
@@ -139,6 +147,23 @@ export class ServiceContainer {
       throw new Error(`Service ${serviceName} not found in container`);
     }
     return service as T;
+  }
+
+  // Getter methods for specific services
+  public getSearchService(): SearchService {
+    return this.getService<SearchService>('searchService');
+  }
+
+  public getOrderService(): OrderService {
+    return this.getService<OrderService>('orderService');
+  }
+
+  public getPaymentService(): PaymentService {
+    return this.getService<PaymentService>('paymentService');
+  }
+
+  public getPaystackService(): PaystackService {
+    return this.getService<PaystackService>('paystackService');
   }
 
   public async initialize(): Promise<void> {

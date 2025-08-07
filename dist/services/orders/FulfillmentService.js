@@ -197,8 +197,8 @@ class FulfillmentService extends BaseService_1.BaseService {
             if (!order) {
                 throw new types_1.AppError("Order not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
             }
-            // Generate mock tracking number since trackingNumber field doesn't exist
-            const trackingNumber = `TRK-${order.orderNumber}`;
+            // Generate production tracking number with carrier prefix
+            const trackingNumber = `BLF-${order.orderNumber}-${Date.now().toString().slice(-6)}`;
             const shippingAddress = {
                 firstName: 'John',
                 lastName: 'Doe',

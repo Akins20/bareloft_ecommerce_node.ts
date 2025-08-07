@@ -8,7 +8,7 @@ export declare class ProductService extends BaseService {
     private productRepo;
     private categoryRepo;
     private inventoryRepo;
-    constructor();
+    constructor(productRepo?: any, categoryRepo?: any, inventoryRepo?: any);
     /**
      * 📋 Get products with filtering, search, and pagination
      * Nigerian market optimized with local categories and pricing

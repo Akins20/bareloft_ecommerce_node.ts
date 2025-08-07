@@ -25,8 +25,8 @@ const express_1 = require("express");
 const CartController_1 = require("../../controllers/cart/CartController");
 // Middleware imports
 const authenticate_1 = require("../../middleware/auth/authenticate");
+const optionalAuth_1 = require("../../middleware/auth/optionalAuth");
 const rateLimiter_1 = require("../../middleware/security/rateLimiter");
-const validateRequest_1 = require("../../middleware/validation/validateRequest");
 // Note: Cart schemas not yet created, using placeholder validation
 const cartSchemas = {
     addToCart: {},
@@ -36,9 +36,19 @@ const cartSchemas = {
     mergeCart: {},
     updateShipping: {},
 };
-// Services (dependency injection) - using placeholder for now
-const cartService = {};
+// Services (dependency injection)
+const CartService_1 = require("../../services/cart/CartService");
+const CartRepository_1 = require("../../repositories/CartRepository");
+const ProductRepository_1 = require("../../repositories/ProductRepository");
+const CouponRepository_1 = require("../../repositories/CouponRepository");
+const client_1 = require("@prisma/client");
 const router = (0, express_1.Router)();
+// Initialize dependencies for production
+const prisma = new client_1.PrismaClient();
+const cartRepository = new CartRepository_1.CartRepository(prisma);
+const productRepository = new ProductRepository_1.ProductRepository(prisma);
+const couponRepository = new CouponRepository_1.CouponRepository(prisma);
+const cartService = new CartService_1.CartService(cartRepository, productRepository, couponRepository);
 // Initialize controller
 const cartController = new CartController_1.CartController(cartService);
 /**
@@ -94,7 +104,7 @@ const cartController = new CartController_1.CartController(cartService);
  *   }
  * }
  */
-router.get("/", cartController.getCart);
+router.get("/", optionalAuth_1.optionalAuth, cartController.getCart);
 /**
  * @route   POST /api/v1/cart/add
  * @desc    Add item to shopping cart
@@ -122,7 +132,7 @@ router.get("/", cartController.getCart);
  *   }
  * }
  */
-router.post("/add", rateLimiter_1.rateLimiter.authenticated, 
+router.post("/add", optionalAuth_1.optionalAuth, rateLimiter_1.rateLimiter.authenticated, 
 // validateRequest(cartSchemas.addToCart), // Skip validation for now due to empty schema
 cartController.addToCart);
 /**
@@ -152,7 +162,7 @@ cartController.addToCart);
  *   }
  * }
  */
-router.put("/update", rateLimiter_1.rateLimiter.authenticated, 
+router.put("/update", optionalAuth_1.optionalAuth, rateLimiter_1.rateLimiter.authenticated, 
 // validateRequest(cartSchemas.updateCartItem), // Skip validation for now due to empty schema
 cartController.updateCartItem);
 /**
@@ -180,7 +190,7 @@ cartController.updateCartItem);
  *   }
  * }
  */
-router.delete("/remove/:productId", rateLimiter_1.rateLimiter.authenticated, cartController.removeFromCart);
+router.delete("/remove/:productId", optionalAuth_1.optionalAuth, rateLimiter_1.rateLimiter.authenticated, cartController.removeFromCart);
 /**
  * @route   DELETE /api/v1/cart/clear
  * @desc    Clear entire shopping cart
@@ -201,7 +211,7 @@ router.delete("/remove/:productId", rateLimiter_1.rateLimiter.authenticated, car
  *   }
  * }
  */
-router.delete("/clear", cartController.clearCart);
+router.delete("/clear", optionalAuth_1.optionalAuth, cartController.clearCart);
 /**
  * @route   GET /api/v1/cart/count
  * @desc    Get cart item count (for header badge)
@@ -221,7 +231,7 @@ router.delete("/clear", cartController.clearCart);
  *   }
  * }
  */
-router.get("/count", rateLimiter_1.rateLimiter.general, cartController.getCartItemCount);
+router.get("/count", optionalAuth_1.optionalAuth, rateLimiter_1.rateLimiter.general, cartController.getCartItemCount);
 /**
  * @route   POST /api/v1/cart/validate
  * @desc    Validate cart items and check availability
@@ -249,7 +259,7 @@ router.get("/count", rateLimiter_1.rateLimiter.general, cartController.getCartIt
  *   }
  * }
  */
-router.post("/validate", cartController.validateCart);
+router.post("/validate", optionalAuth_1.optionalAuth, cartController.validateCart);
 /**
  * @route   POST /api/v1/cart/merge
  * @desc    Merge guest cart with user cart after login
@@ -318,7 +328,7 @@ cartController.mergeCart);
  *   }
  * }
  */
-router.post("/coupon/apply", rateLimiter_1.rateLimiter.authenticated, 
+router.post("/coupon/apply", optionalAuth_1.optionalAuth, rateLimiter_1.rateLimiter.authenticated, 
 // validateRequest(cartSchemas.applyCoupon), // Skip validation for now due to empty schema
 cartController.applyCoupon);
 /**
@@ -341,7 +351,7 @@ cartController.applyCoupon);
  *   }
  * }
  */
-router.delete("/coupon/remove", cartController.removeCoupon);
+router.delete("/coupon/remove", optionalAuth_1.optionalAuth, cartController.removeCoupon);
 /**
  * Shipping Management Routes
  */
@@ -377,7 +387,7 @@ router.delete("/coupon/remove", cartController.removeCoupon);
  *   }
  * }
  */
-router.put("/shipping", 
+router.put("/shipping", optionalAuth_1.optionalAuth, 
 // validateRequest(cartSchemas.updateShipping), // Skip validation for now due to empty schema
 cartController.updateShipping);
 /**
@@ -413,7 +423,9 @@ cartController.updateShipping);
  *   }
  * }
  */
-router.post("/shipping/calculate", (0, validateRequest_1.validateRequest)(cartSchemas.calculateShipping), cartController.calculateShipping);
+router.post("/shipping/calculate", optionalAuth_1.optionalAuth, 
+// validateRequest(cartSchemas.calculateShipping), // Skip validation for now due to empty schema
+cartController.calculateShipping);
 /**
  * Wishlist Integration Routes
  */

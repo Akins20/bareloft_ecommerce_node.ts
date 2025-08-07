@@ -16,8 +16,8 @@ export declare class OrderController extends BaseController {
      */
     getUserOrders: (req: AuthenticatedRequest, res: Response) => Promise<void>;
     /**
-     * Get order by ID
-     * GET /api/v1/orders/:id
+     * Get order details by ID
+     * GET /api/v1/orders/:orderId
      */
     getOrderById: (req: AuthenticatedRequest, res: Response) => Promise<void>;
     /**
@@ -26,48 +26,58 @@ export declare class OrderController extends BaseController {
      */
     getOrderByNumber: (req: AuthenticatedRequest, res: Response) => Promise<void>;
     /**
-     * Cancel order (if allowed)
-     * PUT /api/v1/orders/:id/cancel
-     */
-    cancelOrder: (req: AuthenticatedRequest, res: Response) => Promise<void>;
-    /**
-     * Track order status
-     * GET /api/v1/orders/:id/tracking
-     */
-    trackOrder: (req: AuthenticatedRequest, res: Response) => Promise<void>;
-    /**
-     * Get order timeline/history
-     * GET /api/v1/orders/:id/timeline
-     */
-    getOrderTimeline: (req: AuthenticatedRequest, res: Response) => Promise<void>;
-    /**
-     * Reorder (create new order from existing order)
-     * POST /api/v1/orders/:id/reorder
-     */
-    reorder: (req: AuthenticatedRequest, res: Response) => Promise<void>;
-    /**
-     * Request return/refund
-     * POST /api/v1/orders/:id/return
-     */
-    requestReturn: (req: AuthenticatedRequest, res: Response) => Promise<void>;
-    /**
-     * Verify payment status
-     * GET /api/v1/orders/:id/payment/verify
-     */
-    verifyPayment: (req: AuthenticatedRequest, res: Response) => Promise<void>;
-    /**
-     * Get downloadable invoice
-     * GET /api/v1/orders/:id/invoice
-     */
-    getInvoice: (req: AuthenticatedRequest, res: Response) => Promise<void>;
-    /**
      * Get order summary statistics for user
      * GET /api/v1/orders/stats
      */
     getOrderStats: (req: AuthenticatedRequest, res: Response) => Promise<void>;
     /**
-     * Validate create order request
+     * Cancel an order
+     * POST /api/v1/orders/:orderId/cancel
      */
+    cancelOrder: (req: AuthenticatedRequest, res: Response) => Promise<void>;
+    /**
+     * Update order status (Admin only)
+     * PUT /api/v1/orders/:orderId/status
+     */
+    updateOrderStatus: (req: AuthenticatedRequest, res: Response) => Promise<void>;
+    /**
+     * Get all orders (Admin only)
+     * GET /api/v1/orders/admin/all
+     */
+    getAllOrders: (req: AuthenticatedRequest, res: Response) => Promise<void>;
     private validateCreateOrderRequest;
+    /**
+     * Track order status and shipping information
+     * GET /api/v1/orders/:id/tracking
+     */
+    trackOrder: (req: AuthenticatedRequest, res: Response) => Promise<void>;
+    /**
+     * Get order timeline/history of status changes
+     * GET /api/v1/orders/:id/timeline
+     */
+    getOrderTimeline: (req: AuthenticatedRequest, res: Response) => Promise<void>;
+    /**
+     * Get downloadable invoice (PDF)
+     * GET /api/v1/orders/:id/invoice
+     */
+    getInvoice: (req: AuthenticatedRequest, res: Response) => Promise<void>;
+    /**
+     * Verify payment status for order
+     * GET /api/v1/orders/:id/payment/verify
+     */
+    verifyPayment: (req: AuthenticatedRequest, res: Response) => Promise<void>;
+    /**
+     * Reorder (create new order from existing order items)
+     * POST /api/v1/orders/:id/reorder
+     */
+    reorder: (req: AuthenticatedRequest, res: Response) => Promise<void>;
+    /**
+     * Request return/refund for order items
+     * POST /api/v1/orders/:id/return
+     */
+    requestReturn: (req: AuthenticatedRequest, res: Response) => Promise<void>;
+    private getTrackingLocation;
+    private calculateEstimatedDelivery;
+    private getStatusDescription;
 }
 //# sourceMappingURL=OrderController.d.ts.map

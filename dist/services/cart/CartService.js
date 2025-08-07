@@ -3,13 +3,28 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CartService = void 0;
 const BaseService_1 = require("../BaseService");
 const types_1 = require("../../types");
+const redis_1 = require("../../config/redis");
+const CouponService_1 = require("../coupon/CouponService");
+const CouponRepository_1 = require("../../repositories/CouponRepository");
 class CartService extends BaseService_1.BaseService {
     cartRepository;
     productRepository;
-    constructor(cartRepository, productRepository) {
+    couponService;
+    constructor(cartRepository, productRepository, couponRepository) {
         super();
         this.cartRepository = cartRepository || {};
         this.productRepository = productRepository || {};
+        // Initialize coupon service with database repository for production
+        if (couponRepository) {
+            this.couponService = new CouponService_1.CouponService(couponRepository);
+        }
+        else {
+            // Fallback: create coupon repository with same prisma instance
+            const { PrismaClient } = require("@prisma/client");
+            const prisma = new PrismaClient();
+            const couponRepo = new CouponRepository_1.CouponRepository(prisma);
+            this.couponService = new CouponService_1.CouponService(couponRepo);
+        }
     }
     /**
      * Get user's cart
@@ -180,23 +195,64 @@ class CartService extends BaseService_1.BaseService {
             const { couponCode } = data;
             // Get current cart
             const currentCart = await this.getCart(userId);
-            // TODO: Implement actual coupon validation and application logic
-            // For now, return the cart without applying coupon
+            // Validate and calculate discount
+            const couponResult = await this.couponService.calculateDiscount(couponCode.toUpperCase(), currentCart.subtotal);
+            if (!couponResult.isValid) {
+                return {
+                    success: false,
+                    message: couponResult.message,
+                    cart: {
+                        id: `cart_${userId}`,
+                        userId,
+                        items: currentCart.items,
+                        subtotal: currentCart.subtotal,
+                        estimatedTax: currentCart.tax,
+                        estimatedShipping: 0,
+                        estimatedTotal: currentCart.total,
+                        currency: "NGN",
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    }
+                };
+            }
+            // Apply discount to cart
+            const discountAmount = couponResult.discount;
+            const discountedSubtotal = Math.max(0, currentCart.subtotal - discountAmount);
+            const tax = discountedSubtotal * 0.075; // 7.5% VAT on discounted amount
+            const shippingCost = couponResult.shippingDiscount > 0 ? 0 : 0; // Free shipping if applicable
+            const total = discountedSubtotal + tax + shippingCost;
+            const cartWithCoupon = {
+                id: `cart_${userId}`,
+                userId,
+                items: currentCart.items,
+                subtotal: currentCart.subtotal,
+                discountAmount,
+                discountedSubtotal,
+                estimatedTax: tax,
+                estimatedShipping: shippingCost,
+                estimatedTotal: total,
+                currency: "NGN",
+                appliedCoupon: {
+                    code: couponResult.coupon?.code,
+                    type: couponResult.coupon?.type,
+                    value: couponResult.coupon?.value,
+                    discountAmount,
+                },
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            };
+            // Store applied coupon in Redis for session persistence
+            const couponKey = `cart_coupon:${userId}`;
+            await redis_1.redisClient.set(couponKey, {
+                code: couponCode.toUpperCase(),
+                appliedAt: new Date(),
+                discount: discountAmount,
+                shippingDiscount: couponResult.shippingDiscount,
+            }, 60 * 60); // 1 hour expiry
             return {
-                success: false,
-                message: "Coupon functionality not implemented yet",
-                cart: {
-                    id: `cart_${userId}`,
-                    userId,
-                    items: currentCart.items,
-                    subtotal: currentCart.subtotal,
-                    estimatedTax: currentCart.tax,
-                    estimatedShipping: 0,
-                    estimatedTotal: currentCart.total,
-                    currency: "NGN",
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                }
+                success: true,
+                message: couponResult.message,
+                cart: cartWithCoupon
             };
         }
         catch (error) {
@@ -506,6 +562,265 @@ class CartService extends BaseService_1.BaseService {
         }
         // Remote areas cost more
         return baseShippingCost + 1000; // ₦3,000
+    }
+    /**
+     * Get guest cart from Redis
+     */
+    async getGuestCart(sessionId) {
+        try {
+            const cartKey = `guest_cart:${sessionId}`;
+            const cartData = await redis_1.redisClient.get(cartKey);
+            if (!cartData) {
+                // Return empty guest cart
+                return {
+                    id: `guest_${sessionId}`,
+                    sessionId,
+                    items: [],
+                    subtotal: 0,
+                    estimatedTax: 0,
+                    estimatedShipping: 0,
+                    estimatedTotal: 0,
+                    currency: "NGN",
+                    itemCount: 0,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                };
+            }
+            // RedisConnection already parses JSON, so cartData is already an object
+            const guestCart = cartData;
+            // Simple cart items without enrichment to avoid errors
+            const items = (guestCart.items || []).map(item => ({
+                id: `${sessionId}_${item.productId}`,
+                cartId: `guest_${sessionId}`,
+                productId: item.productId,
+                quantity: item.quantity,
+                unitPrice: 0,
+                totalPrice: 0,
+                product: null,
+                isAvailable: true,
+                hasStockIssue: false,
+                priceChanged: false,
+            }));
+            return {
+                id: `guest_${sessionId}`,
+                sessionId,
+                items,
+                subtotal: 0,
+                estimatedTax: 0,
+                estimatedShipping: 0,
+                estimatedTotal: 0,
+                currency: "NGN",
+                itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            };
+        }
+        catch (error) {
+            console.error("Error in getGuestCart:", error);
+            // Return empty cart on any error to prevent system failure
+            return {
+                id: `guest_${sessionId}`,
+                sessionId,
+                items: [],
+                subtotal: 0,
+                estimatedTax: 0,
+                estimatedShipping: 0,
+                estimatedTotal: 0,
+                currency: "NGN",
+                itemCount: 0,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            };
+        }
+    }
+    /**
+     * Add item to guest cart
+     */
+    async addToGuestCart(sessionId, data) {
+        try {
+            const { productId, quantity } = data;
+            // Validate product exists
+            const product = await this.productRepository.findById?.(productId);
+            if (!product) {
+                throw new types_1.AppError("Product not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+            }
+            // Check stock availability
+            if (product.stock < quantity) {
+                throw new types_1.AppError("Insufficient stock", types_1.HTTP_STATUS.BAD_REQUEST, types_1.ERROR_CODES.INSUFFICIENT_STOCK);
+            }
+            const cartKey = `guest_cart:${sessionId}`;
+            let guestCart;
+            // Get existing cart or create new one
+            const existingCartData = await redis_1.redisClient.get(cartKey);
+            if (existingCartData) {
+                guestCart = existingCartData;
+            }
+            else {
+                guestCart = {
+                    sessionId,
+                    items: [],
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+                };
+            }
+            // Check if item already exists
+            const existingItemIndex = guestCart.items.findIndex(item => item.productId === productId);
+            if (existingItemIndex >= 0) {
+                // Update existing item
+                const newQuantity = guestCart.items[existingItemIndex].quantity + quantity;
+                if (newQuantity > product.stock) {
+                    throw new types_1.AppError("Insufficient stock for requested quantity", types_1.HTTP_STATUS.BAD_REQUEST, types_1.ERROR_CODES.INSUFFICIENT_STOCK);
+                }
+                guestCart.items[existingItemIndex].quantity = newQuantity;
+            }
+            else {
+                // Add new item
+                guestCart.items.push({
+                    productId,
+                    quantity,
+                    addedAt: new Date(),
+                });
+            }
+            guestCart.updatedAt = new Date();
+            // Save to Redis with 24 hour expiry
+            await redis_1.redisClient.set(cartKey, guestCart, 24 * 60 * 60);
+            // Return simplified cart response without full enrichment
+            // to avoid potential issues with product lookups
+            const simpleCart = {
+                id: `guest_${sessionId}`,
+                sessionId,
+                items: guestCart.items.map((item, index) => ({
+                    id: `${sessionId}_${item.productId}`,
+                    productId: item.productId,
+                    quantity: item.quantity,
+                    addedAt: item.addedAt,
+                })),
+                itemCount: guestCart.items.reduce((sum, item) => sum + item.quantity, 0),
+                subtotal: 0, // Will be calculated with product prices later
+                estimatedTax: 0,
+                estimatedShipping: 0,
+                estimatedTotal: 0,
+                currency: "NGN",
+                createdAt: new Date(guestCart.createdAt),
+                updatedAt: new Date(guestCart.updatedAt),
+            };
+            return {
+                success: true,
+                message: "Item added to guest cart successfully",
+                cart: simpleCart,
+            };
+        }
+        catch (error) {
+            this.handleError("Error adding to guest cart", error);
+            throw error;
+        }
+    }
+    /**
+     * Update guest cart item
+     */
+    async updateGuestCartItem(sessionId, productId, quantity) {
+        try {
+            const cartKey = `guest_cart:${sessionId}`;
+            const existingCartData = await redis_1.redisClient.get(cartKey);
+            if (!existingCartData) {
+                throw new types_1.AppError("Guest cart not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+            }
+            const guestCart = existingCartData;
+            const itemIndex = guestCart.items.findIndex(item => item.productId === productId);
+            if (itemIndex === -1) {
+                throw new types_1.AppError("Item not found in cart", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+            }
+            if (quantity <= 0) {
+                // Remove item if quantity is 0 or negative
+                guestCart.items.splice(itemIndex, 1);
+            }
+            else {
+                // Validate stock
+                const product = await this.productRepository.findById?.(productId);
+                if (!product || product.stock < quantity) {
+                    throw new types_1.AppError("Insufficient stock", types_1.HTTP_STATUS.BAD_REQUEST, types_1.ERROR_CODES.INSUFFICIENT_STOCK);
+                }
+                guestCart.items[itemIndex].quantity = quantity;
+            }
+            guestCart.updatedAt = new Date();
+            // Save updated cart
+            await redis_1.redisClient.set(cartKey, guestCart, 24 * 60 * 60);
+            // Get updated cart to return
+            const updatedCart = await this.getGuestCart(sessionId);
+            return {
+                success: true,
+                message: "Guest cart updated successfully",
+                cart: updatedCart,
+            };
+        }
+        catch (error) {
+            this.handleError("Error updating guest cart", error);
+            throw error;
+        }
+    }
+    /**
+     * Remove item from guest cart
+     */
+    async removeFromGuestCart(sessionId, productId) {
+        try {
+            const cartKey = `guest_cart:${sessionId}`;
+            const existingCartData = await redis_1.redisClient.get(cartKey);
+            if (!existingCartData) {
+                throw new types_1.AppError("Guest cart not found", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+            }
+            const guestCart = existingCartData;
+            const initialLength = guestCart.items.length;
+            guestCart.items = guestCart.items.filter(item => item.productId !== productId);
+            if (guestCart.items.length === initialLength) {
+                throw new types_1.AppError("Item not found in cart", types_1.HTTP_STATUS.NOT_FOUND, types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
+            }
+            guestCart.updatedAt = new Date();
+            // Save updated cart
+            await redis_1.redisClient.set(cartKey, guestCart, 24 * 60 * 60);
+            // Get updated cart to return
+            const updatedCart = await this.getGuestCart(sessionId);
+            return {
+                success: true,
+                message: "Item removed from guest cart successfully",
+                cart: updatedCart,
+            };
+        }
+        catch (error) {
+            this.handleError("Error removing from guest cart", error);
+            throw error;
+        }
+    }
+    /**
+     * Clear guest cart
+     */
+    async clearGuestCart(sessionId) {
+        try {
+            const cartKey = `guest_cart:${sessionId}`;
+            await redis_1.redisClient.delete(cartKey);
+            const emptyCart = {
+                id: `guest_${sessionId}`,
+                sessionId,
+                items: [],
+                subtotal: 0,
+                estimatedTax: 0,
+                estimatedShipping: 0,
+                estimatedTotal: 0,
+                currency: "NGN",
+                itemCount: 0,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            };
+            return {
+                success: true,
+                message: "Guest cart cleared successfully",
+                cart: emptyCart,
+            };
+        }
+        catch (error) {
+            this.handleError("Error clearing guest cart", error);
+            throw error;
+        }
     }
     /**
      * Handle service errors

@@ -36,6 +36,7 @@ import reviewRoutes from "@/routes/v1/reviews";
 import wishlistRoutes from "@/routes/v1/wishlist";
 import searchRoutes from "@/routes/v1/search";
 import uploadRoutes from "@/routes/v1/upload";
+import paymentRoutes from "@/routes/v1/payments";
 
 // Admin routes
 // import adminRoutes from "@/routes/admin";
@@ -182,6 +183,7 @@ class App {
           categories: "/api/v1/categories",
           cart: "/api/v1/cart",
           orders: "/api/v1/orders",
+          payments: "/api/v1/payments",
           addresses: "/api/v1/addresses",
           reviews: "/api/v1/reviews",
           wishlist: "/api/v1/wishlist",
@@ -206,10 +208,17 @@ class App {
     this.app.use(`${apiV1}/categories`, categoryRoutes);
     this.app.use(`${apiV1}/search`, searchRoutes);
 
+    // Cart routes (supports both authenticated and guest users)
+    this.app.use(`${apiV1}/cart`, cartRoutes);
+
+    // Order routes (mixed public and protected endpoints)
+    this.app.use(`${apiV1}/orders`, orderRoutes);
+
+    // Payment routes (mixed public and protected endpoints)
+    this.app.use(`${apiV1}/payments`, paymentRoutes);
+
     // Protected routes (authentication required)
     this.app.use(`${apiV1}/users`, authenticate, userRoutes);
-    this.app.use(`${apiV1}/cart`, authenticate, cartRoutes);
-    this.app.use(`${apiV1}/orders`, authenticate, orderRoutes);
     this.app.use(`${apiV1}/addresses`, authenticate, addressRoutes);
     this.app.use(`${apiV1}/reviews`, authenticate, reviewRoutes);
     this.app.use(`${apiV1}/wishlist`, authenticate, wishlistRoutes);
@@ -217,9 +226,6 @@ class App {
 
     // Admin routes (admin authentication required)
     // this.app.use(`${apiV1}/admin`, adminRoutes);
-
-    // Webhook routes (special authentication for external services)
-    // this.app.use("/webhooks", webhookRoutes);
 
     // 404 handler for undefined routes
     this.app.use("*", (req: Request, res: Response) => {
@@ -355,6 +361,7 @@ class App {
         authentication: "/api/v1/auth",
         products: "/api/v1/products",
         orders: "/api/v1/orders",
+        payments: "/api/v1/payments",
       },
       support: {
         email: "api@bareloft.com",
