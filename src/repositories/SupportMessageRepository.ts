@@ -4,10 +4,24 @@ import {
   SupportMessageType, 
   SupportChannelType, 
   SupportMessageDirection,
-  Prisma 
+  Prisma,
+  PrismaClient 
 } from '@prisma/client';
 import { BaseRepository } from './BaseRepository';
-import { PaginationOptions, PaginatedResult } from '@/types';
+
+// Local type definitions
+interface PaginationOptions {
+  page: number;
+  limit: number;
+}
+
+interface PaginatedResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
 
 export interface MessageFilters {
   ticketId?: string;
@@ -47,7 +61,13 @@ export interface MessageWithDetails extends SupportTicketMessage {
   replyTo?: MessageWithDetails | null;
 }
 
-export class SupportMessageRepository extends BaseRepository {
+export class SupportMessageRepository extends BaseRepository<SupportTicketMessage> {
+  protected db: PrismaClient;
+
+  constructor(prisma?: PrismaClient) {
+    super(prisma);
+    this.db = this.prisma;
+  }
   async create(data: {
     ticketId: string;
     senderId?: string;
@@ -70,6 +90,8 @@ export class SupportMessageRepository extends BaseRepository {
       data: {
         ...data,
         isRead: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
     });
   }

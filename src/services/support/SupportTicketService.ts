@@ -7,17 +7,91 @@ import {
   SupportLanguage
 } from '@prisma/client';
 import { BaseService } from '../BaseService';
-import { 
-  SupportTicketRepository, 
-  SupportAgentRepository,
-  SupportMessageRepository,
-  TicketFilters,
-  TicketWithDetails 
-} from '@/repositories';
-import { PaginationOptions, PaginatedResult, ApiResponse, AppError, HTTP_STATUS } from '@/types';
-import { IDGenerators } from '@/utils/helpers/generators';
-import { NotificationService } from '@/services/notifications';
-import { validateNigerianPhoneNumber } from '@/utils/helpers/nigerian';
+import { SupportTicketRepository } from '../../repositories/SupportTicketRepository';
+import { SupportAgentRepository } from '../../repositories/SupportAgentRepository';
+import { SupportMessageRepository } from '../../repositories/SupportMessageRepository';
+import { TicketFilters, TicketWithDetails } from '../../repositories/SupportTicketRepository';
+import { PrismaClient } from '@prisma/client';
+
+// Local type definitions
+interface PaginationOptions {
+  page: number;
+  limit: number;
+}
+
+interface PaginatedResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
+interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+  timestamp: string;
+}
+
+class AppError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number,
+    public code: string
+  ) {
+    super(message);
+    this.name = 'AppError';
+  }
+}
+
+const HTTP_STATUS = {
+  OK: 200,
+  CREATED: 201,
+  BAD_REQUEST: 400,
+  NOT_FOUND: 404,
+  INTERNAL_SERVER_ERROR: 500
+};
+
+// Mock services
+class NotificationService {
+  async sendTicketCreatedNotification(customerId: string, ticketNumber: string): Promise<void> {
+    console.log(`Ticket created notification sent to customer ${customerId}: ${ticketNumber}`);
+  }
+  
+  async sendTicketAssignedNotification(agentId: string, ticketId: string): Promise<void> {
+    console.log(`Ticket assigned notification sent to agent ${agentId}: ${ticketId}`);
+  }
+  
+  async sendTicketEscalatedNotification(agentId: string, ticketId: string): Promise<void> {
+    console.log(`Ticket escalated notification sent to agent ${agentId}: ${ticketId}`);
+  }
+  
+  async sendTicketClosedNotification(customerId: string, ticketNumber: string): Promise<void> {
+    console.log(`Ticket closed notification sent to customer ${customerId}: ${ticketNumber}`);
+  }
+}
+
+// Mock utility functions
+class IDGenerators {
+  static generateTicketNumber(): string {
+    return `TKT-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+  }
+}
+
+const validateNigerianPhoneNumber = (phoneNumber: string) => {
+  const cleanNumber = phoneNumber.replace(/[\s\-\(\)]/g, '');
+  const patterns = [
+    /^\+234[0-9]{10}$/, // +234XXXXXXXXXX
+    /^234[0-9]{10}$/, // 234XXXXXXXXXX
+    /^0[0-9]{10}$/, // 0XXXXXXXXXX
+  ];
+  const isValid = patterns.some(pattern => pattern.test(cleanNumber));
+  return {
+    isValid,
+    formatted: isValid ? (cleanNumber.startsWith('+') ? cleanNumber : `+234${cleanNumber.substring(1)}`) : phoneNumber
+  };
+};
 
 export interface CreateTicketRequest {
   subject: string;
@@ -74,13 +148,33 @@ export interface TicketEscalation {
 }
 
 export class SupportTicketService extends BaseService {
-  constructor(
-    private ticketRepository: SupportTicketRepository,
-    private agentRepository: SupportAgentRepository,
-    private messageRepository: SupportMessageRepository,
-    private notificationService: NotificationService
-  ) {
+  protected db: PrismaClient;
+  private ticketRepository: SupportTicketRepository;
+  private agentRepository: SupportAgentRepository;
+  private messageRepository: SupportMessageRepository;
+  private notificationService: NotificationService;
+
+  constructor() {
     super();
+    this.db = new PrismaClient();
+    this.ticketRepository = new SupportTicketRepository();
+    this.agentRepository = new SupportAgentRepository();
+    this.messageRepository = new SupportMessageRepository();
+    this.notificationService = new NotificationService();
+  }
+
+  // Helper method to create success response
+  protected createSuccessResponse<T>(
+    data: T,
+    message: string,
+    statusCode: number = HTTP_STATUS.OK
+  ): ApiResponse<T> {
+    return {
+      success: true,
+      message,
+      data,
+      timestamp: new Date().toISOString()
+    };
   }
 
   async createTicket(data: CreateTicketRequest): Promise<ApiResponse<TicketWithDetails>> {

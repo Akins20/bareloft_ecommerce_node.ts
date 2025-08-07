@@ -31,7 +31,7 @@ class NotificationService extends BaseService_1.BaseService {
                         recipientEmail: request.recipient.email,
                         recipientPhone: request.recipient.phoneNumber,
                         recipientName: request.recipient.name,
-                        priority: request.priority || "normal",
+                        priority: request.priority || 'NORMAL',
                         variables: request.variables,
                         metadata: request.metadata,
                         scheduledFor: request.scheduledFor,
@@ -59,11 +59,11 @@ class NotificationService extends BaseService_1.BaseService {
                 failed: 0,
                 notifications: [],
             };
-            for (const recipient of request.recipients) {
+            for (const recipient of request.recipients || []) {
                 try {
                     const notificationRequest = {
                         type: request.type,
-                        channel: request.channel,
+                        channel: request.channels?.[0] || types_1.NotificationChannel.EMAIL,
                         userId: recipient.userId,
                         recipient: {
                             email: recipient.email,
@@ -114,7 +114,7 @@ class NotificationService extends BaseService_1.BaseService {
                 // Send based on channel
                 let providerMessageId;
                 const notificationData = notification.data;
-                const channel = notificationData?.channel || 'EMAIL';
+                const channel = notificationData?.channel || types_1.NotificationChannel.EMAIL;
                 switch (channel) {
                     case "EMAIL":
                         if (notificationData?.recipientEmail) {
@@ -470,7 +470,7 @@ class NotificationService extends BaseService_1.BaseService {
             id: notification.id,
             userId: notification.userId,
             type: notification.type,
-            channel: notificationData.channel || 'EMAIL',
+            channel: notificationData.channel || types_1.NotificationChannel.EMAIL,
             templateId: null, // Default since field doesn't exist
             subject: notification.title, // Use title instead of subject
             message: notification.message,
@@ -481,7 +481,7 @@ class NotificationService extends BaseService_1.BaseService {
                 name: notificationData.recipientName,
             },
             status: notificationData.status || 'PENDING',
-            priority: notificationData.priority || 'normal',
+            priority: notificationData.priority || 'NORMAL',
             providerMessageId: notificationData.providerMessageId,
             deliveredAt: null, // Default since field doesn't exist
             readAt: notification.isRead ? notification.updatedAt : null,
@@ -510,8 +510,8 @@ class NotificationService extends BaseService_1.BaseService {
             await this.sendNotification({
                 userId: customerId,
                 type: 'RETURN_REQUEST_CREATED',
-                channel: 'EMAIL',
-                priority: 'normal',
+                channel: types_1.NotificationChannel.EMAIL,
+                priority: 'NORMAL',
                 variables: {
                     customerName: returnRequest.customer?.firstName || 'Valued Customer',
                     returnNumber: returnRequest.returnNumber,
@@ -526,7 +526,7 @@ class NotificationService extends BaseService_1.BaseService {
                 userId: customerId,
                 type: 'RETURN_REQUEST_CREATED',
                 channel: 'SMS',
-                priority: 'normal',
+                priority: 'NORMAL',
                 variables: {
                     returnNumber: returnRequest.returnNumber,
                     estimatedProcessingTime: '3-5 business days'
@@ -545,8 +545,8 @@ class NotificationService extends BaseService_1.BaseService {
             await this.sendNotification({
                 userId: customerId,
                 type: 'RETURN_REQUEST_CANCELLED',
-                channel: 'EMAIL',
-                priority: 'normal',
+                channel: types_1.NotificationChannel.EMAIL,
+                priority: 'NORMAL',
                 variables: {
                     customerName: returnRequest.customer?.firstName || 'Valued Customer',
                     returnNumber: returnRequest.returnNumber,
@@ -568,7 +568,7 @@ class NotificationService extends BaseService_1.BaseService {
                 userId: customerId,
                 type: 'PICKUP_SCHEDULED',
                 channel: 'SMS',
-                priority: 'high',
+                priority: 'HIGH',
                 variables: {
                     confirmationNumber: pickupDetails.confirmationNumber,
                     scheduledDate: pickupDetails.scheduledDate.toLocaleDateString('en-NG'),
@@ -589,8 +589,8 @@ class NotificationService extends BaseService_1.BaseService {
             await this.sendNotification({
                 userId: customerId,
                 type: 'SUPPORT_TICKET_CREATED',
-                channel: 'EMAIL',
-                priority: 'normal',
+                channel: types_1.NotificationChannel.EMAIL,
+                priority: 'NORMAL',
                 variables: {
                     ticketNumber: ticket.ticketNumber,
                     subject: ticket.subject,
@@ -611,8 +611,8 @@ class NotificationService extends BaseService_1.BaseService {
             await this.sendNotification({
                 userId: agentId,
                 type: 'NEW_CUSTOMER_MESSAGE',
-                channel: 'EMAIL',
-                priority: ticket.priority === 'urgent' ? 'high' : 'normal',
+                channel: types_1.NotificationChannel.EMAIL,
+                priority: (ticket.priority === 'urgent' ? 'HIGH' : 'NORMAL'),
                 variables: {
                     ticketNumber: ticket.ticketNumber,
                     customerName: ticket.customer?.firstName || 'Customer',
@@ -633,8 +633,8 @@ class NotificationService extends BaseService_1.BaseService {
             await this.sendNotification({
                 userId: agentId,
                 type: 'TICKET_ASSIGNED',
-                channel: 'EMAIL',
-                priority: 'normal',
+                channel: types_1.NotificationChannel.EMAIL,
+                priority: 'NORMAL',
                 variables: {
                     ticketId,
                     ticketUrl: `/admin/support/tickets/${ticketId}`

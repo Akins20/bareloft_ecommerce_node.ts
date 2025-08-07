@@ -1,22 +1,116 @@
 import { BaseRepository } from './BaseRepository';
 import { PrismaClient } from '@prisma/client';
-import { 
-  ReturnRequest,
-  ReturnItem,
-  ReturnTimelineEvent,
-  ReturnListQuery,
-  ReturnStatus,
-  ReturnReason,
-  ReturnCondition,
-  AppError,
-  HTTP_STATUS,
-  ERROR_CODES,
-  PaginationMeta 
-} from '../types';
+import { AppError, HTTP_STATUS, ERROR_CODES, PaginationMeta } from '../types';
 
-export class ReturnRepository extends BaseRepository<ReturnRequest> {
+// Return-related type definitions
+type ReturnStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'IN_TRANSIT' | 'RECEIVED' | 'INSPECTED' | 'PROCESSED' | 'COMPLETED' | 'CANCELLED';
+type ReturnReason = 'DEFECTIVE' | 'WRONG_ITEM' | 'NOT_AS_DESCRIBED' | 'DAMAGED' | 'SIZE_ISSUE' | 'QUALITY_ISSUE' | 'CHANGE_OF_MIND' | 'OTHER';
+type ReturnCondition = 'NEW' | 'GOOD' | 'FAIR' | 'POOR' | 'DAMAGED' | 'UNUSABLE';
+
+interface ReturnRequest {
+  id: string;
+  returnNumber: string;
+  orderId: string;
+  customerId: string;
+  status: ReturnStatus;
+  reason: ReturnReason;
+  description?: string;
+  totalAmount: number;
+  currency: string;
+  isEligible: boolean;
+  eligibilityReason?: string;
+  returnShippingMethod?: string;
+  returnTrackingNumber?: string;
+  estimatedPickupDate?: Date;
+  actualPickupDate?: Date;
+  estimatedReturnDate?: Date;
+  actualReturnDate?: Date;
+  qualityCheckNotes?: string;
+  inspectionPhotos?: string[];
+  adminNotes?: string;
+  customerNotes?: string;
+  processedBy?: string;
+  approvedBy?: string;
+  rejectedBy?: string;
+  rejectionReason?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  order?: any;
+  customer?: any;
+  items?: ReturnItem[];
+  refunds?: any[];
+  timeline?: ReturnTimelineEvent[];
+}
+
+interface ReturnItem {
+  id: string;
+  returnRequestId: string;
+  orderItemId: string;
+  productId: string;
+  productName: string;
+  productSku?: string;
+  productImage?: string;
+  quantityReturned: number;
+  unitPrice: number;
+  totalPrice: number;
+  condition?: ReturnCondition;
+  conditionNotes?: string;
+  inspectionPhotos?: string[];
+  restockable: boolean;
+  restockLocation?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  returnRequest?: ReturnRequest;
+  orderItem?: any;
+  product?: any;
+}
+
+interface ReturnTimelineEvent {
+  id: string;
+  returnRequestId: string;
+  type: string;
+  title: string;
+  description: string;
+  data?: any;
+  createdBy?: string;
+  createdByName?: string;
+  isVisible: boolean;
+  createdAt: Date;
+}
+
+interface ReturnListQuery {
+  status?: ReturnStatus[];
+  reason?: ReturnReason[];
+  customerId?: string;
+  startDate?: Date;
+  endDate?: Date;
+  search?: string;
+  state?: string;
+}
+
+export class ReturnRepository extends BaseRepository<ReturnRequest, any, any> {
+  protected db: PrismaClient;
+
   constructor(prisma?: PrismaClient) {
     super(prisma);
+    this.db = this.prisma;
+  }
+
+  // Handle errors with proper logging
+  protected handleError(message: string, error: any): void {
+    console.error(`${message}:`, error);
+  }
+
+  // Create pagination helper
+  protected createPagination(page: number, limit: number, total: number): PaginationMeta {
+    return {
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      totalItems: total,
+      itemsPerPage: limit,
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
+    };
   }
 
   /**
@@ -35,7 +129,7 @@ export class ReturnRepository extends BaseRepository<ReturnRequest> {
     customerNotes?: string;
   }): Promise<ReturnRequest> {
     try {
-      const returnRequest = await this.prisma.returnRequest.create({
+      const returnRequest = await this.db.returnRequest.create({
         data: {
           returnNumber: data.returnNumber,
           orderId: data.orderId,
@@ -96,7 +190,7 @@ export class ReturnRepository extends BaseRepository<ReturnRequest> {
     try {
       const returnItems = await Promise.all(
         items.map(async (item) => {
-          return await this.prisma.returnItem.create({
+          return await this.db.returnItem.create({
             data: {
               returnRequestId,
               orderItemId: item.orderItemId,
@@ -135,7 +229,7 @@ export class ReturnRepository extends BaseRepository<ReturnRequest> {
         })
       );
 
-      return returnItems.map(this.transformReturnItem);
+      return returnItems.map((item) => this.transformReturnItem(item));
     } catch (error) {
       this.handleError('Error adding return items', error);
       throw error;
@@ -147,7 +241,7 @@ export class ReturnRepository extends BaseRepository<ReturnRequest> {
    */
   async findById(id: string): Promise<ReturnRequest | null> {
     try {
-      const returnRequest = await this.prisma.returnRequest.findUnique({
+      const returnRequest = await this.db.returnRequest.findUnique({
         where: { id },
         include: {
           order: {
@@ -211,7 +305,7 @@ export class ReturnRepository extends BaseRepository<ReturnRequest> {
    */
   async findByReturnNumber(returnNumber: string): Promise<ReturnRequest | null> {
     try {
-      const returnRequest = await this.prisma.returnRequest.findUnique({
+      const returnRequest = await this.db.returnRequest.findUnique({
         where: { returnNumber },
         include: {
           order: {
@@ -280,7 +374,7 @@ export class ReturnRepository extends BaseRepository<ReturnRequest> {
     }
   ): Promise<ReturnRequest> {
     try {
-      const returnRequest = await this.prisma.returnRequest.update({
+      const returnRequest = await this.db.returnRequest.update({
         where: { id },
         data: {
           status: status as any,
@@ -338,7 +432,7 @@ export class ReturnRepository extends BaseRepository<ReturnRequest> {
     }
   ): Promise<ReturnItem> {
     try {
-      const returnItem = await this.prisma.returnItem.update({
+      const returnItem = await this.db.returnItem.update({
         where: { id: returnItemId },
         data: {
           condition: inspection.condition as any,
@@ -451,10 +545,10 @@ export class ReturnRepository extends BaseRepository<ReturnRequest> {
       }
 
       // Count total records
-      const total = await this.prisma.returnRequest.count({ where });
+      const total = await this.db.returnRequest.count({ where });
 
       // Get paginated results
-      const returnRequests = await this.prisma.returnRequest.findMany({
+      const returnRequests = await this.db.returnRequest.findMany({
         where,
         include: {
           order: {
@@ -498,7 +592,7 @@ export class ReturnRepository extends BaseRepository<ReturnRequest> {
       const pagination = this.createPagination(page, limit, total);
 
       return {
-        data: returnRequests.map(this.transformReturnRequest),
+        data: returnRequests.map((request) => this.transformReturnRequest(request)),
         pagination,
       };
     } catch (error) {
@@ -550,7 +644,7 @@ export class ReturnRepository extends BaseRepository<ReturnRequest> {
       }
 
       // Get all return requests
-      const returnRequests = await this.prisma.returnRequest.findMany({
+      const returnRequests = await this.db.returnRequest.findMany({
         where,
         include: {
           items: true,
@@ -571,8 +665,8 @@ export class ReturnRepository extends BaseRepository<ReturnRequest> {
 
       const returnsByStatus = Object.entries(statusCounts).map(([status, count]) => ({
         status,
-        count,
-        percentage: totalReturns > 0 ? (count / totalReturns) * 100 : 0,
+        count: count as number,
+        percentage: totalReturns > 0 ? ((count as number) / totalReturns) * 100 : 0,
       }));
 
       // Returns by reason
@@ -642,7 +736,7 @@ export class ReturnRepository extends BaseRepository<ReturnRequest> {
     }
   ): Promise<ReturnTimelineEvent> {
     try {
-      const timelineEvent = await this.prisma.returnTimelineEvent.create({
+      const timelineEvent = await this.db.returnTimelineEvent.create({
         data: {
           returnRequestId,
           type: event.type,
@@ -695,9 +789,9 @@ export class ReturnRepository extends BaseRepository<ReturnRequest> {
       updatedAt: data.updatedAt,
       order: data.order,
       customer: data.customer,
-      items: data.items?.map(this.transformReturnItem),
+      items: data.items?.map((item: any) => this.transformReturnItem(item)),
       refunds: data.refunds,
-      timeline: data.timeline?.map(this.transformTimelineEvent),
+      timeline: data.timeline?.map((event: any) => this.transformTimelineEvent(event)),
     } as ReturnRequest;
   }
 

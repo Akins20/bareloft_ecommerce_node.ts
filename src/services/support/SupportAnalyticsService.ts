@@ -1,12 +1,37 @@
 // src/services/support/SupportAnalyticsService.ts
 import { PeriodType, SupportTicketStatus, SupportTicketCategory } from '@prisma/client';
 import { BaseService } from '../BaseService';
-import { 
-  SupportTicketRepository,
-  SupportAgentRepository,
-  SupportMessageRepository
-} from '@/repositories';
-import { ApiResponse, AppError, HTTP_STATUS } from '@/types';
+import { SupportTicketRepository } from '../../repositories/SupportTicketRepository';
+import { SupportAgentRepository } from '../../repositories/SupportAgentRepository';
+import { SupportMessageRepository } from '../../repositories/SupportMessageRepository';
+import { PrismaClient } from '@prisma/client';
+
+// Local type definitions
+interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+  timestamp: string;
+}
+
+class AppError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number,
+    public code: string
+  ) {
+    super(message);
+    this.name = 'AppError';
+  }
+}
+
+const HTTP_STATUS = {
+  OK: 200,
+  CREATED: 201,
+  BAD_REQUEST: 400,
+  NOT_FOUND: 404,
+  INTERNAL_SERVER_ERROR: 500
+};
 
 export interface SupportOverviewAnalytics {
   ticketStats: {
@@ -147,12 +172,25 @@ export interface SatisfactionAnalytics {
 }
 
 export class SupportAnalyticsService extends BaseService {
+  protected db: PrismaClient;
+
   constructor(
     private ticketRepository: SupportTicketRepository,
     private agentRepository: SupportAgentRepository,
     private messageRepository: SupportMessageRepository
   ) {
     super();
+    this.db = new PrismaClient();
+  }
+
+  // Helper method to create success response
+  protected createSuccessResponse<T>(data: T, message: string, statusCode: number = HTTP_STATUS.OK): ApiResponse<T> {
+    return {
+      success: true,
+      message,
+      data,
+      timestamp: new Date().toISOString()
+    };
   }
 
   async getSupportOverview(

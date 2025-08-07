@@ -2,16 +2,59 @@
 import { 
   SupportTicketCategory,
   SupportLanguage,
-  KnowledgeBaseStatus
+  KnowledgeBaseStatus,
+  PrismaClient
 } from '@prisma/client';
 import { BaseService } from '../BaseService';
-import { 
-  SupportKnowledgeBaseRepository,
-  KnowledgeBaseFilters,
-  KnowledgeBaseWithDetails 
-} from '@/repositories';
-import { PaginationOptions, PaginatedResult, ApiResponse, AppError, HTTP_STATUS } from '@/types';
-import { IDGenerators } from '@/utils/helpers/generators';
+import { PaginationOptions, PaginatedResult, ApiResponse, AppError, HTTP_STATUS } from '../../types';
+import { IDGenerators } from '../../utils/helpers/generators';
+
+// Repository interfaces
+interface KnowledgeBaseFilters {
+  category?: SupportTicketCategory[];
+  language?: SupportLanguage[];
+  tags?: string[];
+  status?: KnowledgeBaseStatus[];
+  isPublic?: boolean;
+  authorId?: string;
+  search?: string;
+}
+
+interface KnowledgeBaseWithDetails {
+  id: string;
+  title: string;
+  content: string;
+  slug: string;
+  status: KnowledgeBaseStatus;
+  isPublic: boolean;
+  viewCount: number;
+  helpfulVotes: number;
+  unhelpfulVotes: number;
+  category: SupportTicketCategory;
+  language: SupportLanguage;
+  authorId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface SupportKnowledgeBaseRepository {
+  findBySlug(slug: string): Promise<KnowledgeBaseWithDetails | null>;
+  create(data: any): Promise<KnowledgeBaseWithDetails>;
+  findById(id: string): Promise<KnowledgeBaseWithDetails | null>;
+  findMany(filters: KnowledgeBaseFilters, pagination: PaginationOptions): Promise<PaginatedResult<KnowledgeBaseWithDetails>>;
+  update(id: string, data: any): Promise<KnowledgeBaseWithDetails>;
+  incrementViewCount(id: string): Promise<void>;
+  publish(id: string, publishedBy: string): Promise<void>;
+  archive(id: string, archivedBy: string): Promise<void>;
+  delete(id: string): Promise<void>;
+  search(query: string, filters: Omit<KnowledgeBaseFilters, 'search'>, pagination: PaginationOptions): Promise<PaginatedResult<KnowledgeBaseWithDetails>>;
+  getFeatured(category?: SupportTicketCategory, language?: SupportLanguage, limit?: number): Promise<KnowledgeBaseWithDetails[]>;
+  getPopular(category?: SupportTicketCategory, language?: SupportLanguage, limit?: number): Promise<KnowledgeBaseWithDetails[]>;
+  getRelated(id: string, limit?: number): Promise<KnowledgeBaseWithDetails[]>;
+  voteHelpful(id: string): Promise<void>;
+  voteUnhelpful(id: string): Promise<void>;
+  getStats(): Promise<any>;
+}
 
 export interface CreateKnowledgeBaseRequest {
   title: string;
@@ -78,10 +121,13 @@ export interface KnowledgeBaseStats {
 }
 
 export class SupportKnowledgeBaseService extends BaseService {
+  private db: PrismaClient;
+
   constructor(
-    private knowledgeBaseRepository: SupportKnowledgeBaseRepository
+    private knowledgeBaseRepository?: SupportKnowledgeBaseRepository
   ) {
     super();
+    this.db = new PrismaClient();
   }
 
   async createArticle(
@@ -94,7 +140,7 @@ export class SupportKnowledgeBaseService extends BaseService {
       let counter = 1;
 
       // Ensure slug is unique
-      while (await this.knowledgeBaseRepository.findBySlug(slug)) {
+      while (await this.knowledgeBaseRepository?.findBySlug(slug)) {
         slug = `${baseSlug}-${counter}`;
         counter++;
       }
@@ -104,20 +150,21 @@ export class SupportKnowledgeBaseService extends BaseService {
         this.extractKeywords(data.title + ' ' + data.content);
 
       // Create the article
-      const article = await this.knowledgeBaseRepository.create({
+      const article = await this.knowledgeBaseRepository?.create({
         ...data,
         slug,
         searchKeywords,
         status: KnowledgeBaseStatus.DRAFT,
-      });
+      }) || {} as KnowledgeBaseWithDetails;
 
-      const articleWithDetails = await this.knowledgeBaseRepository.findById(article.id);
+      const articleWithDetails = await this.knowledgeBaseRepository?.findById(article.id);
 
-      return this.createSuccessResponse(
-        articleWithDetails!,
-        'Knowledge base article created successfully',
-        HTTP_STATUS.CREATED
-      );
+      return {
+        success: true,
+        message: 'Knowledge base article created successfully',
+        data: articleWithDetails!,
+        timestamp: new Date().toISOString()
+      } as ApiResponse<KnowledgeBaseWithDetails>;
     } catch (error) {
       throw new AppError(
         'Failed to create knowledge base article',
@@ -129,7 +176,7 @@ export class SupportKnowledgeBaseService extends BaseService {
 
   async getArticle(id: string, incrementView = false): Promise<ApiResponse<KnowledgeBaseWithDetails>> {
     try {
-      const article = await this.knowledgeBaseRepository.findById(id);
+      const article = await this.knowledgeBaseRepository?.findById(id);
 
       if (!article) {
         throw new AppError(
@@ -140,12 +187,17 @@ export class SupportKnowledgeBaseService extends BaseService {
       }
 
       // Increment view count if requested
-      if (incrementView && article.isPublic && article.status === KnowledgeBaseStatus.PUBLISHED) {
-        await this.knowledgeBaseRepository.incrementViewCount(id);
-        article.viewCount += 1;
+      if (incrementView && article?.isPublic && article?.status === KnowledgeBaseStatus.PUBLISHED) {
+        await this.knowledgeBaseRepository?.incrementViewCount(id);
+        if (article) article.viewCount += 1;
       }
 
-      return this.createSuccessResponse(article, 'Article retrieved successfully');
+      return {
+        success: true,
+        message: 'Article retrieved successfully',
+        data: article!,
+        timestamp: new Date().toISOString()
+      } as ApiResponse<KnowledgeBaseWithDetails>;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError(
@@ -158,7 +210,7 @@ export class SupportKnowledgeBaseService extends BaseService {
 
   async getArticleBySlug(slug: string, incrementView = false): Promise<ApiResponse<KnowledgeBaseWithDetails>> {
     try {
-      const article = await this.knowledgeBaseRepository.findBySlug(slug);
+      const article = await this.knowledgeBaseRepository?.findBySlug(slug);
 
       if (!article) {
         throw new AppError(
@@ -169,12 +221,17 @@ export class SupportKnowledgeBaseService extends BaseService {
       }
 
       // Increment view count if requested
-      if (incrementView && article.isPublic && article.status === KnowledgeBaseStatus.PUBLISHED) {
-        await this.knowledgeBaseRepository.incrementViewCount(article.id);
-        article.viewCount += 1;
+      if (incrementView && article?.isPublic && article?.status === KnowledgeBaseStatus.PUBLISHED) {
+        await this.knowledgeBaseRepository?.incrementViewCount(article.id);
+        if (article) article.viewCount += 1;
       }
 
-      return this.createSuccessResponse(article, 'Article retrieved successfully');
+      return {
+        success: true,
+        message: 'Article retrieved successfully',
+        data: article!,
+        timestamp: new Date().toISOString()
+      } as ApiResponse<KnowledgeBaseWithDetails>;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError(
@@ -190,8 +247,21 @@ export class SupportKnowledgeBaseService extends BaseService {
     pagination: PaginationOptions = { page: 1, limit: 20 }
   ): Promise<ApiResponse<PaginatedResult<KnowledgeBaseWithDetails>>> {
     try {
-      const articles = await this.knowledgeBaseRepository.findMany(filters, pagination);
-      return this.createSuccessResponse(articles, 'Articles retrieved successfully');
+      const articles = await this.knowledgeBaseRepository?.findMany(filters, pagination) || {
+        items: [],
+        pagination: {
+          page: 1,
+          limit: 20,
+          total: 0,
+          pages: 0
+        }
+      };
+      return {
+        success: true,
+        message: 'Articles retrieved successfully',
+        data: articles,
+        timestamp: new Date().toISOString()
+      } as ApiResponse<PaginatedResult<KnowledgeBaseWithDetails>>;
     } catch (error) {
       throw new AppError(
         'Failed to retrieve articles',
@@ -207,7 +277,7 @@ export class SupportKnowledgeBaseService extends BaseService {
     updatedBy: string
   ): Promise<ApiResponse<KnowledgeBaseWithDetails>> {
     try {
-      const article = await this.knowledgeBaseRepository.findById(id);
+      const article = await this.knowledgeBaseRepository?.findById(id);
 
       if (!article) {
         throw new AppError(
@@ -220,13 +290,13 @@ export class SupportKnowledgeBaseService extends BaseService {
       // Update slug if title changed
       let updateData = { ...data, lastUpdatedBy: updatedBy };
       
-      if (data.title && data.title !== article.title) {
+      if (data.title && data.title !== article?.title) {
         const baseSlug = IDGenerators.generateSlug(data.title);
         let slug = baseSlug;
         let counter = 1;
 
         // Ensure new slug is unique
-        while (await this.knowledgeBaseRepository.findBySlug(slug)) {
+        while (await this.knowledgeBaseRepository?.findBySlug(slug)) {
           slug = `${baseSlug}-${counter}`;
           counter++;
         }
@@ -236,18 +306,20 @@ export class SupportKnowledgeBaseService extends BaseService {
 
       // Update search keywords if content changed
       if (data.title || data.content) {
-        const title = data.title || article.title;
-        const content = data.content || article.content;
+        const title = data.title || article?.title || '';
+        const content = data.content || article?.content || '';
         updateData.searchKeywords = data.searchKeywords || this.extractKeywords(title + ' ' + content);
       }
 
-      const updatedArticle = await this.knowledgeBaseRepository.update(id, updateData);
-      const articleWithDetails = await this.knowledgeBaseRepository.findById(id);
+      const updatedArticle = await this.knowledgeBaseRepository?.update(id, updateData);
+      const articleWithDetails = await this.knowledgeBaseRepository?.findById(id);
 
-      return this.createSuccessResponse(
-        articleWithDetails!,
-        'Article updated successfully'
-      );
+      return {
+        success: true,
+        message: 'Article updated successfully',
+        data: articleWithDetails!,
+        timestamp: new Date().toISOString()
+      } as ApiResponse<KnowledgeBaseWithDetails>;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError(
@@ -260,7 +332,7 @@ export class SupportKnowledgeBaseService extends BaseService {
 
   async publishArticle(id: string, publishedBy: string): Promise<ApiResponse<KnowledgeBaseWithDetails>> {
     try {
-      const article = await this.knowledgeBaseRepository.findById(id);
+      const article = await this.knowledgeBaseRepository?.findById(id);
 
       if (!article) {
         throw new AppError(
@@ -270,7 +342,7 @@ export class SupportKnowledgeBaseService extends BaseService {
         );
       }
 
-      if (article.status === KnowledgeBaseStatus.PUBLISHED) {
+      if (article?.status === KnowledgeBaseStatus.PUBLISHED) {
         throw new AppError(
           'Article is already published',
           HTTP_STATUS.BAD_REQUEST,
@@ -278,13 +350,15 @@ export class SupportKnowledgeBaseService extends BaseService {
         );
       }
 
-      await this.knowledgeBaseRepository.publish(id, publishedBy);
-      const publishedArticle = await this.knowledgeBaseRepository.findById(id);
+      await this.knowledgeBaseRepository?.publish(id, publishedBy);
+      const publishedArticle = await this.knowledgeBaseRepository?.findById(id);
 
-      return this.createSuccessResponse(
-        publishedArticle!,
-        'Article published successfully'
-      );
+      return {
+        success: true,
+        message: 'Article published successfully',
+        data: publishedArticle!,
+        timestamp: new Date().toISOString()
+      } as ApiResponse<KnowledgeBaseWithDetails>;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError(
@@ -297,7 +371,7 @@ export class SupportKnowledgeBaseService extends BaseService {
 
   async archiveArticle(id: string, archivedBy: string): Promise<ApiResponse<KnowledgeBaseWithDetails>> {
     try {
-      const article = await this.knowledgeBaseRepository.findById(id);
+      const article = await this.knowledgeBaseRepository?.findById(id);
 
       if (!article) {
         throw new AppError(
@@ -307,13 +381,15 @@ export class SupportKnowledgeBaseService extends BaseService {
         );
       }
 
-      await this.knowledgeBaseRepository.archive(id, archivedBy);
-      const archivedArticle = await this.knowledgeBaseRepository.findById(id);
+      await this.knowledgeBaseRepository?.archive(id, archivedBy);
+      const archivedArticle = await this.knowledgeBaseRepository?.findById(id);
 
-      return this.createSuccessResponse(
-        archivedArticle!,
-        'Article archived successfully'
-      );
+      return {
+        success: true,
+        message: 'Article archived successfully',
+        data: archivedArticle!,
+        timestamp: new Date().toISOString()
+      } as ApiResponse<KnowledgeBaseWithDetails>;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError(
@@ -326,7 +402,7 @@ export class SupportKnowledgeBaseService extends BaseService {
 
   async deleteArticle(id: string): Promise<ApiResponse<null>> {
     try {
-      const article = await this.knowledgeBaseRepository.findById(id);
+      const article = await this.knowledgeBaseRepository?.findById(id);
 
       if (!article) {
         throw new AppError(
@@ -336,9 +412,14 @@ export class SupportKnowledgeBaseService extends BaseService {
         );
       }
 
-      await this.knowledgeBaseRepository.delete(id);
+      await this.knowledgeBaseRepository?.delete(id);
 
-      return this.createSuccessResponse(null, 'Article deleted successfully');
+      return {
+        success: true,
+        message: 'Article deleted successfully',
+        data: null,
+        timestamp: new Date().toISOString()
+      } as ApiResponse<null>;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError(
@@ -366,13 +447,26 @@ export class SupportKnowledgeBaseService extends BaseService {
         filters.isPublic = true;
       }
 
-      const results = await this.knowledgeBaseRepository.search(
+      const results = await this.knowledgeBaseRepository?.search(
         searchRequest.query,
         filters,
         pagination
-      );
+      ) || {
+        items: [],
+        pagination: {
+          page: 1,
+          limit: 10,
+          total: 0,
+          pages: 0
+        }
+      };
 
-      return this.createSuccessResponse(results, 'Search completed successfully');
+      return {
+        success: true,
+        message: 'Search completed successfully',
+        data: results,
+        timestamp: new Date().toISOString()
+      } as ApiResponse<PaginatedResult<KnowledgeBaseWithDetails>>;
     } catch (error) {
       throw new AppError(
         'Failed to search articles',
@@ -388,8 +482,13 @@ export class SupportKnowledgeBaseService extends BaseService {
     limit = 5
   ): Promise<ApiResponse<KnowledgeBaseWithDetails[]>> {
     try {
-      const articles = await this.knowledgeBaseRepository.getFeatured(category, language, limit);
-      return this.createSuccessResponse(articles, 'Featured articles retrieved successfully');
+      const articles = await this.knowledgeBaseRepository?.getFeatured(category, language, limit) || [];
+      return {
+        success: true,
+        message: 'Featured articles retrieved successfully',
+        data: articles,
+        timestamp: new Date().toISOString()
+      } as ApiResponse<KnowledgeBaseWithDetails[]>;
     } catch (error) {
       throw new AppError(
         'Failed to retrieve featured articles',
@@ -405,8 +504,13 @@ export class SupportKnowledgeBaseService extends BaseService {
     limit = 10
   ): Promise<ApiResponse<KnowledgeBaseWithDetails[]>> {
     try {
-      const articles = await this.knowledgeBaseRepository.getPopular(category, language, limit);
-      return this.createSuccessResponse(articles, 'Popular articles retrieved successfully');
+      const articles = await this.knowledgeBaseRepository?.getPopular(category, language, limit) || [];
+      return {
+        success: true,
+        message: 'Popular articles retrieved successfully',
+        data: articles,
+        timestamp: new Date().toISOString()
+      } as ApiResponse<KnowledgeBaseWithDetails[]>;
     } catch (error) {
       throw new AppError(
         'Failed to retrieve popular articles',
@@ -418,8 +522,13 @@ export class SupportKnowledgeBaseService extends BaseService {
 
   async getRelatedArticles(id: string, limit = 5): Promise<ApiResponse<KnowledgeBaseWithDetails[]>> {
     try {
-      const articles = await this.knowledgeBaseRepository.getRelated(id, limit);
-      return this.createSuccessResponse(articles, 'Related articles retrieved successfully');
+      const articles = await this.knowledgeBaseRepository?.getRelated(id, limit) || [];
+      return {
+        success: true,
+        message: 'Related articles retrieved successfully',
+        data: articles,
+        timestamp: new Date().toISOString()
+      } as ApiResponse<KnowledgeBaseWithDetails[]>;
     } catch (error) {
       throw new AppError(
         'Failed to retrieve related articles',
@@ -431,7 +540,7 @@ export class SupportKnowledgeBaseService extends BaseService {
 
   async voteArticle(id: string, helpful: boolean): Promise<ApiResponse<KnowledgeBaseWithDetails>> {
     try {
-      const article = await this.knowledgeBaseRepository.findById(id);
+      const article = await this.knowledgeBaseRepository?.findById(id);
 
       if (!article) {
         throw new AppError(
@@ -450,17 +559,19 @@ export class SupportKnowledgeBaseService extends BaseService {
       }
 
       if (helpful) {
-        await this.knowledgeBaseRepository.voteHelpful(id);
+        await this.knowledgeBaseRepository?.voteHelpful(id);
       } else {
-        await this.knowledgeBaseRepository.voteUnhelpful(id);
+        await this.knowledgeBaseRepository?.voteUnhelpful(id);
       }
 
-      const updatedArticle = await this.knowledgeBaseRepository.findById(id);
+      const updatedArticle = await this.knowledgeBaseRepository?.findById(id);
 
-      return this.createSuccessResponse(
-        updatedArticle!,
-        helpful ? 'Voted as helpful' : 'Voted as not helpful'
-      );
+      return {
+        success: true,
+        message: helpful ? 'Voted as helpful' : 'Voted as not helpful',
+        data: updatedArticle!,
+        timestamp: new Date().toISOString()
+      } as ApiResponse<KnowledgeBaseWithDetails>;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError(
@@ -478,7 +589,7 @@ export class SupportKnowledgeBaseService extends BaseService {
         topArticles,
         recentUpdates,
       ] = await Promise.all([
-        this.knowledgeBaseRepository.getStats(),
+        this.knowledgeBaseRepository?.getStats() || {},
         this.getTopPerformingArticles(),
         this.getRecentlyUpdatedArticles(),
       ]);
@@ -489,7 +600,12 @@ export class SupportKnowledgeBaseService extends BaseService {
         recentUpdates,
       };
 
-      return this.createSuccessResponse(stats, 'Knowledge base statistics retrieved successfully');
+      return {
+        success: true,
+        message: 'Knowledge base statistics retrieved successfully',
+        data: stats,
+        timestamp: new Date().toISOString()
+      } as ApiResponse<KnowledgeBaseStats>;
     } catch (error) {
       throw new AppError(
         'Failed to retrieve knowledge base statistics',
@@ -510,7 +626,7 @@ export class SupportKnowledgeBaseService extends BaseService {
       const keywords = this.extractKeywords(ticketDescription);
       
       // Search for relevant articles
-      const searchResults = await this.knowledgeBaseRepository.search(
+      const searchResults = await this.knowledgeBaseRepository?.search(
         keywords,
         {
           category: [ticketCategory],
@@ -519,12 +635,22 @@ export class SupportKnowledgeBaseService extends BaseService {
           isPublic: true,
         },
         { page: 1, limit }
-      );
+      ) || {
+        items: [],
+        pagination: {
+          page: 1,
+          limit: 5,
+          total: 0,
+          pages: 0
+        }
+      };
 
-      return this.createSuccessResponse(
-        searchResults.items,
-        'Article suggestions retrieved successfully'
-      );
+      return {
+        success: true,
+        message: 'Article suggestions retrieved successfully',
+        data: searchResults.items,
+        timestamp: new Date().toISOString()
+      } as ApiResponse<KnowledgeBaseWithDetails[]>;
     } catch (error) {
       throw new AppError(
         'Failed to retrieve article suggestions',
@@ -539,12 +665,25 @@ export class SupportKnowledgeBaseService extends BaseService {
     pagination: PaginationOptions = { page: 1, limit: 20 }
   ): Promise<ApiResponse<PaginatedResult<KnowledgeBaseWithDetails>>> {
     try {
-      const articles = await this.knowledgeBaseRepository.findMany(
+      const articles = await this.knowledgeBaseRepository?.findMany(
         { authorId },
         pagination
-      );
+      ) || {
+        items: [],
+        pagination: {
+          page: 1,
+          limit: 20,
+          total: 0,
+          pages: 0
+        }
+      };
 
-      return this.createSuccessResponse(articles, 'Author articles retrieved successfully');
+      return {
+        success: true,
+        message: 'Author articles retrieved successfully',
+        data: articles,
+        timestamp: new Date().toISOString()
+      } as ApiResponse<PaginatedResult<KnowledgeBaseWithDetails>>;
     } catch (error) {
       throw new AppError(
         'Failed to retrieve author articles',
@@ -572,12 +711,22 @@ export class SupportKnowledgeBaseService extends BaseService {
         filters.tags = [`state-${state.toLowerCase()}`];
       }
 
-      const articles = await this.knowledgeBaseRepository.findMany(filters, pagination);
+      const articles = await this.knowledgeBaseRepository?.findMany(filters, pagination) || {
+        items: [],
+        pagination: {
+          page: 1,
+          limit: 20,
+          total: 0,
+          pages: 0
+        }
+      };
 
-      return this.createSuccessResponse(
-        articles, 
-        'Nigerian context articles retrieved successfully'
-      );
+      return {
+        success: true,
+        message: 'Nigerian context articles retrieved successfully',
+        data: articles,
+        timestamp: new Date().toISOString()
+      } as ApiResponse<PaginatedResult<KnowledgeBaseWithDetails>>;
     } catch (error) {
       throw new AppError(
         'Failed to retrieve Nigerian context articles',
@@ -638,30 +787,34 @@ export class SupportKnowledgeBaseService extends BaseService {
     viewCount: number;
     rating: number;
   }>> {
-    const articles = await this.db.supportKnowledgeBase.findMany({
-      where: {
-        status: KnowledgeBaseStatus.PUBLISHED,
-        isPublic: true,
-      },
-      select: {
-        id: true,
-        title: true,
-        viewCount: true,
-        helpfulVotes: true,
-        unhelpfulVotes: true,
-      },
-      orderBy: {
-        viewCount: 'desc',
-      },
-      take: limit,
-    });
+    try {
+      const articles = await this.db.supportKnowledgeBase.findMany({
+        where: {
+          status: KnowledgeBaseStatus.PUBLISHED,
+          isPublic: true,
+        },
+        select: {
+          id: true,
+          title: true,
+          viewCount: true,
+          helpfulVotes: true,
+          unhelpfulVotes: true,
+        },
+        orderBy: {
+          viewCount: 'desc',
+        },
+        take: limit,
+      });
 
-    return articles.map(article => ({
-      id: article.id,
-      title: article.title,
-      viewCount: article.viewCount,
-      rating: this.calculateRating(article.helpfulVotes, article.unhelpfulVotes),
-    }));
+      return articles.map(article => ({
+        id: article.id,
+        title: article.title,
+        viewCount: article.viewCount,
+        rating: this.calculateRating(article.helpfulVotes, article.unhelpfulVotes),
+      }));
+    } catch (error) {
+      return [];
+    }
   }
 
   private async getRecentlyUpdatedArticles(limit = 10): Promise<Array<{
@@ -670,32 +823,36 @@ export class SupportKnowledgeBaseService extends BaseService {
     updatedAt: Date;
     updaterName: string;
   }>> {
-    const articles = await this.db.supportKnowledgeBase.findMany({
-      where: {
-        status: KnowledgeBaseStatus.PUBLISHED,
-      },
-      include: {
-        updater: {
-          select: {
-            firstName: true,
-            lastName: true,
+    try {
+      const articles = await this.db.supportKnowledgeBase.findMany({
+        where: {
+          status: KnowledgeBaseStatus.PUBLISHED,
+        },
+        include: {
+          updater: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
           },
         },
-      },
-      orderBy: {
-        updatedAt: 'desc',
-      },
-      take: limit,
-    });
+        orderBy: {
+          updatedAt: 'desc',
+        },
+        take: limit,
+      });
 
-    return articles.map(article => ({
-      id: article.id,
-      title: article.title,
-      updatedAt: article.updatedAt,
-      updaterName: article.updater ? 
-        `${article.updater.firstName} ${article.updater.lastName}` : 
-        'System',
-    }));
+      return articles.map(article => ({
+        id: article.id,
+        title: article.title,
+        updatedAt: article.updatedAt,
+        updaterName: (article as any).updater ? 
+          `${(article as any).updater.firstName} ${(article as any).updater.lastName}` : 
+          'System',
+      }));
+    } catch (error) {
+      return [];
+    }
   }
 
   private calculateRating(helpful: number, unhelpful: number): number {

@@ -62,8 +62,9 @@ export const ReorderSuggestionModel = {
 
     if (!existing) return null;
 
+    const existingData = (existing.data as any) || {};
     const updatedData = {
-      ...existing.data,
+      ...existingData,
       ...data,
       updatedAt: new Date(),
     };
@@ -135,8 +136,9 @@ export const ReorderRequestModel = {
 
     if (!existing) return null;
 
+    const existingData = (existing.data as any) || {};
     const updatedData = {
-      ...existing.data,
+      ...existingData,
       ...data,
       updatedAt: new Date(),
     };
@@ -283,4 +285,4 @@ model ReorderRequest {
 }
 `;
 
-export { ReorderSuggestionModel, ReorderRequestModel };
+// Models are already exported above

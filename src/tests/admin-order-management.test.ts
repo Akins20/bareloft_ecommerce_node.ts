@@ -1,26 +1,42 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import request from 'supertest';
 import { Express } from 'express';
-import { AdminOrderController } from '../controllers/admin/AdminOrderController';
+import app from '../app';
 import { OrderService } from '../services/orders/OrderService';
-import { FulfillmentService } from '../services/orders/FulfillmentService';
 import { OrderRepository } from '../repositories/OrderRepository';
 import { formatNaira } from '../utils/helpers/formatters';
+import { PrismaClient } from '@prisma/client';
+
+// Types
+interface MockOrderService {
+  updateOrderStatus: jest.MockedFunction<any>;
+  cancelOrder: jest.MockedFunction<any>;
+}
+
+interface MockFulfillmentService {
+  getFulfillmentQueue: jest.MockedFunction<any>;
+  shipOrder: jest.MockedFunction<any>;
+  generateShippingLabel: jest.MockedFunction<any>;
+}
+
+interface MockOrderRepository {
+  getOrdersWithFilters: jest.MockedFunction<any>;
+  findById: jest.MockedFunction<any>;
+  getRecentOrders: jest.MockedFunction<any>;
+  getOrderAnalytics: jest.MockedFunction<any>;
+}
 
 // Mock dependencies
 jest.mock('../services/orders/OrderService');
-jest.mock('../services/orders/FulfillmentService');
 jest.mock('../repositories/OrderRepository');
 jest.mock('../services/notifications/NotificationService');
 jest.mock('../services/payments/PaymentService');
-jest.mock('../services/analytics/ReportingService');
 
 describe('Admin Order Management System', () => {
-  let app: Express;
   let adminToken: string;
-  let mockOrderService: jest.Mocked<OrderService>;
-  let mockFulfillmentService: jest.Mocked<FulfillmentService>;
-  let mockOrderRepository: jest.Mocked<OrderRepository>;
+  let mockOrderService: MockOrderService;
+  let mockFulfillmentService: MockFulfillmentService;
+  let mockOrderRepository: MockOrderRepository;
 
   // Sample test data
   const sampleOrder = {
@@ -74,9 +90,23 @@ describe('Admin Order Management System', () => {
     jest.clearAllMocks();
     
     // Setup mock implementations
-    mockOrderService = new OrderService() as jest.Mocked<OrderService>;
-    mockFulfillmentService = new FulfillmentService() as jest.Mocked<FulfillmentService>;
-    mockOrderRepository = new OrderRepository({} as any) as jest.Mocked<OrderRepository>;
+    mockOrderService = {
+      updateOrderStatus: jest.fn(),
+      cancelOrder: jest.fn()
+    };
+    
+    mockFulfillmentService = {
+      getFulfillmentQueue: jest.fn(),
+      shipOrder: jest.fn(),
+      generateShippingLabel: jest.fn()
+    };
+    
+    mockOrderRepository = {
+      getOrdersWithFilters: jest.fn(),
+      findById: jest.fn(),
+      getRecentOrders: jest.fn(),
+      getOrderAnalytics: jest.fn()
+    };
 
     // Mock admin authentication token
     adminToken = 'admin-jwt-token-123';
@@ -86,7 +116,7 @@ describe('Admin Order Management System', () => {
     describe('GET /api/admin/orders', () => {
       it('should retrieve orders with Nigerian market formatting', async () => {
         // Mock the repository method
-        mockOrderRepository.getOrdersWithFilters = jest.fn().mockResolvedValue({
+        mockOrderRepository.getOrdersWithFilters.mockResolvedValue({
           orders: [sampleOrder],
           pagination: {
             page: 1,
@@ -134,7 +164,7 @@ describe('Admin Order Management System', () => {
           { ...sampleOrder, shippingAddress: { state: 'Lagos', city: 'Lagos' } }
         ];
 
-        mockOrderRepository.getOrdersWithFilters = jest.fn().mockResolvedValue({
+        mockOrderRepository.getOrdersWithFilters.mockResolvedValue({
           orders: lagosOrders,
           pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
           summary: { totalRevenue: 265875, totalOrders: 1, averageOrderValue: 265875 }
@@ -155,7 +185,7 @@ describe('Admin Order Management System', () => {
         const searchQuery = '+2348012345678';
         const expectedFormatted = '+234 801 234 5678';
 
-        mockOrderRepository.getOrdersWithFilters = jest.fn().mockResolvedValue({
+        mockOrderRepository.getOrdersWithFilters.mockResolvedValue({
           orders: [sampleOrder],
           pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
           summary: { totalRevenue: 265875, totalOrders: 1, averageOrderValue: 265875 }
@@ -167,7 +197,7 @@ describe('Admin Order Management System', () => {
 
     describe('GET /api/admin/orders/:orderId', () => {
       it('should retrieve detailed order information', async () => {
-        mockOrderRepository.findById = jest.fn().mockResolvedValue(sampleOrder);
+        mockOrderRepository.findById.mockResolvedValue(sampleOrder);
 
         const orderId = 'order-test-id-123';
         const result = await mockOrderRepository.findById(orderId);
@@ -178,7 +208,7 @@ describe('Admin Order Management System', () => {
       });
 
       it('should handle invalid order IDs', async () => {
-        mockOrderRepository.findById = jest.fn().mockResolvedValue(null);
+        mockOrderRepository.findById.mockResolvedValue(null);
 
         const invalidOrderId = 'invalid-order-id';
         const result = await mockOrderRepository.findById(invalidOrderId);
@@ -194,7 +224,7 @@ describe('Admin Order Management System', () => {
           notes: 'Order confirmed by admin'
         };
 
-        mockOrderService.updateOrderStatus = jest.fn().mockResolvedValue({
+        mockOrderService.updateOrderStatus.mockResolvedValue({
           success: true,
           message: 'Order status updated successfully',
           order: { ...sampleOrder, status: 'CONFIRMED' }
@@ -228,7 +258,7 @@ describe('Admin Order Management System', () => {
   describe('Order Queue Management', () => {
     describe('GET /api/admin/orders/queue/pending', () => {
       it('should retrieve pending orders with Nigerian business context', async () => {
-        mockFulfillmentService.getFulfillmentQueue = jest.fn().mockResolvedValue([
+        mockFulfillmentService.getFulfillmentQueue.mockResolvedValue([
           sampleQueueOrder
         ]);
 
@@ -251,7 +281,7 @@ describe('Admin Order Management System', () => {
           { ...sampleQueueOrder, priority: 'high' as const }
         ];
 
-        mockFulfillmentService.getFulfillmentQueue = jest.fn().mockResolvedValue(
+        mockFulfillmentService.getFulfillmentQueue.mockResolvedValue(
           highPriorityOrders
         );
 
@@ -271,7 +301,7 @@ describe('Admin Order Management System', () => {
           createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) // 2 days ago
         };
 
-        mockOrderRepository.getRecentOrders = jest.fn().mockResolvedValue([
+        mockOrderRepository.getRecentOrders.mockResolvedValue([
           processingOrder
         ]);
 
@@ -317,7 +347,7 @@ describe('Admin Order Management System', () => {
           ordersByStatus: []
         };
 
-        mockOrderRepository.getOrderAnalytics = jest.fn().mockResolvedValue(mockAnalytics);
+        mockOrderRepository.getOrderAnalytics.mockResolvedValue(mockAnalytics);
 
         const analytics = await mockOrderRepository.getOrderAnalytics(
           new Date('2024-07-01'),
@@ -440,7 +470,7 @@ describe('Admin Order Management System', () => {
           refundAmount: 265875 // in kobo
         };
 
-        mockOrderService.cancelOrder = jest.fn().mockResolvedValue({
+        mockOrderService.cancelOrder.mockResolvedValue({
           success: true,
           message: 'Order cancelled successfully',
           order: { ...sampleOrder, status: 'CANCELLED' }
@@ -505,12 +535,12 @@ describe('Admin Order Management System', () => {
           generateShippingLabel: true
         };
 
-        mockFulfillmentService.shipOrder = jest.fn().mockResolvedValue({
+        mockFulfillmentService.shipOrder.mockResolvedValue({
           ...sampleOrder,
           status: 'SHIPPED'
         });
 
-        mockFulfillmentService.generateShippingLabel = jest.fn().mockResolvedValue({
+        mockFulfillmentService.generateShippingLabel.mockResolvedValue({
           orderId: sampleOrder.id,
           trackingNumber: fulfillmentData.trackingNumber,
           shippingMethod: 'Standard Delivery',

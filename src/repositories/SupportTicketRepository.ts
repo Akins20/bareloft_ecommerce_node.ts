@@ -1,7 +1,20 @@
 // src/repositories/SupportTicketRepository.ts
-import { SupportTicket, SupportTicketStatus, SupportTicketPriority, SupportTicketCategory, Prisma } from '@prisma/client';
+import { SupportTicket, SupportTicketStatus, SupportTicketPriority, SupportTicketCategory, Prisma, PrismaClient } from '@prisma/client';
 import { BaseRepository } from './BaseRepository';
-import { PaginationOptions, PaginatedResult } from '@/types';
+
+// Local type definitions
+interface PaginationOptions {
+  page: number;
+  limit: number;
+}
+
+interface PaginatedResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
 
 export interface TicketFilters {
   status?: SupportTicketStatus[];
@@ -58,7 +71,13 @@ export interface TicketWithDetails extends SupportTicket {
   } | null;
 }
 
-export class SupportTicketRepository extends BaseRepository {
+export class SupportTicketRepository extends BaseRepository<SupportTicket> {
+  protected db: PrismaClient;
+
+  constructor(prisma?: PrismaClient) {
+    super(prisma);
+    this.db = this.prisma;
+  }
   async create(data: {
     ticketNumber: string;
     subject: string;
@@ -75,7 +94,13 @@ export class SupportTicketRepository extends BaseRepository {
     metadata?: any;
   }): Promise<SupportTicket> {
     return this.db.supportTicket.create({
-      data,
+      data: {
+        ...data,
+        status: SupportTicketStatus.OPEN, // Default status
+        priority: data.priority,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
     });
   }
 

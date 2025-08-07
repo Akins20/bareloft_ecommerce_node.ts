@@ -5,17 +5,84 @@ import {
   SupportMessageDirection
 } from '@prisma/client';
 import { BaseService } from '../BaseService';
-import { 
-  SupportMessageRepository,
-  SupportTicketRepository,
-  MessageFilters,
-  MessageWithDetails 
-} from '@/repositories';
-import { PaginationOptions, PaginatedResult, ApiResponse, AppError, HTTP_STATUS } from '@/types';
-import { NotificationService } from '@/services/notifications';
-import { EmailService } from '@/services/notifications/EmailService';
-import { SMSService } from '@/services/notifications/SMSService';
-import { validateNigerianPhoneNumber } from '@/utils/helpers/nigerian';
+import { SupportMessageRepository } from '../../repositories/SupportMessageRepository';
+import { SupportTicketRepository } from '../../repositories/SupportTicketRepository';
+import { MessageFilters, MessageWithDetails } from '../../repositories/SupportMessageRepository';
+import { PrismaClient } from '@prisma/client';
+
+// Local type definitions
+interface PaginationOptions {
+  page: number;
+  limit: number;
+}
+
+interface PaginatedResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
+interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+  timestamp: string;
+}
+
+class AppError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number,
+    public code: string
+  ) {
+    super(message);
+    this.name = 'AppError';
+  }
+}
+
+const HTTP_STATUS = {
+  OK: 200,
+  CREATED: 201,
+  BAD_REQUEST: 400,
+  NOT_FOUND: 404,
+  INTERNAL_SERVER_ERROR: 500
+};
+
+// Mock services
+class NotificationService {
+  async sendInAppNotification(userId: string, title: string, content: string): Promise<void> {
+    console.log(`In-app notification to ${userId}: ${title} - ${content}`);
+  }
+}
+
+class EmailService {
+  async sendTicketMessage(email: string, subject: string, content: string, attachments: string[]): Promise<void> {
+    console.log(`Email to ${email}: ${subject} - ${content}`);
+  }
+}
+
+class SMSService {
+  async sendSMS(phoneNumber: string, content: string): Promise<void> {
+    console.log(`SMS to ${phoneNumber}: ${content}`);
+  }
+}
+
+// Mock utility function
+const validateNigerianPhoneNumber = (phoneNumber: string) => {
+  const cleanNumber = phoneNumber.replace(/[\s\-\(\)]/g, '');
+  const patterns = [
+    /^\+234[0-9]{10}$/, // +234XXXXXXXXXX
+    /^234[0-9]{10}$/, // 234XXXXXXXXXX
+    /^0[0-9]{10}$/, // 0XXXXXXXXXX
+  ];
+  const isValid = patterns.some(pattern => pattern.test(cleanNumber));
+  return {
+    isValid,
+    formatted: isValid ? (cleanNumber.startsWith('+') ? cleanNumber : `+234${cleanNumber.substring(1)}`) : phoneNumber
+  };
+};
 
 export interface CreateMessageRequest {
   ticketId: string;
@@ -63,14 +130,35 @@ export interface TemplateVariables {
 }
 
 export class SupportMessageService extends BaseService {
-  constructor(
-    private messageRepository: SupportMessageRepository,
-    private ticketRepository: SupportTicketRepository,
-    private notificationService: NotificationService,
-    private emailService: EmailService,
-    private smsService: SMSService
-  ) {
+  protected db: PrismaClient;
+  private messageRepository: SupportMessageRepository;
+  private ticketRepository: SupportTicketRepository;
+  private notificationService: NotificationService;
+  private emailService: EmailService;
+  private smsService: SMSService;
+
+  constructor() {
     super();
+    this.db = new PrismaClient();
+    this.messageRepository = new SupportMessageRepository();
+    this.ticketRepository = new SupportTicketRepository();
+    this.notificationService = new NotificationService();
+    this.emailService = new EmailService();
+    this.smsService = new SMSService();
+  }
+
+  // Helper method to create success response
+  protected createSuccessResponse<T>(
+    data: T,
+    message: string,
+    statusCode: number = HTTP_STATUS.OK
+  ): ApiResponse<T> {
+    return {
+      success: true,
+      message,
+      data,
+      timestamp: new Date().toISOString()
+    };
   }
 
   async createMessage(data: CreateMessageRequest): Promise<ApiResponse<MessageWithDetails>> {

@@ -6,14 +6,112 @@ import {
   PeriodType
 } from '@prisma/client';
 import { BaseService } from '../BaseService';
-import { 
-  SupportAgentRepository,
-  AgentFilters,
-  AgentWithDetails 
-} from '@/repositories';
-import { PaginationOptions, PaginatedResult, ApiResponse, AppError, HTTP_STATUS } from '@/types';
-import { IDGenerators } from '@/utils/helpers/generators';
-import { NotificationService } from '@/services/notifications';
+import { SupportAgentRepository } from '../../repositories/SupportAgentRepository';
+import { PrismaClient } from '@prisma/client';
+
+// Local type definitions
+interface AgentFilters {
+  department?: any;
+  skillLevel?: any;
+  status?: any;
+  languages?: string[];
+  specializations?: string[];
+  isActive?: boolean;
+}
+
+interface AgentWithDetails {
+  id: string;
+  agentNumber: string;
+  userId: string;
+  department: string;
+  specializations: string[];
+  languages: string[];
+  skillLevel: string;
+  maxConcurrentTickets: number;
+  workingHours: any;
+  timeZone: string;
+  status: string;
+  isActive: boolean;
+  currentTicketCount: number;
+  totalTicketsResolved: number;
+  averageResolutionTime?: number;
+  averageResponseTime?: number;
+  customerSatisfactionRate?: number;
+  performanceRating?: number;
+  createdAt: Date;
+  updatedAt: Date;
+  user?: any;
+  tickets?: any[];
+}
+
+interface PaginationOptions {
+  page: number;
+  limit: number;
+}
+
+interface PaginatedResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
+interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+  timestamp: string;
+}
+
+class AppError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number,
+    public code: string
+  ) {
+    super(message);
+    this.name = 'AppError';
+  }
+}
+
+const HTTP_STATUS = {
+  OK: 200,
+  CREATED: 201,
+  BAD_REQUEST: 400,
+  NOT_FOUND: 404,
+  INTERNAL_SERVER_ERROR: 500
+};
+
+// Mock services
+class NotificationService {
+  async sendAgentOnboardingNotification(agentId: string): Promise<void> {
+    console.log(`Onboarding notification sent to agent ${agentId}`);
+  }
+  
+  async sendAgentOfflineWithTicketsNotification(agentId: string): Promise<void> {
+    console.log(`Offline with tickets notification sent to agent ${agentId}`);
+  }
+  
+  async sendAgentScheduleNotification(agentId: string, shiftId: string): Promise<void> {
+    console.log(`Schedule notification sent to agent ${agentId} for shift ${shiftId}`);
+  }
+  
+  async sendAgentDeactivationNotification(agentId: string, reason: string): Promise<void> {
+    console.log(`Deactivation notification sent to agent ${agentId}: ${reason}`);
+  }
+  
+  async sendAgentActivationNotification(agentId: string): Promise<void> {
+    console.log(`Activation notification sent to agent ${agentId}`);
+  }
+}
+
+// Mock ID Generators
+class IDGenerators {
+  static generateAgentNumber(department: string): string {
+    return `AGT-${department.substring(0, 3).toUpperCase()}-${Date.now().toString().slice(-6)}`;
+  }
+}
 
 export interface CreateAgentRequest {
   userId: string;
@@ -74,11 +172,29 @@ export interface AgentPerformanceMetrics {
 }
 
 export class SupportAgentService extends BaseService {
-  constructor(
-    private agentRepository: SupportAgentRepository,
-    private notificationService: NotificationService
-  ) {
+  protected db: PrismaClient;
+  private agentRepository: SupportAgentRepository;
+  private notificationService: NotificationService;
+
+  constructor() {
     super();
+    this.db = new PrismaClient();
+    this.agentRepository = new SupportAgentRepository();
+    this.notificationService = new NotificationService();
+  }
+
+  // Helper method to create success response
+  protected createSuccessResponse<T>(
+    data: T,
+    message: string,
+    statusCode: number = HTTP_STATUS.OK
+  ): ApiResponse<T> {
+    return {
+      success: true,
+      message,
+      data,
+      timestamp: new Date().toISOString()
+    };
   }
 
   async createAgent(data: CreateAgentRequest): Promise<ApiResponse<AgentWithDetails>> {

@@ -1790,13 +1790,17 @@ export class AdminDashboardController extends BaseAdminController {
     try {
       const userId = this.getUserId(req);
 
-      this.logAction('get_inventory_dashboard_widgets', userId, 'admin_dashboard_inventory');
+      this.logAdminActivity(req, 'analytics_access', 'get_inventory_dashboard_widgets', {
+        description: 'Retrieved inventory dashboard widgets',
+        severity: 'low',
+        resourceType: 'dashboard_widgets'
+      });
 
       const widgets = await this.inventoryDashboardService.getAvailableWidgets();
 
       this.sendAdminSuccess(res, { widgets }, 'Inventory dashboard widgets retrieved successfully', 200, {
-        activity: 'dashboard_access',
-        widgetCount: widgets.length
+        activity: 'analytics_access',
+        includeMetrics: true
       });
     } catch (error) {
       this.handleError(error, req, res);
@@ -1812,13 +1816,18 @@ export class AdminDashboardController extends BaseAdminController {
       const userId = this.getUserId(req);
       const { layoutId } = req.query;
 
-      this.logAction('get_inventory_dashboard_layout', userId, 'admin_dashboard_inventory', undefined, { layoutId });
+      this.logAdminActivity(req, 'analytics_access', 'get_inventory_dashboard_layout', {
+        description: 'Retrieved inventory dashboard layout',
+        severity: 'low',
+        resourceType: 'dashboard_layout',
+        metadata: { layoutId }
+      });
 
       const layout = await this.inventoryDashboardService.getDashboardLayout(layoutId as string);
 
       this.sendAdminSuccess(res, { layout }, 'Inventory dashboard layout retrieved successfully', 200, {
-        activity: 'dashboard_layout_access',
-        layoutId: layout.id
+        activity: 'analytics_access',
+        includeMetrics: true
       });
     } catch (error) {
       this.handleError(error, req, res);
@@ -1833,14 +1842,17 @@ export class AdminDashboardController extends BaseAdminController {
     try {
       const userId = this.getUserId(req);
 
-      this.logAction('get_inventory_realtime_dashboard', userId, 'admin_dashboard_inventory');
+      this.logAdminActivity(req, 'analytics_access', 'get_inventory_realtime_dashboard', {
+        description: 'Retrieved real-time inventory dashboard data',
+        severity: 'low',
+        resourceType: 'realtime_dashboard'
+      });
 
       const dashboardData = await this.inventoryDashboardService.getRealTimeDashboardData();
 
       this.sendAdminSuccess(res, dashboardData, 'Real-time inventory dashboard data retrieved successfully', 200, {
-        activity: 'realtime_dashboard_access',
-        widgetCount: dashboardData.widgets.length,
-        autoRefresh: dashboardData.autoRefresh
+        activity: 'analytics_access',
+        includeMetrics: true
       });
     } catch (error) {
       this.handleError(error, req, res);
@@ -1861,7 +1873,12 @@ export class AdminDashboardController extends BaseAdminController {
         return;
       }
 
-      this.logAction('get_inventory_widget_data', userId, 'admin_dashboard_inventory', widgetId);
+      this.logAdminActivity(req, 'analytics_access', 'get_inventory_widget_data', {
+        description: `Retrieved inventory widget data for widget ${widgetId}`,
+        severity: 'low',
+        resourceType: 'dashboard_widget',
+        resourceId: widgetId
+      });
 
       const widget = await this.inventoryDashboardService.getWidget(widgetId);
       if (!widget) {
@@ -1870,9 +1887,8 @@ export class AdminDashboardController extends BaseAdminController {
       }
 
       this.sendAdminSuccess(res, { widget }, 'Inventory widget data retrieved successfully', 200, {
-        activity: 'widget_access',
-        widgetId: widget.id,
-        widgetType: widget.type
+        activity: 'analytics_access',
+        includeMetrics: true
       });
     } catch (error) {
       this.handleError(error, req, res);
@@ -1899,13 +1915,19 @@ export class AdminDashboardController extends BaseAdminController {
         return;
       }
 
-      this.logAction('update_inventory_widget_config', userId, 'admin_dashboard_inventory', widgetId, { configuration });
+      this.logAdminActivity(req, 'system_configuration', 'update_inventory_widget_config', {
+        description: `Updated inventory widget configuration for widget ${widgetId}`,
+        severity: 'medium',
+        resourceType: 'dashboard_widget',
+        resourceId: widgetId,
+        metadata: { configuration }
+      });
 
       const updatedWidget = await this.inventoryDashboardService.updateWidgetConfiguration(widgetId, configuration);
 
       this.sendAdminSuccess(res, { widget: updatedWidget }, 'Widget configuration updated successfully', 200, {
-        activity: 'widget_config_update',
-        widgetId: updatedWidget.id
+        activity: 'system_configuration',
+        includeMetrics: true
       });
     } catch (error) {
       this.handleError(error, req, res);
@@ -1920,15 +1942,18 @@ export class AdminDashboardController extends BaseAdminController {
     try {
       const userId = this.getUserId(req);
 
-      this.logAction('get_nigerian_inventory_widgets', userId, 'admin_dashboard_inventory');
+      this.logAdminActivity(req, 'analytics_access', 'get_nigerian_inventory_widgets', {
+        description: 'Retrieved Nigerian business inventory widgets',
+        severity: 'low',
+        resourceType: 'nigerian_widgets'
+      });
 
       const nigerianWidgets = await this.inventoryDashboardService.getNigerianBusinessWidgets();
 
       this.sendAdminSuccess(res, { widgets: nigerianWidgets }, 'Nigerian business inventory widgets retrieved successfully', 200, {
-        activity: 'nigerian_widgets_access',
-        widgetCount: nigerianWidgets.length,
-        includesVAT: true,
-        includesRegionalData: true
+        activity: 'analytics_access',
+        includeMetrics: true,
+        includeCurrencyInfo: true
       });
     } catch (error) {
       this.handleError(error, req, res);
@@ -1943,7 +1968,11 @@ export class AdminDashboardController extends BaseAdminController {
     try {
       const userId = this.getUserId(req);
 
-      this.logAction('get_inventory_dashboard_summary', userId, 'admin_dashboard_inventory');
+      this.logAdminActivity(req, 'analytics_access', 'get_inventory_dashboard_summary', {
+        description: 'Retrieved inventory dashboard summary',
+        severity: 'low',
+        resourceType: 'dashboard_summary'
+      });
 
       // Get key inventory metrics for the main dashboard
       const [overview, widgets] = await Promise.all([
@@ -2030,9 +2059,9 @@ export class AdminDashboardController extends BaseAdminController {
       };
 
       this.sendAdminSuccess(res, summary, 'Inventory dashboard summary retrieved successfully', 200, {
-        activity: 'dashboard_summary_access',
-        includesNigerianContext: true,
-        alertCount: summary.alerts.total
+        activity: 'analytics_access',
+        includeMetrics: true,
+        includeCurrencyInfo: true
       });
     } catch (error) {
       this.handleError(error, req, res);
