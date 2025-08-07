@@ -87,7 +87,7 @@ export class ServiceContainer {
 
     // Initialize product services with proper repositories
     const productService = new ProductService(productRepository, categoryRepository, inventoryRepository);
-    const categoryService = new CategoryService();
+    const categoryService = new CategoryService(categoryRepository);
     const searchService = new SearchService();
     const reviewService = {} as any; // TODO: Fix dependencies - needs UserRepository, ProductRepository, OrderRepository, CacheService, NotificationService
 

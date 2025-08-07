@@ -14,9 +14,9 @@ import {
 export class CategoryService extends BaseService {
   private categoryRepository: any;
 
-  constructor() {
+  constructor(categoryRepository?: any) {
     super();
-    this.categoryRepository = {} as any; // Mock repository
+    this.categoryRepository = categoryRepository || {} as any; // Accept injected repository or use mock
   }
 
   /**
