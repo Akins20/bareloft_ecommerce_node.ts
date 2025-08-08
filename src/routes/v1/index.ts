@@ -31,6 +31,7 @@ import wishlistRoutes from "./wishlist";
 import searchRoutes from "./search";
 import uploadRoutes from "./upload";
 import returnsRoutes from "./returns";
+import paymentRoutes from "./payments";
 
 const router = Router();
 
@@ -58,6 +59,7 @@ router.get("/", (req, res) => {
         search: "/api/v1/search",
         upload: "/api/v1/upload",
         returns: "/api/v1/returns",
+        payments: "/api/v1/payments",
       },
       features: [
         "OTP-based authentication",
@@ -101,6 +103,9 @@ router.use("/upload", uploadRoutes);
 
 // Return management routes
 router.use("/returns", returnsRoutes);
+
+// Payment routes
+router.use("/payments", paymentRoutes);
 
 export default router;
 

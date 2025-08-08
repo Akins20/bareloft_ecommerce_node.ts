@@ -709,32 +709,74 @@ export class CartService extends BaseService {
       // RedisConnection already parses JSON, so cartData is already an object
       const guestCart: GuestCart = cartData as GuestCart;
 
-      // Simple cart items without enrichment to avoid errors
-      const items = (guestCart.items || []).map(item => ({
-        id: `${sessionId}_${item.productId}`,
-        cartId: `guest_${sessionId}`,
-        productId: item.productId,
-        quantity: item.quantity,
-        unitPrice: 0,
-        totalPrice: 0,
-        product: null,
-        isAvailable: true,
-        hasStockIssue: false,
-        priceChanged: false,
-      }));
+      // Enrich cart items with product data and proper pricing
+      const items = [];
+      let subtotal = 0;
+
+      for (const item of guestCart.items || []) {
+        try {
+          // Fetch product data for pricing
+          const product = await this.productRepository.findById?.(item.productId);
+          if (product) {
+            const unitPrice = Number((product as any).price) || 0;
+            const totalPrice = unitPrice * item.quantity;
+            subtotal += totalPrice;
+
+            items.push({
+              id: `${sessionId}_${item.productId}`,
+              cartId: `guest_${sessionId}`,
+              productId: item.productId,
+              quantity: item.quantity,
+              unitPrice,
+              totalPrice,
+              product: {
+                id: product.id,
+                name: (product as any).name,
+                slug: (product as any).slug,
+                sku: (product as any).sku,
+                primaryImage: (product as any).primaryImage,
+                inStock: ((product as any).stock || 0) > 0,
+                stockQuantity: (product as any).stock || 0
+              },
+              isAvailable: ((product as any).stock || 0) >= item.quantity,
+              hasStockIssue: ((product as any).stock || 0) < item.quantity,
+              priceChanged: false,
+            });
+          }
+        } catch (error) {
+          console.warn(`Failed to enrich guest cart item ${item.productId}:`, error);
+          // Add item with zero pricing if product fetch fails
+          items.push({
+            id: `${sessionId}_${item.productId}`,
+            cartId: `guest_${sessionId}`,
+            productId: item.productId,
+            quantity: item.quantity,
+            unitPrice: 0,
+            totalPrice: 0,
+            product: null,
+            isAvailable: false,
+            hasStockIssue: true,
+            priceChanged: false,
+          });
+        }
+      }
+
+      // Calculate tax and total
+      const tax = subtotal * 0.075; // 7.5% VAT in Nigeria
+      const estimatedTotal = subtotal + tax;
 
       return {
         id: `guest_${sessionId}`,
         sessionId,
         items,
-        subtotal: 0,
-        estimatedTax: 0,
+        subtotal,
+        estimatedTax: tax,
         estimatedShipping: 0,
-        estimatedTotal: 0,
+        estimatedTotal,
         currency: "NGN",
         itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: new Date(guestCart.createdAt),
+        updatedAt: new Date(guestCart.updatedAt),
       };
     } catch (error) {
       console.error("Error in getGuestCart:", error);
@@ -826,31 +868,13 @@ export class CartService extends BaseService {
       // Save to Redis with 24 hour expiry
       await redisClient.set(cartKey, guestCart, 24 * 60 * 60);
 
-      // Return simplified cart response without full enrichment
-      // to avoid potential issues with product lookups
-      const simpleCart = {
-        id: `guest_${sessionId}`,
-        sessionId,
-        items: guestCart.items.map((item, index) => ({
-          id: `${sessionId}_${item.productId}`,
-          productId: item.productId,
-          quantity: item.quantity,
-          addedAt: item.addedAt,
-        })),
-        itemCount: guestCart.items.reduce((sum, item) => sum + item.quantity, 0),
-        subtotal: 0, // Will be calculated with product prices later
-        estimatedTax: 0,
-        estimatedShipping: 0,
-        estimatedTotal: 0,
-        currency: "NGN",
-        createdAt: new Date(guestCart.createdAt),
-        updatedAt: new Date(guestCart.updatedAt),
-      };
+      // Return updated cart with proper pricing
+      const updatedCart = await this.getGuestCart(sessionId);
 
       return {
         success: true,
         message: "Item added to guest cart successfully",
-        cart: simpleCart,
+        cart: updatedCart,
       };
     } catch (error) {
       this.handleError("Error adding to guest cart", error);

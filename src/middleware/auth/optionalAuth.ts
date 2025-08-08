@@ -62,19 +62,21 @@ export const optionalAuth = async (
 
     // Handle guest session
     if (!req.user) {
-      // Generate session ID if not provided
-      req.sessionId = sessionId || `guest_${randomUUID()}`;
+      // Use existing session ID if provided, otherwise generate new one
+      if (sessionId) {
+        req.sessionId = sessionId;
+      } else {
+        req.sessionId = `guest_${randomUUID()}`;
+        // Always return session ID in response headers for client to store
+        res.setHeader("X-Session-ID", req.sessionId);
+      }
       req.isGuest = true;
       
       logger.info("Guest user access", {
         sessionId: req.sessionId,
+        isNewSession: !sessionId,
         endpoint: req.path
       });
-
-      // Add session ID to response headers for client to store
-      if (!sessionId) {
-        res.setHeader("X-Session-ID", req.sessionId);
-      }
     }
 
     next();
