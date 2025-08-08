@@ -1,34 +1,202 @@
 import { BaseService } from "../BaseService";
-// Note: Model imports temporarily disabled - using interfaces instead
-import {
-  ShipmentRateRequest,
-  ShipmentRateResponse,
-  CreateShipmentRequest,
-  Shipment,
-  TrackingResponse,
-  ShippingLabel,
-  ShippingCarrier,
-  BulkTrackingRequest,
-  DeliverySchedule,
-  AppError,
-  HTTP_STATUS,
-  ERROR_CODES,
-} from "../../types";
 import { JumiaLogisticsService } from "./JumiaLogisticsService";
 import { LocalCarrierService } from "./LocalCarrierService";
 import { BaseCarrierService } from "./BaseCarrierService";
+import { PrismaClient } from "@prisma/client";
+
+// Local type definitions to match existing interface expectations
+interface ShipmentRateRequest {
+  originAddress: {
+    street: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+  };
+  destinationAddress: {
+    street: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+  };
+  originCity: string;
+  originState: string;
+  destinationCity: string;
+  destinationState: string;
+  packageWeight: number;
+  packageDimensions: {
+    length: number;
+    width: number;
+    height: number;
+  };
+  declaredValue?: number;
+  serviceType?: string;
+}
+
+interface ShipmentRateResponse {
+  carrierId: string;
+  carrierName: string;
+  serviceType: string;
+  cost: number;
+  currency: string;
+  estimatedDelivery: Date;
+  deliveryTimeframe: string;
+  transitTime?: number;
+  notes?: string;
+}
+
+interface CreateShipmentRequest {
+  orderId: string;
+  carrierId?: string;
+  destinationAddress: {
+    street: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+  };
+  packageWeight: number;
+  packageDimensions: {
+    length: number;
+    width: number;
+    height: number;
+  };
+  declaredValue: number;
+  serviceType: string;
+  specialInstructions?: string;
+  customerNotes?: string;
+}
+
+interface Shipment {
+  id: string;
+  trackingNumber: string;
+  orderId: string;
+  carrierId: string;
+  serviceType: string;
+  status: string;
+  originAddress: any;
+  destinationAddress: any;
+  packageWeight: number;
+  packageDimensions: any;
+  declaredValue: number;
+  shippingCost: number;
+  insuranceCost?: number;
+  estimatedDelivery?: Date;
+  actualDelivery?: Date;
+  specialInstructions?: string;
+  customerNotes?: string;
+  labelUrl?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface TrackingResponse {
+  trackingNumber: string;
+  status: string;
+  estimatedDelivery?: Date;
+  actualDelivery?: Date;
+  currentLocation?: string;
+  progress: {
+    percentage: number;
+    currentStep: string;
+    nextStep?: string;
+  };
+  events: any[];
+  deliveryAttempts?: any[];
+}
+
+interface ShippingLabel {
+  id?: string;
+  shipmentId?: string;
+  labelUrl: string;
+  format?: string;
+  dimensions?: string;
+  createdAt?: Date;
+}
+
+interface ShippingCarrier {
+  id: string;
+  name: string;
+  code: string;
+  status: string;
+  type: string;
+  isDefault: boolean;
+  baseUrl: string;
+  supportedServices: string[];
+  coverageAreas: string[];
+  businessHours: any;
+  deliveryTimeframes: any;
+  contactInfo: any;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface BulkTrackingRequest {
+  trackingNumbers: string[];
+}
+
+interface DeliverySchedule {
+  scheduledDate: Date;
+  timeSlot?: string;
+  specialInstructions?: string;
+}
+
+interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+  timestamp: string;
+}
+
+class AppError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number,
+    public code: string
+  ) {
+    super(message);
+    this.name = 'AppError';
+  }
+}
+
+const HTTP_STATUS = {
+  OK: 200,
+  CREATED: 201,
+  BAD_REQUEST: 400,
+  NOT_FOUND: 404,
+  INTERNAL_SERVER_ERROR: 500
+};
+
+const ERROR_CODES = {
+  RESOURCE_NOT_FOUND: 'RESOURCE_NOT_FOUND',
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  INTERNAL_ERROR: 'INTERNAL_ERROR'
+};
 
 /**
  * Shipping Service - Main orchestrator for Nigerian shipping operations
  * Manages multiple carriers including Jumia Logistics and local carriers
  */
 export class ShippingService extends BaseService {
+  protected db: PrismaClient;
   private carriers: Map<string, BaseCarrierService> = new Map();
   private defaultCarrier: string = 'jumia_logistics';
 
   constructor() {
     super();
+    this.db = new PrismaClient();
     this.initializeCarriers();
+  }
+
+  // Helper method to create success response
+  protected createSuccessResponse<T>(data: T, message: string, statusCode: number = HTTP_STATUS.OK): ApiResponse<T> {
+    return {
+      success: true,
+      message,
+      data,
+      timestamp: new Date().toISOString()
+    };
   }
 
   // Mock logging methods
@@ -105,7 +273,22 @@ export class ShippingService extends BaseService {
             return null;
           }
 
-          return await carrier.calculateShippingRate(request);
+          // Map internal request to carrier expected format
+          const carrierRequest = {
+            ...request,
+            originCity: request.originAddress.city,
+            originState: request.originAddress.state,
+            destinationCity: request.destinationAddress.city,
+            destinationState: request.destinationAddress.state,
+          };
+
+          const response = await carrier.calculateShippingRate(carrierRequest as any);
+          
+          // Ensure response has required deliveryTimeframe
+          return {
+            ...response,
+            deliveryTimeframe: (response as any).deliveryTimeframe || `${(response as any).transitTime || 3} days`,
+          };
         } catch (error: any) {
           this.logWarn(`Rate calculation failed for ${carrierId}`, error.message);
           return null;
@@ -163,7 +346,11 @@ export class ShippingService extends BaseService {
       }
 
       // Create shipment through carrier API
-      const shipment = await carrier.createShipment(request);
+      const carrierRequest = {
+        ...request,
+        carrierId: carrierId,
+      };
+      const shipment = await carrier.createShipment(carrierRequest as any);
 
       // Store shipment in database (mock implementation)
       const savedShipment = {
@@ -313,10 +500,20 @@ export class ShippingService extends BaseService {
         );
       }
 
-      const label = await carrier.generateShippingLabel(shipmentId);
+      const carrierLabel = await carrier.generateShippingLabel(shipmentId);
 
       // Update shipment with label URL (mock implementation)
       console.log('Updating shipment label URL for:', shipmentId);
+
+      // Ensure label has the required properties
+      const label: ShippingLabel = {
+        ...carrierLabel,
+        id: (carrierLabel as any).id || `lbl_${Date.now()}`,
+        shipmentId: (carrierLabel as any).shipmentId || shipmentId,
+        format: (carrierLabel as any).format || 'PDF',
+        dimensions: (carrierLabel as any).dimensions || '4x6',
+        createdAt: (carrierLabel as any).createdAt || new Date(),
+      };
 
       return label;
 
@@ -557,5 +754,20 @@ export class ShippingService extends BaseService {
     } catch (error) {
       this.logWarn('Error updating tracking events', error);
     }
+  }
+
+  /**
+   * Handle service errors
+   */
+  protected handleError(message: string, error: any): never {
+    console.error(message, error);
+    if (error instanceof AppError) {
+      throw error;
+    }
+    throw new AppError(
+      message,
+      HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      ERROR_CODES.INTERNAL_ERROR
+    );
   }
 }
