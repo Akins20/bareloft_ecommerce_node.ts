@@ -11,14 +11,63 @@ import {
   AppError,
   HTTP_STATUS,
   ERROR_CODES,
-  CreateShipmentRequest,
-  ShipmentRateRequest,
-  Shipment,
 } from "../../types";
 import { ShippingService } from "../shipping/ShippingService";
 import { ReservationService } from "../inventory/ReservationService";
 import { StockService } from "../inventory/StockService";
 import { NotificationService } from "../notifications/NotificationService";
+
+// Local type definitions to match ShippingService interface expectations
+interface ShipmentRateRequest {
+  originAddress: {
+    street: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+  };
+  destinationAddress: {
+    street: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+  };
+  originCity: string;
+  originState: string;
+  destinationCity: string;
+  destinationState: string;
+  packageWeight: number;
+  packageDimensions: {
+    length: number;
+    width: number;
+    height: number;
+  };
+  declaredValue?: number;
+  serviceType?: string;
+}
+
+interface CreateShipmentRequest {
+  orderId: string;
+  carrierId?: string;
+  destinationAddress: {
+    street: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+  };
+  packageWeight: number;
+  packageDimensions: {
+    length: number;
+    width: number;
+    height: number;
+  };
+  declaredValue: number;
+  serviceType: string;
+  specialInstructions?: string;
+  customerNotes?: string;
+}
 
 interface EnhancedFulfillmentUpdate {
   orderId: string;
@@ -349,6 +398,20 @@ export class EnhancedFulfillmentService extends BaseService {
         packageWeight: totalWeight,
         packageDimensions,
         declaredValue: Number(order.total),
+        originAddress: {
+          street: "Bareloft Warehouse, Victoria Island",
+          city: "Lagos",
+          state: "Lagos",
+          postalCode: "100001",
+          country: "NG"
+        },
+        destinationAddress: {
+          street: order.shippingAddress.addressLine1,
+          city: order.shippingAddress.city,
+          state: order.shippingAddress.state,
+          postalCode: order.shippingAddress.postalCode || "000000",
+          country: order.shippingAddress.country || "NG"
+        }
       };
 
       return await this.shippingService.calculateShippingRates(rateRequest);
@@ -379,16 +442,11 @@ export class EnhancedFulfillmentService extends BaseService {
       carrierId: carrierId || await this.selectOptimalCarrier(order),
       serviceType: this.determineServiceType(order),
       destinationAddress: {
-        firstName: order.shippingAddress.firstName,
-        lastName: order.shippingAddress.lastName,
-        company: order.shippingAddress.company,
-        addressLine1: order.shippingAddress.addressLine1,
-        addressLine2: order.shippingAddress.addressLine2,
+        street: order.shippingAddress.addressLine1,
         city: order.shippingAddress.city,
         state: order.shippingAddress.state,
-        postalCode: order.shippingAddress.postalCode,
+        postalCode: order.shippingAddress.postalCode || "000000",
         country: order.shippingAddress.country || 'NG',
-        phoneNumber: order.shippingAddress.phoneNumber,
       },
       packageWeight: totalWeight,
       packageDimensions,
