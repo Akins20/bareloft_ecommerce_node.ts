@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { app } from '../app';
+import app from '../app';
 import { ShippingService } from '../services/shipping/ShippingService';
 import { JumiaLogisticsService } from '../services/shipping/JumiaLogisticsService';
 import { LocalCarrierService } from '../services/shipping/LocalCarrierService';

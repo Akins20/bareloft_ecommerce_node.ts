@@ -486,8 +486,11 @@ export class InventoryRepository extends BaseRepository<
             ? `${product.name} is out of stock`
             : `${product.name} is running low (${product.stock} remaining)`,
         isRead: false,
+        isAcknowledged: false,
+        isDismissed: false,
         createdAt: product.updatedAt,
-      }));
+        updatedAt: product.updatedAt,
+      })) as InventoryAlert[];
     } catch (error) {
       this.handleError("Error getting low stock alerts", error);
       throw error;

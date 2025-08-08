@@ -175,7 +175,7 @@ export interface SendNotificationRequest {
   priority?: NotificationPriority;
 }
 
-export interface BulkNotificationRequest {
+export interface NotificationBulkRequest {
   type: NotificationType;
   channel: NotificationChannel;
   recipients: {

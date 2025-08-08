@@ -3,7 +3,7 @@ import {
   ShippingCarrierModel,
   ShipmentModel,
   TrackingEventModel,
-} from "@/models";
+} from "../../models";
 import {
   ShippingPerformanceReport,
   ShippingAnalytics,
@@ -11,7 +11,7 @@ import {
   AppError,
   HTTP_STATUS,
   ERROR_CODES,
-} from "@/types";
+} from "../../types";
 
 /**
  * Shipping Analytics Service - Performance monitoring and reporting for Nigerian shipping
@@ -28,7 +28,7 @@ export class ShippingAnalyticsService extends BaseService {
     stateFilter?: string[]
   ): Promise<ShippingPerformanceReport> {
     try {
-      this.logInfo('Generating shipping performance report', {
+      console.info('Generating shipping performance report', {
         startDate, endDate, stateFilter
       });
 

@@ -85,7 +85,7 @@ export const SupplierModel = {
     if (!existing) return null;
 
     const updatedData = {
-      ...existing.data,
+      ...(existing.data as object || {}),
       ...data,
       updatedAt: new Date(),
     };
@@ -134,12 +134,12 @@ export const SupplierModel = {
         type: "SYSTEM_ALERT",
         data: {
           path: ["type"],
-          equals: "SUPPLIER",
-          AND: [
-            { path: ["isLocal"], equals: true },
-            { path: ["isActive"], equals: true },
-          ],
+          equals: "SUPPLIER"
         },
+        AND: [
+          { data: { path: ["isLocal"], equals: true } },
+          { data: { path: ["isActive"], equals: true } },
+        ],
       },
       orderBy: { createdAt: "desc" },
     });
@@ -151,12 +151,12 @@ export const SupplierModel = {
         type: "SYSTEM_ALERT",
         data: {
           path: ["type"],
-          equals: "SUPPLIER",
-          AND: [
-            { path: ["isPreferred"], equals: true },
-            { path: ["isActive"], equals: true },
-          ],
+          equals: "SUPPLIER"
         },
+        AND: [
+          { data: { path: ["isPreferred"], equals: true } },
+          { data: { path: ["isActive"], equals: true } },
+        ],
       },
       orderBy: { createdAt: "desc" },
     });

@@ -25,7 +25,7 @@ import {
   HTTP_STATUS,
   ERROR_CODES,
 } from '../../types';
-import { RefundStatus, BulkRefundRequest } from '../../types/return.types';
+import { RefundStatus, ReturnBulkRefundRequest } from '../../types/return.types';
 
 export class AdminRefundsController extends BaseAdminController {
   private refundsService: RefundsService;
@@ -234,7 +234,7 @@ export class AdminRefundsController extends BaseAdminController {
         }
       }
 
-      const bulkRequest: BulkRefundRequest = {
+      const bulkRequest: ReturnBulkRefundRequest = {
         refundRequests,
         processInBatches: processInBatches || false,
         batchSize: batchSize || 10,

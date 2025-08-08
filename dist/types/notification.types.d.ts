@@ -124,7 +124,7 @@ export interface SendNotificationRequest {
     scheduledFor?: Date;
     priority?: NotificationPriority;
 }
-export interface BulkNotificationRequest {
+export interface NotificationBulkRequest {
     type: NotificationType;
     channel: NotificationChannel;
     recipients: {

@@ -13,16 +13,14 @@ class EmailService extends BaseService_1.BaseService {
         this.initializeTransporter();
     }
     /**
-     * Initialize email transporter (SendGrid/SMTP)
+     * Initialize email transporter (Nodemailer)
      */
     initializeTransporter() {
-        // Since emailConfig doesn't have provider property, default to SendGrid
+        // Use nodemailer with local/test configuration for development
         this.transporter = nodemailer_1.default.createTransport({
-            service: "SendGrid",
-            auth: {
-                user: "apikey",
-                pass: process.env.SENDGRID_API_KEY || "",
-            },
+            host: "localhost",
+            port: 1025,
+            ignoreTLS: true,
         });
     }
     /**

@@ -40,7 +40,8 @@
       "Bash(time curl:*)",
       "Bash(/dev/null)",
       "Bash(npm test:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(sed:*)"
     ],
     "deny": []
   }

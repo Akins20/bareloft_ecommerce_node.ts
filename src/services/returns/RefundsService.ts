@@ -18,7 +18,7 @@ import {
   RefundStatus,
   RefundMethod,
   ProcessRefundRequest,
-  BulkRefundRequest,
+  ReturnBulkRefundRequest,
   RefundListQuery,
   RefundResponse,
   RefundListResponse,
@@ -185,7 +185,7 @@ export class RefundsService extends BaseService {
    * Process multiple refunds in bulk
    */
   async processBulkRefunds(
-    request: BulkRefundRequest,
+    request: ReturnBulkRefundRequest,
     adminId: string
   ): Promise<BulkRefundResponse> {
     try {

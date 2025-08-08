@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { app } from '../app';
+import app from '../app';
 import { ReturnsService } from '../services/returns/ReturnsService';
 import { RefundsService } from '../services/returns/RefundsService';
 import {
@@ -8,10 +8,6 @@ import {
   ReturnCondition,
   RefundStatus,
   RefundMethod,
-  createTestUser,
-  createTestOrder,
-  createTestAdmin,
-  generateJWT,
 } from '../types';
 
 describe('Admin Returns and Refunds Management System', () => {

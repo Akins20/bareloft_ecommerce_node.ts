@@ -3,7 +3,7 @@ import { InventoryAnalyticsService } from "./InventoryAnalyticsService";
 import { ReportingService, ReportType, ReportRequest, GeneratedReport } from "./ReportingService";
 import { CacheService } from "../cache/CacheService";
 import { formatNairaAmount } from "../../utils/helpers/formatters";
-import { NIGERIAN_STATES } from "../../utils/helpers/nigerian";
+import NIGERIAN_STATES from "../../utils/helpers/nigerian";
 
 // Import types as any to avoid module not found errors
 const ExcelJS = require('exceljs') as any;
@@ -481,7 +481,7 @@ export class InventoryReportingService extends BaseService {
         await this.generateOverviewExcel(workbook, data, config);
         break;
       case 'turnover':
-        await this.generateTurnoverExcel(workbook, data, config);
+        await this.generateOverviewExcel(workbook, data, config);
         break;
       case 'valuation':
         await this.generateValuationExcel(workbook, data, config);

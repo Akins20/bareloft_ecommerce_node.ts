@@ -1,6 +1,6 @@
 // Service exports
 export { BaseService } from './BaseService';
-export { UserService } from './auth/UserService';
+export { UserService } from './users/UserService';
 export { AuthService } from './auth/AuthService';
 export { OrderService } from './orders/OrderService';
 export { CartService } from './cart/CartService';

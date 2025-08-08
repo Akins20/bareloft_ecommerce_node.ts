@@ -1,18 +1,18 @@
 import { Router } from "express";
-import { AdminShippingController } from "@/controllers/admin/AdminShippingController";
-import { authenticateToken } from "@/middleware/auth/authenticate";
-import { authorize } from "@/middleware/auth/authorize";
-import { validateRequest } from "@/middleware/validation/validateRequest";
-import { auditLogging } from "@/middleware/logging/auditLogging";
+import { AdminShippingController } from "../../controllers/admin/AdminShippingController";
+import { authenticate } from "../../middleware/auth/authenticate";
+import { authorize } from "../../middleware/auth/authorize";
+import { validateRequest } from "../../middleware/validation/validateRequest";
+import auditLogging from "../../middleware/logging/auditLogging";
 import { body, param, query } from "express-validator";
 
 const router = Router();
 const shippingController = new AdminShippingController();
 
 // Apply authentication and admin authorization to all routes
-router.use(authenticateToken);
+router.use(authenticate);
 router.use(authorize(["ADMIN", "SUPER_ADMIN"]));
-router.use(auditLogging);
+router.use(auditLogging.adminAuditLogger);
 
 /**
  * @swagger

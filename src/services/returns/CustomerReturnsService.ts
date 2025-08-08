@@ -404,7 +404,7 @@ export class CustomerReturnsService extends BaseService {
         eligibleItems.push({
           orderItemId: orderItem.id,
           productId: orderItem.productId,
-          productName: orderItem.productName,
+          productName: (orderItem as any).product?.name || 'Unknown Product',
           maxQuantityReturnable: eligibility.maxQuantityReturnable,
           isEligible: eligibility.isEligible,
           reason: eligibility.reason,
@@ -609,7 +609,7 @@ export class CustomerReturnsService extends BaseService {
       // Upload files to storage
       const uploadedPhotos: string[] = [];
       for (const file of files) {
-        const photoUrl = `mock-photo-url-${Date.now()}-${file.name || 'photo'}`; // Mock upload
+        const photoUrl = `mock-photo-url-${Date.now()}-${(file as any).originalname || 'photo'}`; // Mock upload
         uploadedPhotos.push(photoUrl);
       }
 

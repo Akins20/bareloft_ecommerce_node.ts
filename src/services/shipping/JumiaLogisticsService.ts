@@ -9,7 +9,7 @@ import {
   ShipmentStatus,
   JumiaLogisticsConfig,
   NigerianAddress,
-} from "@/types";
+} from "../../types";
 import axios, { AxiosInstance } from "axios";
 
 /**
@@ -58,7 +58,7 @@ export class JumiaLogisticsService extends BaseCarrierService {
         addressLine1: request.destinationCity,
         phoneNumber: '+2348000000000',
         country: 'NG'
-      } as NigerianAddress)) {
+      } as any)) {
         throw new Error('Invalid Nigerian address for shipping calculation');
       }
 
@@ -317,7 +317,7 @@ export class JumiaLogisticsService extends BaseCarrierService {
       (response) => response,
       (error) => {
         if (error.response?.status === 401) {
-          this.logError('Jumia Logistics authentication failed', {
+          console.error('Jumia Logistics authentication failed', {
             sellerId: this.sellerId,
             testMode: this.testMode,
           });

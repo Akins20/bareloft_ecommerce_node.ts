@@ -305,8 +305,8 @@ export class SupportTicketService extends BaseService {
     pagination: PaginationOptions = { page: 1, limit: 20 }
   ): Promise<ApiResponse<PaginatedResult<TicketWithDetails>>> {
     try {
-      const tickets = await this.ticketRepository.findMany(filters, pagination);
-      return this.createSuccessResponse(tickets, 'Tickets retrieved successfully');
+      const tickets = await this.ticketRepository.findMany(filters, { pagination });
+      return this.createSuccessResponse(tickets as any, 'Tickets retrieved successfully');
     } catch (error) {
       throw new AppError(
         'Failed to retrieve tickets',

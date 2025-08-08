@@ -236,7 +236,7 @@ export class ReturnShippingService extends BaseService {
       );
 
       // Create timeline event
-      await this.returnRequestRepository.createTimelineEvent(returnId, {
+      await this.returnRequestRepository.addTimelineEvent(returnId, {
         type: 'pickup_scheduled',
         title: 'Pickup Scheduled',
         description: `Pickup scheduled for ${scheduleData.preferredDate.toLocaleDateString()} (${scheduleData.timeSlot})`,
@@ -245,8 +245,7 @@ export class ReturnShippingService extends BaseService {
           timeSlot: scheduleData.timeSlot,
           confirmationNumber
         },
-        isVisible: true,
-        createdAt: new Date()
+        isVisible: true
       });
 
       logger.info('Return pickup scheduled successfully', {
@@ -459,8 +458,8 @@ export class ReturnShippingService extends BaseService {
       const tracking: ReturnTracking = {
         returnId,
         trackingNumber: returnRequest.returnTrackingNumber,
-        status: returnRequest.status,
-        currentLocation: this.getCurrentLocation(returnRequest.status),
+        status: returnRequest.status as ReturnStatus,
+        currentLocation: this.getCurrentLocation(returnRequest.status as ReturnStatus),
         estimatedDelivery: returnRequest.estimatedReturnDate,
         events: this.generateTrackingEvents(returnRequest),
         carrier: {

@@ -95,12 +95,23 @@ export class SupportTicketRepository extends BaseRepository<SupportTicket, any, 
   }): Promise<SupportTicket> {
     return this.db.supportTicket.create({
       data: {
-        ...data,
-        status: SupportTicketStatus.OPEN, // Default status
+        ticketNumber: data.ticketNumber,
+        subject: data.subject,
+        description: data.description,
         priority: data.priority,
+        category: data.category,
+        subcategory: data.subcategory,
+        source: data.source,
+        language: data.language,
+        customerId: data.customerId,
+        orderId: data.orderId,
+        returnRequestId: data.returnRequestId,
+        tags: data.tags,
+        metadata: data.metadata,
+        status: SupportTicketStatus.OPEN, // Default status
         createdAt: new Date(),
         updatedAt: new Date(),
-      },
+      } as any,
     });
   }
 
@@ -299,7 +310,7 @@ export class SupportTicketRepository extends BaseRepository<SupportTicket, any, 
 
     if (filters.tags?.length) {
       where.tags = {
-        hasEvery: filters.tags,
+        equals: filters.tags,
       };
     }
 

@@ -313,8 +313,10 @@ export class CustomerSupportService extends BaseService {
       const result = await this.supportTicketRepository.findMany(
         { customerId } as any,
         {
-          page: filters.page || 1,
-          limit: filters.limit || 10
+          pagination: {
+            page: filters.page || 1,
+            limit: filters.limit || 10
+          }
         }
       );
       

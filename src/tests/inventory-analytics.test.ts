@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
-import { app } from '../app';
+import app from '../app';
 import { UserModel, ProductModel, CategoryModel } from '../models';
 import { JWTService } from '../services/auth/JWTService';
 
@@ -18,7 +18,7 @@ describe('Inventory Analytics API Tests', () => {
         lastName: 'Test',
         email: 'admin.test@bareloft.com',
         phoneNumber: '+2348030000000',
-        password: 'hashedpassword',
+        // password: 'hashedpassword', // Not needed in Prisma schema
         role: 'ADMIN',
         isVerified: true,
         status: 'ACTIVE'
@@ -27,7 +27,12 @@ describe('Inventory Analytics API Tests', () => {
 
     testUserId = adminUser.id;
     const jwtService = new JWTService();
-    adminToken = jwtService.generateAccessToken({ userId: adminUser.id, role: 'ADMIN' });
+    adminToken = jwtService.generateAccessToken({ 
+      userId: adminUser.id, 
+      phoneNumber: adminUser.phoneNumber,
+      role: 'ADMIN',
+      sessionId: 'test-session' 
+    });
 
     // Create test category
     const category = await CategoryModel.create({
@@ -57,7 +62,7 @@ describe('Inventory Analytics API Tests', () => {
             trackQuantity: true,
             isActive: true,
             categoryId: testCategoryId,
-            images: [],
+            // images: [], // Should be proper Prisma nested create
             tags: []
           }
         })

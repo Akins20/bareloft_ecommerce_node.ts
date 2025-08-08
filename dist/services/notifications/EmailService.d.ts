@@ -19,7 +19,7 @@ export declare class EmailService extends BaseService {
     private transporter;
     constructor();
     /**
-     * Initialize email transporter (SendGrid/SMTP)
+     * Initialize email transporter (Nodemailer)
      */
     private initializeTransporter;
     /**

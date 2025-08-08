@@ -45,7 +45,7 @@ export class ShippingZoneModel {
       where: {
         isActive: true,
         states: {
-          has: state
+          equals: state
         }
       },
       include: {
@@ -78,7 +78,7 @@ export class ShippingZoneModel {
       where: {
         isActive: true,
         states: {
-          hasSome: states
+          equals: states
         }
       },
       include: {

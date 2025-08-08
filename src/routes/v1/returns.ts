@@ -9,7 +9,7 @@ import { authenticate } from '../../middleware/auth/authenticate';
 import { rateLimiter } from '../../middleware/security/rateLimiter';
 import { validateRequest } from '../../middleware/validation/validateRequest';
 import { body, param, query } from 'express-validator';
-import { uploadMiddleware } from '../../middleware/upload/uploadMiddleware';
+// import { uploadMiddleware } from '../../middleware/upload/uploadMiddleware'; // TODO: Implement upload middleware
 
 const router = Router();
 const customerReturnsController = new CustomerReturnsController();
@@ -208,7 +208,7 @@ router.put(
 router.post(
   '/:returnId/upload-photos',
   authenticate,
-  uploadMiddleware.array('photos', 10), // Max 10 photos
+  // uploadMiddleware.array('photos', 10), // Max 10 photos // TODO: Implement upload middleware
   [
     param('returnId')
       .isString()

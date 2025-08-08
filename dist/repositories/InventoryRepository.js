@@ -297,7 +297,10 @@ class InventoryRepository extends BaseRepository_1.BaseRepository {
                     ? `${product.name} is out of stock`
                     : `${product.name} is running low (${product.stock} remaining)`,
                 isRead: false,
+                isAcknowledged: false,
+                isDismissed: false,
                 createdAt: product.updatedAt,
+                updatedAt: product.updatedAt,
             }));
         }
         catch (error) {

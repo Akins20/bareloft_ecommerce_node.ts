@@ -9,7 +9,7 @@ import {
   ShipmentStatus,
   NigerianAddress,
   TrackingEvent,
-} from "@/types";
+} from "../../types";
 
 /**
  * Local Carrier Service - Basic Nigerian local delivery service
@@ -64,10 +64,11 @@ export class LocalCarrierService extends BaseCarrierService {
       }
 
       if (!this.validateNigerianAddress({
-        ...request,
         firstName: 'Test',
         lastName: 'User',
         addressLine1: request.destinationCity,
+        city: request.destinationCity,
+        state: request.destinationState,
         phoneNumber: '+2348000000000',
         country: 'NG'
       } as NigerianAddress)) {

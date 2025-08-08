@@ -5,6 +5,19 @@
  */
 
 import { Request, Response } from 'express';
+
+interface AuthRequest extends Request {
+  user: {
+    id: string;
+    phoneNumber: string;
+    email?: string;
+    firstName: string;
+    lastName: string;
+    role: any;
+    isVerified: boolean;
+    sessionId?: string;
+  };
+}
 import { BaseController } from '../BaseController';
 import { CustomerReturnsService } from '../../services/returns/CustomerReturnsService';
 import { ReturnPolicyService } from '../../services/returns/ReturnPolicyService';
@@ -18,8 +31,7 @@ import {
   ReturnStatus,
   ReturnReason 
 } from '../../types/return.types';
-import { createSuccessResponse, createErrorResponse } from '../../utils/responses/responseHelpers';
-import { HTTP_STATUS } from '../../constants/http';
+import { createSuccessResponse, createErrorResponse, HTTP_STATUS } from '../../types';
 import { logger } from '../../utils/logger/winston';
 
 export class CustomerReturnsController extends BaseController {
@@ -43,9 +55,9 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Submit new return request
    */
-  async submitReturnRequest(req: Request, res: Response): Promise<void> {
+  async submitReturnRequest(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const customerId = req.user!.id;
+      const customerId = req.user.id;
       const returnRequestData: CreateReturnRequest = req.body;
 
       logger.info('Customer return request submission', {
@@ -67,9 +79,8 @@ export class CustomerReturnsController extends BaseController {
       if (!eligibility.isEligible) {
         res.status(HTTP_STATUS.BAD_REQUEST).json(
           createErrorResponse(
-            'RETURN_NOT_ELIGIBLE',
             eligibility.reason || 'This order is not eligible for return',
-            { eligibility }
+            'RETURN_NOT_ELIGIBLE'
           )
         );
         return;
@@ -96,7 +107,6 @@ export class CustomerReturnsController extends BaseController {
 
       res.status(HTTP_STATUS.CREATED).json(
         createSuccessResponse(
-          'Return request submitted successfully',
           {
             returnRequest,
             estimatedProcessingTime: '3-5 business days',
@@ -105,7 +115,8 @@ export class CustomerReturnsController extends BaseController {
               'Wait for pickup confirmation',
               'Track return status in your dashboard'
             ]
-          }
+          },
+          'Return request submitted successfully'
         )
       );
 
@@ -128,9 +139,9 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Get customer's return requests
    */
-  async getMyReturns(req: Request, res: Response): Promise<void> {
+  async getMyReturns(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const customerId = req.user!.id;
+      const customerId = req.user.id;
       const query: ReturnListQuery = {
         page: parseInt(req.query.page as string) || 1,
         limit: parseInt(req.query.limit as string) || 10,
@@ -150,12 +161,12 @@ export class CustomerReturnsController extends BaseController {
 
       res.json(
         createSuccessResponse(
-          'Returns retrieved successfully',
           {
             returns: result.returns,
             pagination: result.pagination,
             summary: result.summary
-          }
+          },
+          'Returns retrieved successfully'
         )
       );
 
@@ -178,9 +189,9 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Get specific return details
    */
-  async getReturnDetails(req: Request, res: Response): Promise<void> {
+  async getReturnDetails(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const customerId = req.user!.id;
+      const customerId = req.user.id;
       const { returnId } = req.params;
 
       const returnRequest = await this.customerReturnsService.getReturnDetails(
@@ -200,8 +211,8 @@ export class CustomerReturnsController extends BaseController {
 
       res.json(
         createSuccessResponse(
-          'Return details retrieved successfully',
-          { returnRequest }
+          { returnRequest },
+          'Return details retrieved successfully'
         )
       );
 
@@ -224,9 +235,9 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Cancel pending return request
    */
-  async cancelReturnRequest(req: Request, res: Response): Promise<void> {
+  async cancelReturnRequest(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const customerId = req.user!.id;
+      const customerId = req.user.id;
       const { returnId } = req.params;
       const { reason } = req.body;
 
@@ -254,8 +265,8 @@ export class CustomerReturnsController extends BaseController {
 
       res.json(
         createSuccessResponse(
-          'Return request cancelled successfully',
-          { returnRequest: result.returnRequest }
+          { returnRequest: result.returnRequest },
+          'Return request cancelled successfully'
         )
       );
 
@@ -278,9 +289,9 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Upload return photos
    */
-  async uploadReturnPhotos(req: Request, res: Response): Promise<void> {
+  async uploadReturnPhotos(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const customerId = req.user!.id;
+      const customerId = req.user.id;
       const { returnId } = req.params;
       const { description } = req.body;
       const files = req.files as Express.Multer.File[];
@@ -314,11 +325,11 @@ export class CustomerReturnsController extends BaseController {
 
       res.json(
         createSuccessResponse(
-          'Photos uploaded successfully',
           { 
             returnRequest: result.returnRequest,
             uploadedPhotos: result.uploadedPhotos
-          }
+          },
+          'Photos uploaded successfully'
         )
       );
 
@@ -341,9 +352,9 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Check return eligibility for order
    */
-  async checkReturnEligibility(req: Request, res: Response): Promise<void> {
+  async checkReturnEligibility(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const customerId = req.user!.id;
+      const customerId = req.user.id;
       const { orderId } = req.params;
       const items = req.query.items ? JSON.parse(req.query.items as string) : undefined;
 
@@ -359,8 +370,8 @@ export class CustomerReturnsController extends BaseController {
 
       res.json(
         createSuccessResponse(
-          'Return eligibility checked successfully',
-          { eligibility }
+          { eligibility },
+          'Return eligibility checked successfully'
         )
       );
 
@@ -385,9 +396,9 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Get customer return dashboard
    */
-  async getReturnDashboard(req: Request, res: Response): Promise<void> {
+  async getReturnDashboard(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const customerId = req.user!.id;
+      const customerId = req.user.id;
       const period = parseInt(req.query.period as string) || 90;
 
       const dashboard = await this.customerReturnsService.getCustomerReturnDashboard(
@@ -397,8 +408,8 @@ export class CustomerReturnsController extends BaseController {
 
       res.json(
         createSuccessResponse(
-          'Return dashboard retrieved successfully',
-          { dashboard }
+          { dashboard },
+          'Return dashboard retrieved successfully'
         )
       );
 
@@ -420,9 +431,9 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Get return timeline
    */
-  async getReturnTimeline(req: Request, res: Response): Promise<void> {
+  async getReturnTimeline(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const customerId = req.user!.id;
+      const customerId = req.user.id;
       const { returnId } = req.params;
 
       const timeline = await this.customerReturnsService.getReturnTimeline(
@@ -442,8 +453,8 @@ export class CustomerReturnsController extends BaseController {
 
       res.json(
         createSuccessResponse(
-          'Return timeline retrieved successfully',
-          { timeline }
+          { timeline },
+          'Return timeline retrieved successfully'
         )
       );
 
@@ -466,9 +477,9 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Get refund estimate
    */
-  async getRefundEstimate(req: Request, res: Response): Promise<void> {
+  async getRefundEstimate(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const customerId = req.user!.id;
+      const customerId = req.user.id;
       const { returnId } = req.params;
 
       const estimate = await this.customerReturnsService.getRefundEstimate(
@@ -488,8 +499,8 @@ export class CustomerReturnsController extends BaseController {
 
       res.json(
         createSuccessResponse(
-          'Refund estimate retrieved successfully',
-          { estimate }
+          { estimate },
+          'Refund estimate retrieved successfully'
         )
       );
 
@@ -514,14 +525,14 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Get return policy information
    */
-  async getReturnPolicy(req: Request, res: Response): Promise<void> {
+  async getReturnPolicy(req: AuthRequest, res: Response): Promise<void> {
     try {
       const policy = await this.returnPolicyService.getReturnPolicy();
 
       res.json(
         createSuccessResponse(
-          'Return policy retrieved successfully',
-          { policy }
+          { policy },
+          'Return policy retrieved successfully'
         )
       );
 
@@ -542,14 +553,14 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Get return FAQ
    */
-  async getReturnFAQ(req: Request, res: Response): Promise<void> {
+  async getReturnFAQ(req: AuthRequest, res: Response): Promise<void> {
     try {
       const faq = await this.returnPolicyService.getReturnFAQ();
 
       res.json(
         createSuccessResponse(
-          'Return FAQ retrieved successfully',
-          { faq }
+          { faq },
+          'Return FAQ retrieved successfully'
         )
       );
 
@@ -570,14 +581,14 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Get return reasons and descriptions
    */
-  async getReturnReasons(req: Request, res: Response): Promise<void> {
+  async getReturnReasons(req: AuthRequest, res: Response): Promise<void> {
     try {
       const reasons = await this.returnPolicyService.getReturnReasons();
 
       res.json(
         createSuccessResponse(
-          'Return reasons retrieved successfully',
-          { reasons }
+          { reasons },
+          'Return reasons retrieved successfully'
         )
       );
 
@@ -600,9 +611,9 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Schedule return pickup
    */
-  async scheduleReturnPickup(req: Request, res: Response): Promise<void> {
+  async scheduleReturnPickup(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const customerId = req.user!.id;
+      const customerId = req.user.id;
       const { returnId } = req.params;
       const { preferredDate, timeSlot, specialInstructions, contactPhone } = req.body;
 
@@ -629,11 +640,11 @@ export class CustomerReturnsController extends BaseController {
 
       res.json(
         createSuccessResponse(
-          'Pickup scheduled successfully',
           { 
             pickupSchedule: result.pickupSchedule,
             confirmationNumber: result.confirmationNumber
-          }
+          },
+          'Pickup scheduled successfully'
         )
       );
 
@@ -656,7 +667,7 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Get pickup/drop-off locations
    */
-  async getPickupLocations(req: Request, res: Response): Promise<void> {
+  async getPickupLocations(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { state, city } = req.query;
 
@@ -667,8 +678,8 @@ export class CustomerReturnsController extends BaseController {
 
       res.json(
         createSuccessResponse(
-          'Pickup locations retrieved successfully',
-          { locations }
+          { locations },
+          'Pickup locations retrieved successfully'
         )
       );
 
@@ -690,9 +701,9 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Track return shipment
    */
-  async trackReturnShipment(req: Request, res: Response): Promise<void> {
+  async trackReturnShipment(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const customerId = req.user!.id;
+      const customerId = req.user.id;
       const { returnId } = req.params;
 
       const tracking = await this.returnShippingService.trackReturnShipment(
@@ -712,8 +723,8 @@ export class CustomerReturnsController extends BaseController {
 
       res.json(
         createSuccessResponse(
-          'Return tracking retrieved successfully',
-          { tracking }
+          { tracking },
+          'Return tracking retrieved successfully'
         )
       );
 
@@ -736,9 +747,9 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Get return shipping cost estimate
    */
-  async getReturnShippingCost(req: Request, res: Response): Promise<void> {
+  async getReturnShippingCost(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const customerId = req.user!.id;
+      const customerId = req.user.id;
       const { orderId } = req.params;
       const { returnMethod, pickupState } = req.query;
 
@@ -753,8 +764,8 @@ export class CustomerReturnsController extends BaseController {
 
       res.json(
         createSuccessResponse(
-          'Shipping cost estimate retrieved successfully',
-          { costEstimate }
+          { costEstimate },
+          'Shipping cost estimate retrieved successfully'
         )
       );
 
@@ -779,9 +790,9 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Create support ticket for return issue
    */
-  async createReturnSupportTicket(req: Request, res: Response): Promise<void> {
+  async createReturnSupportTicket(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const customerId = req.user!.id;
+      const customerId = req.user.id;
       const { returnId } = req.params;
       const { subject, description, priority, category } = req.body;
 
@@ -798,8 +809,8 @@ export class CustomerReturnsController extends BaseController {
 
       res.status(HTTP_STATUS.CREATED).json(
         createSuccessResponse(
-          'Support ticket created successfully',
-          { ticket }
+          { ticket },
+          'Support ticket created successfully'
         )
       );
 
@@ -822,9 +833,9 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Get AI-powered help suggestions
    */
-  async getReturnHelpSuggestions(req: Request, res: Response): Promise<void> {
+  async getReturnHelpSuggestions(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const customerId = req.user!.id;
+      const customerId = req.user.id;
       const { issue, returnId } = req.query;
 
       const suggestions = await this.customerSupportService.getReturnHelpSuggestions(
@@ -837,8 +848,8 @@ export class CustomerReturnsController extends BaseController {
 
       res.json(
         createSuccessResponse(
-          'Help suggestions retrieved successfully',
-          { suggestions }
+          { suggestions },
+          'Help suggestions retrieved successfully'
         )
       );
 
@@ -863,9 +874,9 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Get customer's personal return analytics
    */
-  async getMyReturnAnalytics(req: Request, res: Response): Promise<void> {
+  async getMyReturnAnalytics(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const customerId = req.user!.id;
+      const customerId = req.user.id;
       const period = parseInt(req.query.period as string) || 365;
 
       const analytics = await this.customerReturnsService.getCustomerReturnAnalytics(
@@ -875,8 +886,8 @@ export class CustomerReturnsController extends BaseController {
 
       res.json(
         createSuccessResponse(
-          'Return analytics retrieved successfully',
-          { analytics }
+          { analytics },
+          'Return analytics retrieved successfully'
         )
       );
 
@@ -898,7 +909,7 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Get current processing time estimates
    */
-  async getProcessingEstimates(req: Request, res: Response): Promise<void> {
+  async getProcessingEstimates(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { state, returnMethod } = req.query;
 
@@ -909,8 +920,8 @@ export class CustomerReturnsController extends BaseController {
 
       res.json(
         createSuccessResponse(
-          'Processing estimates retrieved successfully',
-          { estimates }
+          { estimates },
+          'Processing estimates retrieved successfully'
         )
       );
 
@@ -931,14 +942,14 @@ export class CustomerReturnsController extends BaseController {
   /**
    * Get seasonal return information
    */
-  async getSeasonalReturnInfo(req: Request, res: Response): Promise<void> {
+  async getSeasonalReturnInfo(req: AuthRequest, res: Response): Promise<void> {
     try {
       const seasonalInfo = await this.customerReturnsService.getSeasonalReturnInfo();
 
       res.json(
         createSuccessResponse(
-          'Seasonal return information retrieved successfully',
-          { seasonalInfo }
+          { seasonalInfo },
+          'Seasonal return information retrieved successfully'
         )
       );
 

@@ -18,7 +18,7 @@ import {
   CONSTANTS,
 } from "../../types";
 import { formatNairaAmount } from "../../utils/helpers/formatters";
-import { NIGERIAN_STATES } from "../../utils/helpers/nigerian";
+import NIGERIAN_STATES from "../../utils/helpers/nigerian";
 
 export interface InventoryOverviewAnalytics {
   summary: {
@@ -706,8 +706,9 @@ export class InventoryAnalyticsService extends BaseService {
     const totalVatCollected = products.reduce((sum, p) => sum + (Number(p.price) * vatRate), 0);
 
     // Regional distribution (simplified - would need actual sales data by address)
-    const regionalDistribution = NIGERIAN_STATES.slice(0, 6).map((state, index) => ({
-      state: state.name,
+    const majorStates = ['Lagos', 'Abuja', 'Kano', 'Rivers', 'Oyo', 'Kaduna'];
+    const regionalDistribution = majorStates.map((stateName, index) => ({
+      state: stateName,
       salesValue: Math.random() * 1000000, // Placeholder
       stockAllocation: Math.random() * 10000,
       demandIndex: Math.random() * 2 + 0.5,

@@ -566,7 +566,7 @@ export class BulkOrderService extends BaseService {
         throw new AppError(
           "Cannot cancel completed or failed job",
           HTTP_STATUS.BAD_REQUEST,
-          ERROR_CODES.INVALID_REQUEST
+          ERROR_CODES.VALIDATION_ERROR
         );
       }
 

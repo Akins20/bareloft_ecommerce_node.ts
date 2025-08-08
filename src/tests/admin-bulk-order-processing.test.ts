@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { app } from '../app';
+import app from '../app';
 import { OrderStatus, OrderPriority, BulkJobStatus, BulkOperationType } from '../types';
 
 describe('Admin Bulk Order Processing Tests', () => {

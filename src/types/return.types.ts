@@ -322,7 +322,7 @@ export interface ProcessRefundRequest {
   notifyCustomer?: boolean;
 }
 
-export interface BulkRefundRequest {
+export interface ReturnBulkRefundRequest {
   refundRequests: {
     returnRequestId?: string;
     orderId: string;
