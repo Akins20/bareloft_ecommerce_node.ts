@@ -40,8 +40,21 @@ export class OTPRepository extends BaseRepository<
    */
   async create(data: CreateOTPData): Promise<OTPCode> {
     try {
-      return await super.create(data);
+      // Use direct Prisma query to avoid BaseRepository issues
+      return await this.prisma.oTPCode.create({
+        data: {
+          phoneNumber: data.phoneNumber,
+          code: data.code,
+          purpose: data.purpose,
+          expiresAt: data.expiresAt,
+          isUsed: data.isUsed,
+          attempts: data.attempts,
+          maxAttempts: data.maxAttempts,
+          userId: data.userId,
+        }
+      });
     } catch (error) {
+      console.error('Database error in create OTP:', error);
       throw new AppError(
         "Error creating OTP code",
         HTTP_STATUS.INTERNAL_SERVER_ERROR,
@@ -58,15 +71,22 @@ export class OTPRepository extends BaseRepository<
     purpose: OTPPurpose
   ): Promise<OTPCode | null> {
     try {
-      return await this.findFirst({
-        phoneNumber,
-        purpose,
-        isUsed: false,
-        expiresAt: {
-          gt: new Date(),
+      // Use direct Prisma query instead of BaseRepository method to avoid issues
+      return await this.prisma.oTPCode.findFirst({
+        where: {
+          phoneNumber,
+          purpose,
+          isUsed: false,
+          expiresAt: {
+            gt: new Date(),
+          },
         },
+        orderBy: {
+          createdAt: 'desc'
+        }
       });
     } catch (error) {
+      console.error('Database error in findValidOTP:', error);
       throw new AppError(
         "Error finding valid OTP",
         HTTP_STATUS.INTERNAL_SERVER_ERROR,
@@ -110,17 +130,19 @@ export class OTPRepository extends BaseRepository<
     purpose: OTPPurpose
   ): Promise<void> {
     try {
-      await this.updateMany(
-        {
+      // Use direct Prisma query
+      await this.prisma.oTPCode.updateMany({
+        where: {
           phoneNumber,
           purpose,
           isUsed: false,
         },
-        {
+        data: {
           isUsed: true,
         }
-      );
+      });
     } catch (error) {
+      console.error('Database error in invalidateExistingOTP:', error);
       throw new AppError(
         "Error invalidating existing OTPs",
         HTTP_STATUS.INTERNAL_SERVER_ERROR,
@@ -134,10 +156,13 @@ export class OTPRepository extends BaseRepository<
    */
   async markAsUsed(otpId: string): Promise<OTPCode> {
     try {
-      return await this.update(otpId, {
-        isUsed: true,
+      // Use direct Prisma query
+      return await this.prisma.oTPCode.update({
+        where: { id: otpId },
+        data: { isUsed: true }
       });
     } catch (error) {
+      console.error('Database error in markAsUsed:', error);
       throw new AppError(
         "Error marking OTP as used",
         HTTP_STATUS.INTERNAL_SERVER_ERROR,
