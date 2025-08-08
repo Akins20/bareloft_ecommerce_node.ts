@@ -6,10 +6,10 @@ import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 
 // Configuration imports
-import { config } from "@/config/environment";
+import { config } from "./config/environment";
 import { PrismaClient } from "@prisma/client";
-import { getServiceContainer } from "@/config/serviceContainer";
-import { RedisService } from "@/services/cache/RedisService";
+import { getServiceContainer } from "./config/serviceContainer";
+import { RedisService } from "./services/cache/RedisService";
 
 // Type imports
 import {
@@ -17,30 +17,30 @@ import {
   HTTP_STATUS,
   ERROR_CODES,
   createErrorResponse,
-} from "@/types";
+} from "./types";
 
 // Middleware imports
-import { errorHandler } from "@/middleware/error/errorHandler";
-import { requestLogger } from "@/middleware/logging/requestLogger";
-import { rateLimiter } from "@/middleware/security/rateLimiter";
-import { authenticate } from "@/middleware/auth/authenticate";
+import { errorHandler } from "./middleware/error/errorHandler";
+import { requestLogger } from "./middleware/logging/requestLogger";
+import { rateLimiter } from "./middleware/security/rateLimiter";
+import { authenticate } from "./middleware/auth/authenticate";
 
 // Route imports - API v1
-import authRoutes from "@/routes/v1/auth";
-import userRoutes from "@/routes/v1/users";
-import productRoutes from "@/routes/v1/products";
-import categoryRoutes from "@/routes/v1/categories";
-import cartRoutes from "@/routes/v1/cart";
-import orderRoutes from "@/routes/v1/orders";
-import addressRoutes from "@/routes/v1/addresses";
-import reviewRoutes from "@/routes/v1/reviews";
-import wishlistRoutes from "@/routes/v1/wishlist";
-import searchRoutes from "@/routes/v1/search";
-import uploadRoutes from "@/routes/v1/upload";
-import paymentRoutes from "@/routes/v1/payments";
+import authRoutes from "./routes/v1/auth";
+import userRoutes from "./routes/v1/users";
+import productRoutes from "./routes/v1/products";
+import categoryRoutes from "./routes/v1/categories";
+import cartRoutes from "./routes/v1/cart";
+import orderRoutes from "./routes/v1/orders";
+import addressRoutes from "./routes/v1/addresses";
+import reviewRoutes from "./routes/v1/reviews";
+import wishlistRoutes from "./routes/v1/wishlist";
+import searchRoutes from "./routes/v1/search";
+import uploadRoutes from "./routes/v1/upload";
+import paymentRoutes from "./routes/v1/payments";
 
 // Admin routes
-import adminRoutes from "@/routes/admin";
+import adminRoutes from "./routes/admin";
 
 // Webhook routes
 // import webhookRoutes from "@/routes/webhooks";

@@ -1,12 +1,12 @@
 import { BaseService } from "../BaseService";
-import { UserRepository } from "@/repositories/UserRepository";
+import { UserRepository } from "../../repositories/UserRepository";
 import {
   User,
   UpdateUserProfileRequest,
   AppError,
   HTTP_STATUS,
   ERROR_CODES,
-} from "@/types";
+} from "../../types";
 import { Express } from 'express-serve-static-core';
 
 export class UserService extends BaseService {

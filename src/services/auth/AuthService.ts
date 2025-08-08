@@ -19,7 +19,7 @@ import {
 import { AppError, HTTP_STATUS, ERROR_CODES } from "../../types/api.types";
 import { redisClient } from "../../config/redis";
 import { CONSTANTS } from "../../types/common.types";
-import { OTPPurpose, RefreshTokenResponse } from "@/types/auth.types";
+import { OTPPurpose, RefreshTokenResponse } from "../../types/auth.types";
 
 export class AuthService extends BaseService {
   private userRepository: any;

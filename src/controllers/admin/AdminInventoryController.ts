@@ -3,7 +3,7 @@ import { BaseAdminController } from "../BaseAdminController";
 import { getServiceContainer } from "../../config/serviceContainer";
 import { InventoryRepository } from "../../repositories/InventoryRepository";
 import { ProductRepository } from "../../repositories/ProductRepository";
-import { inventorySchemas } from "@/utils/validation/schemas/adminSchemas";
+import { inventorySchemas } from "../../utils/validation/schemas/adminSchemas";
 import { 
   InventoryListResponse,
   InventoryMovementType,
@@ -11,8 +11,8 @@ import {
   InventoryAdjustmentRequest,
   ReserveStockRequest,
   ReleaseReservationRequest
-} from "@/types";
-import { NigerianUtils } from "@/utils/helpers/nigerian";
+} from "../../types";
+import { NigerianUtils } from "../../utils/helpers/nigerian";
 
 /**
  * Admin Inventory Management Controller with Nigerian E-commerce Features

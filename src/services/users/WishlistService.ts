@@ -1,13 +1,13 @@
 import { BaseService } from "../BaseService";
-import { UserRepository } from "@/repositories/UserRepository";
-import { ProductRepository } from "@/repositories/ProductRepository";
-import { prisma } from "@/database/connection";
+import { UserRepository } from "../../repositories/UserRepository";
+import { ProductRepository } from "../../repositories/ProductRepository";
+import { prisma } from "../../database/connection";
 import {
   Product,
   AppError,
   HTTP_STATUS,
   ERROR_CODES,
-} from "@/types";
+} from "../../types";
 import {
   WishlistItem,
   AddToWishlistRequest,
@@ -18,8 +18,8 @@ import {
   MoveToCartResult,
   WishlistSummary,
   ShareableWishlistResult,
-} from "@/types/user.types";
-import { PaginationParams } from "@/types/api.types";
+} from "../../types/user.types";
+import { PaginationParams } from "../../types/api.types";
 
 export class WishlistService extends BaseService {
   private userRepository: UserRepository;

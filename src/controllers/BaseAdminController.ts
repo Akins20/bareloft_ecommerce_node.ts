@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import { BaseController } from "./BaseController";
-import { NigerianUtils } from "@/utils/helpers/nigerian";
-import { DataFormatters } from "@/utils/helpers/formatters";
-import { logger } from "@/utils/logger/winston";
+import { NigerianUtils } from "../utils/helpers/nigerian";
+import { DataFormatters } from "../utils/helpers/formatters";
+import { logger } from "../utils/logger/winston";
 
 /**
  * Nigerian Admin Activity Types for audit logging

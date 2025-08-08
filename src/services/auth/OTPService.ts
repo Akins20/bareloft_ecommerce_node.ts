@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { CONSTANTS } from "@/types/common.types";
+import { CONSTANTS } from "../../types/common.types";
 
 export class OTPService {
   /**

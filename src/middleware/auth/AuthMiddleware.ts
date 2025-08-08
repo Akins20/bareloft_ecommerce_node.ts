@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import { AuthService } from "@/services/auth/AuthService";
-import { JWTService } from "@/services/auth/JWTService";
+import { AuthService } from "../../services/auth/AuthService";
+import { JWTService } from "../../services/auth/JWTService";
 import {
   AuthenticatedRequest,
   createErrorResponse,
@@ -8,7 +8,7 @@ import {
   ERROR_CODES,
   UserRole,
   PublicUser,
-} from "@/types";
+} from "../../types";
 
 export class AuthMiddleware {
   private authService: AuthService;
