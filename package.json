@@ -22,7 +22,7 @@
         "db:seed": "tsx src/database/seeds/index.ts",
         "db:reset": "prisma migrate reset --force",
         "db:studio": "prisma studio",
-        "docs:generate": "swagger-jsdoc -d src/config/swagger.ts -o swagger.json 'src/routes/**/*.ts'",
+        "docs:generate": "swagger-jsdoc -d swagger.config.json -o swagger.json 'src/routes/**/*.ts'",
         "docs:serve": "swagger-ui-serve swagger.json",
         "clean": "rimraf dist"
     },
