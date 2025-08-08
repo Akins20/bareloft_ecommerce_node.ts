@@ -11,6 +11,7 @@ import { SessionRepository } from "../../repositories/SessionRepository";
 import { config } from "../../config/environment";
 import { logger } from "../../utils/logger/winston";
 import { UserRole } from "../../types/user.types";
+import { getServiceContainer } from "../../config/serviceContainer";
 
 // Extend Express Request type to include user
 declare global {
@@ -118,7 +119,8 @@ export const authenticate = async (
     }
 
     // Check if session exists and is valid
-    const sessionRepo = new SessionRepository();
+    const serviceContainer = getServiceContainer();
+    const sessionRepo = serviceContainer.getService<SessionRepository>('sessionRepository');
     const session = await sessionRepo.findById(decoded.sessionId);
 
     if (!session || session.expiresAt < new Date()) {
@@ -138,7 +140,7 @@ export const authenticate = async (
     }
 
     // Get user details
-    const userRepo = new UserRepository();
+    const userRepo = serviceContainer.getService<UserRepository>('userRepository');
     const user = await userRepo.findById(decoded.userId);
 
     if (!user) {

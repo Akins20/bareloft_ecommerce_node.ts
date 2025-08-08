@@ -296,7 +296,7 @@ req: Request, res: Response, next?: unknown  ): Promise<void> => {
 
     if (
       data.purpose &&
-      !["login", "signup", "password_reset", "phone_verification"].includes(
+      !["LOGIN", "SIGNUP", "PASSWORD_RESET", "PHONE_VERIFICATION"].includes(
         data.purpose
       )
     ) {
@@ -326,7 +326,7 @@ req: Request, res: Response, next?: unknown  ): Promise<void> => {
 
     if (
       data.purpose &&
-      !["login", "signup", "password_reset", "phone_verification"].includes(
+      !["LOGIN", "SIGNUP", "PASSWORD_RESET", "PHONE_VERIFICATION"].includes(
         data.purpose
       )
     ) {

@@ -3,7 +3,7 @@ import { PublicUser } from './user.types';
 import { Request } from 'express';
 export { PublicUser };
 export type UserRole = 'CUSTOMER' | 'ADMIN' | 'SUPER_ADMIN';
-export type OTPPurpose = 'login' | 'signup' | 'password_reset' | 'phone_verification';
+export type OTPPurpose = 'LOGIN' | 'SIGNUP' | 'PASSWORD_RESET' | 'PHONE_VERIFICATION';
 export interface OTPCode extends BaseEntity {
     phoneNumber: NigerianPhoneNumber;
     code: string;

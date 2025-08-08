@@ -208,7 +208,7 @@ class OTPController extends BaseController_1.BaseController {
             errors.push("Valid Nigerian phone number is required");
         }
         if (data.purpose &&
-            !["login", "signup", "password_reset", "phone_verification"].includes(data.purpose)) {
+            !["LOGIN", "SIGNUP", "PASSWORD_RESET", "PHONE_VERIFICATION"].includes(data.purpose)) {
             errors.push("Invalid OTP purpose");
         }
         return errors;
@@ -231,7 +231,7 @@ class OTPController extends BaseController_1.BaseController {
             errors.push("OTP code must be 6 digits");
         }
         if (data.purpose &&
-            !["login", "signup", "password_reset", "phone_verification"].includes(data.purpose)) {
+            !["LOGIN", "SIGNUP", "PASSWORD_RESET", "PHONE_VERIFICATION"].includes(data.purpose)) {
             errors.push("Invalid OTP purpose");
         }
         return errors;

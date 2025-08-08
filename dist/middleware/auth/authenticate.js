@@ -10,10 +10,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.optionalAuthenticate = exports.authenticate = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const UserRepository_1 = require("../../repositories/UserRepository");
-const SessionRepository_1 = require("../../repositories/SessionRepository");
 const environment_1 = require("../../config/environment");
 const winston_1 = require("../../utils/logger/winston");
+const serviceContainer_1 = require("../../config/serviceContainer");
 /**
  * 🔐 Main Authentication Middleware
  * Validates access tokens and sets user context
@@ -81,7 +80,8 @@ const authenticate = async (req, res, next) => {
             return;
         }
         // Check if session exists and is valid
-        const sessionRepo = new SessionRepository_1.SessionRepository();
+        const serviceContainer = (0, serviceContainer_1.getServiceContainer)();
+        const sessionRepo = serviceContainer.getService('sessionRepository');
         const session = await sessionRepo.findById(decoded.sessionId);
         if (!session || session.expiresAt < new Date()) {
             winston_1.logger.warn("Invalid or expired session", {
@@ -98,7 +98,7 @@ const authenticate = async (req, res, next) => {
             return;
         }
         // Get user details
-        const userRepo = new UserRepository_1.UserRepository();
+        const userRepo = serviceContainer.getService('userRepository');
         const user = await userRepo.findById(decoded.userId);
         if (!user) {
             winston_1.logger.error("User not found for valid token", {

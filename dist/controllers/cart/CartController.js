@@ -574,12 +574,13 @@ class CartController extends BaseController_1.BaseController {
                 res.json(response);
                 return;
             }
-            // Handle guest users - return 0 for now since guest cart counting needs implementation
+            // Handle guest users
             if (isGuest && sessionId) {
+                const countResult = await this.cartService.getGuestCartItemCount(sessionId);
                 const response = {
                     success: true,
                     message: "Guest cart item count retrieved successfully",
-                    data: { count: 0 },
+                    data: countResult,
                 };
                 res.json(response);
                 return;

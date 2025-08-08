@@ -81,7 +81,7 @@ export class AuthService extends BaseService {
       }
 
       // For signup, check if user already exists
-      if (purpose === "signup") {
+      if (purpose === "SIGNUP") {
         const existingUser =
           await this.userRepository.findByPhoneNumber(phoneNumber);
         if (existingUser) {
@@ -94,7 +94,7 @@ export class AuthService extends BaseService {
       }
 
       // For login, check if user exists
-      if (purpose === "login") {
+      if (purpose === "LOGIN") {
         const user = await this.userRepository.findByPhoneNumber(phoneNumber);
         if (!user) {
           throw new AppError(
@@ -238,7 +238,7 @@ export class AuthService extends BaseService {
 
       // For login, get user ID
       let userId: string | undefined;
-      if (purpose === "login") {
+      if (purpose === "LOGIN") {
         const user = await this.userRepository.findByPhoneNumber(phoneNumber);
         userId = user?.id;
       }
@@ -268,7 +268,7 @@ export class AuthService extends BaseService {
       const otpVerification = await this.verifyOTP({
         phoneNumber,
         code: otpCode,
-        purpose: "signup",
+        purpose: "SIGNUP",
       });
 
       if (!otpVerification.isValid) {
@@ -354,7 +354,7 @@ export class AuthService extends BaseService {
       const otpVerification = await this.verifyOTP({
         phoneNumber,
         code: otpCode,
-        purpose: "login",
+        purpose: "LOGIN",
       });
 
       if (!otpVerification.isValid || !otpVerification.userId) {

@@ -415,6 +415,25 @@ class CartService extends BaseService_1.BaseService {
         }
     }
     /**
+     * Get guest cart item count
+     */
+    async getGuestCartItemCount(sessionId) {
+        try {
+            const cartKey = `guest_cart:${sessionId}`;
+            const cartData = await redis_1.redisClient.get(cartKey);
+            if (!cartData) {
+                return { count: 0 };
+            }
+            const guestCart = cartData;
+            const count = (guestCart.items || []).reduce((sum, item) => sum + item.quantity, 0);
+            return { count };
+        }
+        catch (error) {
+            console.warn("Error getting guest cart item count:", error);
+            return { count: 0 };
+        }
+    }
+    /**
      * Merge guest cart with user cart
      */
     async mergeCart(userId, sessionId, data) {

@@ -239,7 +239,7 @@ export class AuthController extends BaseController {
       }
 
       // For signup, check if phone doesn't exist
-      if (purpose === "signup") {
+      if (purpose === "SIGNUP") {
         const existingUser =
           await this.authService.findUserByPhone(phoneNumber);
         if (existingUser) {
@@ -254,7 +254,7 @@ export class AuthController extends BaseController {
       }
 
       // For login, check if phone exists
-      if (purpose === "login") {
+      if (purpose === "LOGIN") {
         const existingUser =
           await this.authService.findUserByPhone(phoneNumber);
         if (!existingUser) {

@@ -42,14 +42,14 @@ class AuthService extends BaseService_1.BaseService {
                 throw new api_types_1.AppError(`Too many OTP requests. Try again after ${retryAfter.toLocaleTimeString()}`, api_types_1.HTTP_STATUS.TOO_MANY_REQUESTS, api_types_1.ERROR_CODES.RATE_LIMIT_EXCEEDED);
             }
             // For signup, check if user already exists
-            if (purpose === "signup") {
+            if (purpose === "SIGNUP") {
                 const existingUser = await this.userRepository.findByPhoneNumber(phoneNumber);
                 if (existingUser) {
                     throw new api_types_1.AppError("Phone number already registered. Try logging in instead.", api_types_1.HTTP_STATUS.CONFLICT, api_types_1.ERROR_CODES.RESOURCE_ALREADY_EXISTS);
                 }
             }
             // For login, check if user exists
-            if (purpose === "login") {
+            if (purpose === "LOGIN") {
                 const user = await this.userRepository.findByPhoneNumber(phoneNumber);
                 if (!user) {
                     throw new api_types_1.AppError("Phone number not registered. Please sign up first.", api_types_1.HTTP_STATUS.NOT_FOUND, api_types_1.ERROR_CODES.RESOURCE_NOT_FOUND);
@@ -133,7 +133,7 @@ class AuthService extends BaseService_1.BaseService {
             await this.otpRepository.markAsUsed(otpRecord.id);
             // For login, get user ID
             let userId;
-            if (purpose === "login") {
+            if (purpose === "LOGIN") {
                 const user = await this.userRepository.findByPhoneNumber(phoneNumber);
                 userId = user?.id;
             }
@@ -157,7 +157,7 @@ class AuthService extends BaseService_1.BaseService {
             const otpVerification = await this.verifyOTP({
                 phoneNumber,
                 code: otpCode,
-                purpose: "signup",
+                purpose: "SIGNUP",
             });
             if (!otpVerification.isValid) {
                 throw new api_types_1.AppError("Invalid OTP code", api_types_1.HTTP_STATUS.BAD_REQUEST, api_types_1.ERROR_CODES.INVALID_INPUT);
@@ -217,7 +217,7 @@ class AuthService extends BaseService_1.BaseService {
             const otpVerification = await this.verifyOTP({
                 phoneNumber,
                 code: otpCode,
-                purpose: "login",
+                purpose: "LOGIN",
             });
             if (!otpVerification.isValid || !otpVerification.userId) {
                 throw new api_types_1.AppError("Invalid OTP code", api_types_1.HTTP_STATUS.BAD_REQUEST, api_types_1.ERROR_CODES.INVALID_INPUT);

@@ -9,7 +9,7 @@ export { PublicUser };
 export type UserRole = 'CUSTOMER' | 'ADMIN' | 'SUPER_ADMIN';
 
 // OTP purposes
-export type OTPPurpose = 'login' | 'signup' | 'password_reset' | 'phone_verification';
+export type OTPPurpose = 'LOGIN' | 'SIGNUP' | 'PASSWORD_RESET' | 'PHONE_VERIFICATION';
 
 // Authentication interfaces
 export interface OTPCode extends BaseEntity {

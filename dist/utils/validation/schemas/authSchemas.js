@@ -26,10 +26,10 @@ exports.authSchemas = {
             "any.required": "Phone number is required",
         }),
         purpose: joi_1.default.string()
-            .valid("login", "signup", "password_reset", "phone_verification")
+            .valid("LOGIN", "SIGNUP", "PASSWORD_RESET", "PHONE_VERIFICATION")
             .required()
             .messages({
-            "any.only": "Purpose must be one of: login, signup, password_reset, phone_verification",
+            "any.only": "Purpose must be one of: LOGIN, SIGNUP, PASSWORD_RESET, PHONE_VERIFICATION",
             "any.required": "Purpose is required",
         }),
     }),
@@ -54,7 +54,7 @@ exports.authSchemas = {
             "any.required": "OTP code is required",
         }),
         purpose: joi_1.default.string()
-            .valid("login", "signup", "password_reset", "phone_verification")
+            .valid("LOGIN", "SIGNUP", "PASSWORD_RESET", "PHONE_VERIFICATION")
             .required(),
     }),
     /**

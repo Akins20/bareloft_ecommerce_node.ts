@@ -13,9 +13,22 @@ class OTPRepository extends BaseRepository_1.BaseRepository {
      */
     async create(data) {
         try {
-            return await super.create(data);
+            // Use direct Prisma query to avoid BaseRepository issues
+            return await this.prisma.oTPCode.create({
+                data: {
+                    phoneNumber: data.phoneNumber,
+                    code: data.code,
+                    purpose: data.purpose,
+                    expiresAt: data.expiresAt,
+                    isUsed: data.isUsed,
+                    attempts: data.attempts,
+                    maxAttempts: data.maxAttempts,
+                    userId: data.userId,
+                }
+            });
         }
         catch (error) {
+            console.error('Database error in create OTP:', error);
             throw new types_1.AppError("Error creating OTP code", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
@@ -24,16 +37,23 @@ class OTPRepository extends BaseRepository_1.BaseRepository {
      */
     async findValidOTP(phoneNumber, purpose) {
         try {
-            return await this.findFirst({
-                phoneNumber,
-                purpose,
-                isUsed: false,
-                expiresAt: {
-                    gt: new Date(),
+            // Use direct Prisma query instead of BaseRepository method to avoid issues
+            return await this.prisma.oTPCode.findFirst({
+                where: {
+                    phoneNumber,
+                    purpose,
+                    isUsed: false,
+                    expiresAt: {
+                        gt: new Date(),
+                    },
                 },
+                orderBy: {
+                    createdAt: 'desc'
+                }
             });
         }
         catch (error) {
+            console.error('Database error in findValidOTP:', error);
             throw new types_1.AppError("Error finding valid OTP", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
@@ -61,15 +81,20 @@ class OTPRepository extends BaseRepository_1.BaseRepository {
      */
     async invalidateExistingOTP(phoneNumber, purpose) {
         try {
-            await this.updateMany({
-                phoneNumber,
-                purpose,
-                isUsed: false,
-            }, {
-                isUsed: true,
+            // Use direct Prisma query
+            await this.prisma.oTPCode.updateMany({
+                where: {
+                    phoneNumber,
+                    purpose,
+                    isUsed: false,
+                },
+                data: {
+                    isUsed: true,
+                }
             });
         }
         catch (error) {
+            console.error('Database error in invalidateExistingOTP:', error);
             throw new types_1.AppError("Error invalidating existing OTPs", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }
@@ -78,11 +103,14 @@ class OTPRepository extends BaseRepository_1.BaseRepository {
      */
     async markAsUsed(otpId) {
         try {
-            return await this.update(otpId, {
-                isUsed: true,
+            // Use direct Prisma query
+            return await this.prisma.oTPCode.update({
+                where: { id: otpId },
+                data: { isUsed: true }
             });
         }
         catch (error) {
+            console.error('Database error in markAsUsed:', error);
             throw new types_1.AppError("Error marking OTP as used", types_1.HTTP_STATUS.INTERNAL_SERVER_ERROR, types_1.ERROR_CODES.DATABASE_ERROR);
         }
     }

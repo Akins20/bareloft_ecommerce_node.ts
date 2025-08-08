@@ -41,7 +41,8 @@
       "Bash(/dev/null)",
       "Bash(npm test:*)",
       "Bash(timeout:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(tsc --noEmit)"
     ],
     "deny": []
   }

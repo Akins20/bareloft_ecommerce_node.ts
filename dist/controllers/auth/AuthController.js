@@ -150,7 +150,7 @@ class AuthController extends BaseController_1.BaseController {
                 return;
             }
             // For signup, check if phone doesn't exist
-            if (purpose === "signup") {
+            if (purpose === "SIGNUP") {
                 const existingUser = await this.authService.findUserByPhone(phoneNumber);
                 if (existingUser) {
                     this.sendError(res, "Phone number is already registered. Use login instead.", 409, "PHONE_EXISTS");
@@ -158,7 +158,7 @@ class AuthController extends BaseController_1.BaseController {
                 }
             }
             // For login, check if phone exists
-            if (purpose === "login") {
+            if (purpose === "LOGIN") {
                 const existingUser = await this.authService.findUserByPhone(phoneNumber);
                 if (!existingUser) {
                     this.sendError(res, "Phone number not registered. Please sign up first.", 404, "PHONE_NOT_FOUND");

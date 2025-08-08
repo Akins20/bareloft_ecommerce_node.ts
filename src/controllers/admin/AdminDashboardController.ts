@@ -565,6 +565,258 @@ export class AdminDashboardController extends BaseAdminController {
   };
 
   /**
+   * Get comprehensive dashboard analytics
+   * GET /api/admin/dashboard/analytics
+   */
+  public getDashboardAnalytics = async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!this.requireAdminAuth(req, res, 'admin')) return;
+
+      const period = req.query.period as string || 'last_30_days';
+      const metrics = req.query.metrics as string || 'all';
+      const userId = this.getUserId(req);
+
+      this.logAdminActivity(req, 'analytics_access', 'get_dashboard_analytics', {
+        description: `Accessed comprehensive dashboard analytics for period: ${period}`,
+        severity: 'low',
+        resourceType: 'dashboard_analytics',
+        metadata: { period, metrics }
+      });
+
+      // Get comprehensive analytics data
+      const [salesAnalytics, customerAnalytics, inventoryAnalytics, operationalAnalytics] = await Promise.all([
+        this.getSalesDataInternal(period, 'daily'),
+        this.getCustomerMetricsInternal(period),
+        this.getInventoryMetricsInternal(),
+        this.getOrderOperationalMetrics(period)
+      ]);
+
+      const analytics = {
+        period,
+        timestamp: new Date().toISOString(),
+        nigerianTime: NigerianUtils.Business.formatNigerianDate(new Date(), 'long'),
+        overview: {
+          totalRevenue: {
+            value: salesAnalytics.totalRevenue,
+            formatted: this.formatAdminCurrency(salesAnalytics.totalRevenue),
+            growth: salesAnalytics.trends.revenue.change,
+            trend: salesAnalytics.trends.revenue.trend
+          },
+          totalOrders: {
+            value: salesAnalytics.totalOrders,
+            growth: salesAnalytics.trends.orders.change,
+            trend: salesAnalytics.trends.orders.trend
+          },
+          totalCustomers: {
+            value: customerAnalytics.totalCustomers,
+            growth: customerAnalytics.growthRate,
+            trend: customerAnalytics.growthRate > 0 ? 'up' : 'down'
+          },
+          conversionRate: {
+            value: salesAnalytics.conversionRate,
+            unit: '%',
+            trend: 'stable'
+          }
+        },
+        detailed: {
+          sales: {
+            revenue: salesAnalytics.totalRevenue,
+            revenueFormatted: this.formatAdminCurrency(salesAnalytics.totalRevenue),
+            averageOrderValue: salesAnalytics.averageOrderValue,
+            averageOrderValueFormatted: this.formatAdminCurrency(salesAnalytics.averageOrderValue),
+            conversionRate: salesAnalytics.conversionRate,
+            trends: salesAnalytics.trends
+          },
+          customers: {
+            total: customerAnalytics.totalCustomers,
+            new: customerAnalytics.newCustomers,
+            active: customerAnalytics.activeCustomers,
+            verified: customerAnalytics.verifiedCustomers,
+            retention: {
+              rate: customerAnalytics.repeatCustomerRate,
+              lifetimeValue: customerAnalytics.averageLifetimeValue,
+              lifetimeValueFormatted: this.formatAdminCurrency(customerAnalytics.averageLifetimeValue)
+            }
+          },
+          inventory: {
+            totalProducts: inventoryAnalytics.totalProducts,
+            activeProducts: inventoryAnalytics.activeProducts,
+            lowStockProducts: inventoryAnalytics.lowStockProducts,
+            outOfStockProducts: inventoryAnalytics.outOfStockProducts,
+            totalValue: inventoryAnalytics.totalValue,
+            totalValueFormatted: this.formatAdminCurrency(inventoryAnalytics.totalValue),
+            turnoverRate: inventoryAnalytics.turnoverRate
+          },
+          operations: {
+            ordersFulfillment: {
+              pending: operationalAnalytics.pending,
+              processing: operationalAnalytics.processing,
+              shipped: operationalAnalytics.shipped,
+              delivered: operationalAnalytics.delivered,
+              cancelled: operationalAnalytics.cancelled
+            },
+            performance: {
+              averageProcessingTime: operationalAnalytics.averageProcessingTime,
+              onTimeDeliveryRate: operationalAnalytics.onTimeDeliveryRate
+            }
+          }
+        },
+        charts: {
+          revenueChart: await this.getRevenueChart(period),
+          ordersChart: await this.getOrdersChart(period),
+          customersChart: await this.getCustomersChart(period),
+          performanceChart: await this.getOrderFlowChart(period)
+        },
+        nigerianMetrics: {
+          vatCollected: {
+            value: NigerianUtils.Ecommerce.calculateVAT(salesAnalytics.totalRevenue),
+            formatted: this.formatAdminCurrency(NigerianUtils.Ecommerce.calculateVAT(salesAnalytics.totalRevenue))
+          },
+          businessHours: NigerianUtils.Business.isBusinessHours(),
+          peakTime: this.isPeakShoppingTime(),
+          topStates: await this.getTopSellingStatesInternal(period)
+        },
+        insights: {
+          topPerformers: await this.getTopSellingProductsInternal(),
+          growthAreas: [
+            { area: 'Customer Acquisition', value: customerAnalytics.growthRate, trend: 'up' },
+            { area: 'Revenue Growth', value: salesAnalytics.trends.revenue.change, trend: salesAnalytics.trends.revenue.trend },
+            { area: 'Order Volume', value: salesAnalytics.trends.orders.change, trend: salesAnalytics.trends.orders.trend }
+          ],
+          recommendations: [
+            {
+              type: 'inventory',
+              priority: inventoryAnalytics.lowStockProducts > 50 ? 'high' : 'medium',
+              message: `${inventoryAnalytics.lowStockProducts} products are running low on stock`,
+              action: 'Review and restock low inventory items'
+            },
+            {
+              type: 'sales',
+              priority: 'medium',
+              message: `Revenue growth of ${salesAnalytics.trends.revenue.change.toFixed(1)}% this period`,
+              action: 'Continue current sales strategies'
+            }
+          ]
+        }
+      };
+
+      this.sendAdminSuccess(res, analytics, 'Dashboard analytics retrieved successfully', 200, {
+        activity: 'analytics_access',
+        includeMetrics: true,
+        includeCurrencyInfo: true
+      });
+    } catch (error) {
+      this.handleError(error, req, res);
+    }
+  };
+
+  /**
+   * Get recent admin activities and system events
+   * GET /api/admin/dashboard/activities
+   */
+  public getRecentActivities = async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!this.requireAdminAuth(req, res, 'admin')) return;
+
+      const limit = parseInt(req.query.limit as string || '20');
+      const type = req.query.type as string || 'all';
+      const dateFrom = req.query.dateFrom ? new Date(req.query.dateFrom as string) : undefined;
+      const userId = this.getUserId(req);
+
+      this.logAdminActivity(req, 'analytics_access', 'get_recent_activities', {
+        description: `Accessed recent activities dashboard with limit: ${limit}`,
+        severity: 'low',
+        resourceType: 'activity_logs',
+        metadata: { limit, type, dateFrom }
+      });
+
+      // Get recent activities (placeholder implementation)
+      const activities = await this.getRecentActivitiesInternal(limit, type, dateFrom);
+      const systemEvents = await this.getSystemEventsInternal(limit, dateFrom);
+
+      const activitiesData = {
+        timestamp: new Date().toISOString(),
+        nigerianTime: NigerianUtils.Business.formatNigerianDate(new Date(), 'long'),
+        filters: {
+          limit,
+          type,
+          dateFrom: dateFrom?.toISOString()
+        },
+        summary: {
+          totalActivities: activities.length,
+          systemEvents: systemEvents.length,
+          lastActivity: activities.length > 0 ? activities[0].timestamp : null,
+          activityTypes: {
+            user: activities.filter(a => a.type === 'user').length,
+            order: activities.filter(a => a.type === 'order').length,
+            system: activities.filter(a => a.type === 'system').length,
+            security: activities.filter(a => a.type === 'security').length
+          }
+        },
+        activities: activities.map(activity => ({
+          id: activity.id,
+          type: activity.type,
+          action: activity.action,
+          description: activity.description,
+          user: {
+            id: activity.userId,
+            name: activity.userName,
+            role: activity.userRole
+          },
+          resource: {
+            type: activity.resourceType,
+            id: activity.resourceId,
+            name: activity.resourceName
+          },
+          timestamp: activity.timestamp,
+          timeAgo: this.getTimeAgoInternal(activity.timestamp),
+          severity: activity.severity,
+          metadata: activity.metadata,
+          ipAddress: activity.ipAddress,
+          userAgent: activity.userAgent
+        })),
+        systemEvents: systemEvents.map(event => ({
+          id: event.id,
+          type: event.type,
+          event: event.event,
+          description: event.description,
+          severity: event.severity,
+          timestamp: event.timestamp,
+          timeAgo: this.getTimeAgoInternal(event.timestamp),
+          resolved: event.resolved,
+          metadata: event.metadata
+        })),
+        recentTrends: {
+          mostActiveHours: await this.getMostActiveHoursInternal(),
+          topAdminActions: await this.getTopAdminActionsInternal(),
+          securityEvents: await this.getSecurityEventsCountInternal(),
+          systemHealth: {
+            uptime: process.uptime(),
+            lastRestart: new Date(Date.now() - process.uptime() * 1000),
+            errorRate: await this.getSystemErrorRateInternal()
+          }
+        },
+        nigerianContext: {
+          businessHours: NigerianUtils.Business.isBusinessHours(),
+          businessDayActivities: activities.filter(a => 
+            this.isBusinessHourActivityInternal(a.timestamp)
+          ).length,
+          afterHoursActivities: activities.filter(a => 
+            !this.isBusinessHourActivityInternal(a.timestamp)
+          ).length
+        }
+      };
+
+      this.sendAdminSuccess(res, activitiesData, 'Recent activities retrieved successfully', 200, {
+        activity: 'analytics_access',
+        includeMetrics: true
+      });
+    } catch (error) {
+      this.handleError(error, req, res);
+    }
+  };
+
+  /**
    * Get quick stats for dashboard widgets
    * GET /api/admin/dashboard/stats
    */
@@ -2080,4 +2332,160 @@ export class AdminDashboardController extends BaseAdminController {
     
     return peakMonths.includes(month) || backToSchoolMonths.includes(month);
   }
+
+  // Helper methods for activities dashboard
+
+  private async getRecentActivitiesInternal(limit: number, type: string, dateFrom?: Date) {
+    // Placeholder implementation - would integrate with actual activity logging
+    const sampleActivities = [
+      {
+        id: '1',
+        type: 'user',
+        action: 'create_user',
+        description: 'Created new customer account',
+        userId: 'admin_123',
+        userName: 'Admin User',
+        userRole: 'ADMIN',
+        resourceType: 'user',
+        resourceId: 'customer_456',
+        resourceName: 'John Doe',
+        timestamp: new Date(Date.now() - 10 * 60 * 1000),
+        severity: 'low',
+        metadata: { customerEmail: 'john@example.com' },
+        ipAddress: '192.168.1.100',
+        userAgent: 'Mozilla/5.0...'
+      },
+      {
+        id: '2',
+        type: 'order',
+        action: 'update_order_status',
+        description: 'Changed order status to SHIPPED',
+        userId: 'admin_123',
+        userName: 'Admin User',
+        userRole: 'ADMIN',
+        resourceType: 'order',
+        resourceId: 'order_789',
+        resourceName: 'Order #ORD-12345',
+        timestamp: new Date(Date.now() - 25 * 60 * 1000),
+        severity: 'low',
+        metadata: { oldStatus: 'PROCESSING', newStatus: 'SHIPPED' },
+        ipAddress: '192.168.1.100',
+        userAgent: 'Mozilla/5.0...'
+      },
+      {
+        id: '3',
+        type: 'security',
+        action: 'failed_login',
+        description: 'Failed login attempt detected',
+        userId: 'unknown',
+        userName: 'Unknown User',
+        userRole: 'NONE',
+        resourceType: 'security',
+        resourceId: 'login_attempt_456',
+        resourceName: 'Failed Login',
+        timestamp: new Date(Date.now() - 45 * 60 * 1000),
+        severity: 'warning',
+        metadata: { attemptedEmail: 'hacker@example.com', reason: 'Invalid credentials' },
+        ipAddress: '192.168.1.200',
+        userAgent: 'Python/3.x'
+      }
+    ];
+
+    return sampleActivities
+      .filter(activity => type === 'all' || activity.type === type)
+      .filter(activity => !dateFrom || activity.timestamp >= dateFrom)
+      .slice(0, limit);
+  }
+
+  private async getSystemEventsInternal(limit: number, dateFrom?: Date) {
+    // Placeholder implementation - would integrate with system event monitoring
+    const sampleEvents = [
+      {
+        id: '1',
+        type: 'system',
+        event: 'high_memory_usage',
+        description: 'Memory usage exceeded 80% threshold',
+        severity: 'warning',
+        timestamp: new Date(Date.now() - 15 * 60 * 1000),
+        resolved: false,
+        metadata: { memoryUsage: '85%', threshold: '80%' }
+      },
+      {
+        id: '2',
+        type: 'database',
+        event: 'slow_query_detected',
+        description: 'Slow database query detected',
+        severity: 'warning',
+        timestamp: new Date(Date.now() - 30 * 60 * 1000),
+        resolved: true,
+        metadata: { queryTime: '5.2s', query: 'SELECT * FROM orders...' }
+      }
+    ];
+
+    return sampleEvents
+      .filter(event => !dateFrom || event.timestamp >= dateFrom)
+      .slice(0, limit);
+  }
+
+  private getTimeAgoInternal(timestamp: Date): string {
+    const now = new Date();
+    const diffMs = now.getTime() - timestamp.getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffMinutes < 1) return 'just now';
+    if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    
+    return timestamp.toLocaleDateString('en-NG', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'Africa/Lagos'
+    });
+  }
+
+  private async getMostActiveHoursInternal() {
+    // Would analyze actual activity logs
+    return [
+      { hour: '09:00-10:00', activities: 45 },
+      { hour: '14:00-15:00', activities: 38 },
+      { hour: '10:00-11:00', activities: 32 },
+      { hour: '15:00-16:00', activities: 28 }
+    ];
+  }
+
+  private async getTopAdminActionsInternal() {
+    // Would analyze actual activity logs
+    return [
+      { action: 'update_order_status', count: 156 },
+      { action: 'create_user', count: 89 },
+      { action: 'inventory_update', count: 67 },
+      { action: 'view_analytics', count: 45 }
+    ];
+  }
+
+  private async getSecurityEventsCountInternal() {
+    // Would integrate with security monitoring
+    return {
+      total: 23,
+      critical: 2,
+      warning: 8,
+      info: 13,
+      lastEvent: new Date(Date.now() - 15 * 60 * 1000)
+    };
+  }
+
+  private async getSystemErrorRateInternal() {
+    // Would calculate from actual system logs
+    return 0.8; // 0.8% error rate
+  }
+
+  private isBusinessHourActivityInternal(timestamp: Date): boolean {
+    const hour = timestamp.getHours();
+    return hour >= 8 && hour <= 18; // 8 AM to 6 PM Nigerian business hours
+  }
+
 }

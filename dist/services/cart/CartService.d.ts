@@ -106,6 +106,12 @@ export declare class CartService extends BaseService {
         count: number;
     }>;
     /**
+     * Get guest cart item count
+     */
+    getGuestCartItemCount(sessionId: string): Promise<{
+        count: number;
+    }>;
+    /**
      * Merge guest cart with user cart
      */
     mergeCart(userId: string, sessionId: string, data: MergeCartRequest): Promise<{

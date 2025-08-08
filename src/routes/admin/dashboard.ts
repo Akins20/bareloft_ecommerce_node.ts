@@ -64,6 +64,25 @@ router.get("/operations", dashboardController.getOperationalMetrics);
 router.get("/stats", dashboardController.getQuickStats);
 
 /**
+ * @route   GET /api/admin/dashboard/analytics
+ * @desc    Get comprehensive dashboard analytics with trends and insights
+ * @access  Admin, Super Admin
+ * @query   period - Time period for analytics (last_7_days, last_30_days, etc.)
+ * @query   metrics - Specific metrics to include (sales, users, orders, revenue)
+ */
+router.get("/analytics", dashboardController.getDashboardAnalytics);
+
+/**
+ * @route   GET /api/admin/dashboard/activities
+ * @desc    Get recent admin activities and system events
+ * @access  Admin, Super Admin
+ * @query   limit - Number of activities to return (default: 20)
+ * @query   type - Activity type filter (all, user, order, system, security)
+ * @query   dateFrom - Filter activities from this date
+ */
+router.get("/activities", dashboardController.getRecentActivities);
+
+/**
  * @route   GET /api/admin/dashboard/alerts
  * @desc    Get real-time system alerts and notifications
  * @access  Admin, Super Admin
