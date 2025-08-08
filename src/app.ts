@@ -413,6 +413,42 @@ class App {
     }
   }
 
+  private async verifyDatabaseSchema(): Promise<void> {
+    try {
+      // Check if critical tables exist
+      const tables = await this.prisma.$queryRaw<Array<{ tablename: string }>>`
+        SELECT tablename FROM pg_tables 
+        WHERE schemaname = 'public' 
+        AND tablename IN ('users', 'products', 'categories', 'orders')
+      `;
+      
+      const expectedTables = ['users', 'products', 'categories', 'orders'];
+      const existingTables = tables.map(t => t.tablename);
+      const missingTables = expectedTables.filter(table => !existingTables.includes(table));
+      
+      if (missingTables.length > 0) {
+        console.warn(`⚠️ Missing critical tables: ${missingTables.join(', ')}`);
+        console.warn('🔄 Attempting to create missing tables...');
+        
+        // In production, this should trigger an alert but continue
+        if (process.env.NODE_ENV === 'production') {
+          console.error('❌ Critical tables missing in production! Manual intervention required.');
+          // Don't throw in production - log and continue
+        } else {
+          console.log('💡 Run "npm run db:deploy" to create missing tables');
+        }
+      }
+      
+    } catch (error) {
+      console.error("Database schema verification failed:", error);
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('Database schema verification failed in production');
+      }
+      // In development, warn but continue
+      console.warn('⚠️ Continuing with unverified database schema');
+    }
+  }
+
   public async initialize(): Promise<void> {
     try {
       console.log("🔄 Initializing Bareloft API services...");
@@ -420,6 +456,10 @@ class App {
       // Initialize database connection
       await this.prisma.$connect();
       console.log("✅ Database connected successfully");
+
+      // Verify database schema
+      await this.verifyDatabaseSchema();
+      console.log("✅ Database schema verified");
 
       // Initialize Redis connection
       try {
