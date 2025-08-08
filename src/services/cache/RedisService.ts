@@ -3,8 +3,12 @@ import Redis from "ioredis";
 // import { redisConfig } from "../../config";
 
 export class RedisService extends BaseService {
-  private client: Redis;
+  private client: Redis | null = null;
   private isConnected: boolean = false;
+  private circuitBreakerOpen: boolean = false;
+  private circuitBreakerResetTime: number = 0;
+  private readonly circuitBreakerTimeoutMs: number = 60000; // 60 seconds
+  private connectionAttempts: number = 0;
 
   constructor() {
     super();
@@ -16,39 +20,100 @@ export class RedisService extends BaseService {
    */
   private initializeRedis(): void {
     try {
-      this.client = new Redis({
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
-        password: process.env.REDIS_PASSWORD,
-        db: parseInt(process.env.REDIS_DATABASE || '0'),
-        maxRetriesPerRequest: 3,
-        lazyConnect: true,
-        connectionName: "bareloft-api",
-        family: 4, // IPv4
-      });
+      // Use REDIS_URL if provided, otherwise use individual config
+      const redisUrl = process.env.REDIS_URL;
+      
+      if (redisUrl) {
+        this.client = new Redis(redisUrl, {
+          maxRetriesPerRequest: 3,
+          lazyConnect: false, // Connect immediately to avoid timing issues
+          connectionName: "bareloft-api",
+          family: 4, // IPv4
+          enableOfflineQueue: true, // Allow queuing commands during connection
+          connectTimeout: 20000, // 20 seconds for Railway
+          commandTimeout: 10000, // 10 seconds for commands
+          enableReadyCheck: true,
+          showFriendlyErrorStack: true,
+          keepAlive: 30000, // Keep connection alive
+          autoResubscribe: true, // Auto resubscribe on reconnect
+          autoResendUnfulfilledCommands: true, // Resend commands on reconnect
+          // Railway Redis specific settings
+          tls: redisUrl.includes('rediss://') ? {
+            rejectUnauthorized: false, // Railway Redis requires this
+            servername: 'shinkansen.proxy.rlwy.net', // Explicit servername for TLS
+          } : undefined,
+        });
+      } else {
+        this.client = new Redis({
+          host: process.env.REDIS_HOST || 'localhost',
+          port: parseInt(process.env.REDIS_PORT || '6379'),
+          password: process.env.REDIS_PASSWORD,
+          db: parseInt(process.env.REDIS_DATABASE || '0'),
+          maxRetriesPerRequest: 3, // Standard retry count
+          lazyConnect: true,
+          connectionName: "bareloft-api",
+          family: 4, // IPv4
+          enableOfflineQueue: false, // Don't queue commands when offline
+          connectTimeout: 10000, // 10 seconds timeout
+          commandTimeout: 5000, // 5 seconds for commands
+          autoResubscribe: false, // Don't auto resubscribe
+          autoResendUnfulfilledCommands: false, // Don't resend commands
+        });
+      }
 
-      // Connection event handlers
+      // Connection event handlers with reduced logging
       this.client.on("connect", () => {
-        console.log("Redis connected successfully");
+        this.logger.info("Redis connected successfully");
         this.isConnected = true;
+        this.connectionAttempts = 0; // Reset attempts on successful connection
       });
 
       this.client.on("ready", () => {
-        console.log("Redis ready for operations");
+        this.logger.info("Redis ready for operations");
+        this.connectionAttempts = 0; // Reset attempts when ready
       });
 
       this.client.on("error", (error) => {
-        console.error("Redis connection error:", error);
+        this.connectionAttempts++;
+        
+        // Only log error once, not repeatedly
+        if (this.isConnected) {
+          this.logger.warn("Redis connection lost, switching to fallback mode", {
+            error: error.message,
+            code: (error as any).code,
+            attempts: this.connectionAttempts,
+          });
+          // Only open circuit breaker after multiple failed attempts
+          if (this.connectionAttempts > 3) {
+            this.openCircuitBreaker();
+          }
+        } else {
+          this.logger.debug("Redis error while not connected", {
+            error: error.message,
+            code: (error as any).code,
+            attempts: this.connectionAttempts,
+          });
+        }
         this.isConnected = false;
       });
 
       this.client.on("close", () => {
-        console.log("Redis connection closed");
+        if (this.isConnected) {
+          this.logger.warn("Redis connection closed, cache operations disabled");
+        }
         this.isConnected = false;
       });
 
-      this.client.on("reconnecting", () => {
-        console.log("Redis reconnecting...");
+      this.client.on("end", () => {
+        this.logger.debug("Redis connection ended");
+        this.isConnected = false;
+      });
+
+      this.client.on("reconnecting", (time) => {
+        // Only log reconnection attempts occasionally, not every attempt
+        if (time === 1) {
+          this.logger.info("Redis reconnecting attempt...");
+        }
       });
     } catch (error) {
       this.handleError("Error initializing Redis", error);
@@ -61,12 +126,33 @@ export class RedisService extends BaseService {
    */
   async connect(): Promise<void> {
     try {
+      if (!this.client) {
+        this.logger.warn('Redis client not initialized, skipping connection');
+        return;
+      }
+      
+      // If lazyConnect is false, client connects automatically
+      // Just wait for ready state
       if (!this.isConnected) {
-        await this.client.connect();
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Redis connection timeout'));
+          }, 25000); // 25 second timeout
+          
+          this.client!.once('ready', () => {
+            clearTimeout(timeout);
+            resolve();
+          });
+          
+          this.client!.once('error', (error) => {
+            clearTimeout(timeout);
+            reject(error);
+          });
+        });
       }
     } catch (error) {
-      this.handleError("Error connecting to Redis", error);
-      throw error;
+      this.logger.error("Error connecting to Redis", error);
+      // Don't throw - app should continue without Redis
     }
   }
 
@@ -75,12 +161,12 @@ export class RedisService extends BaseService {
    */
   async disconnect(): Promise<void> {
     try {
-      if (this.isConnected) {
+      if (this.client && this.isConnected) {
         await this.client.disconnect();
         this.isConnected = false;
       }
     } catch (error) {
-      this.handleError("Error disconnecting from Redis", error);
+      this.logger.error("Error disconnecting from Redis", error);
     }
   }
 
@@ -88,7 +174,41 @@ export class RedisService extends BaseService {
    * Check if Redis is connected
    */
   isRedisConnected(): boolean {
-    return this.isConnected && this.client.status === "ready";
+    return this.client && this.isConnected && this.client.status === "ready";
+  }
+
+  /**
+   * Check if operation should be attempted
+   */
+  private shouldAttemptOperation(): boolean {
+    // If no client (Redis disabled), don't attempt
+    if (!this.client) {
+      return false;
+    }
+
+    // Check circuit breaker
+    if (this.circuitBreakerOpen) {
+      if (Date.now() > this.circuitBreakerResetTime) {
+        this.circuitBreakerOpen = false;
+        this.logger.info('Redis circuit breaker reset, attempting operations again');
+      } else {
+        return false; // Circuit breaker is open, don't attempt
+      }
+    }
+
+    // Only attempt if client is truly ready
+    return this.client.status === 'ready' && this.isConnected;
+  }
+
+  /**
+   * Open circuit breaker to stop Redis operations temporarily
+   */
+  private openCircuitBreaker(): void {
+    if (!this.circuitBreakerOpen) {
+      this.circuitBreakerOpen = true;
+      this.circuitBreakerResetTime = Date.now() + this.circuitBreakerTimeoutMs;
+      this.logger.warn(`Redis circuit breaker opened, operations disabled for ${this.circuitBreakerTimeoutMs / 1000} seconds`);
+    }
   }
 
   /**
@@ -96,9 +216,12 @@ export class RedisService extends BaseService {
    */
   async ping(): Promise<string> {
     try {
+      if (!this.client) {
+        throw new Error("Redis client not initialized");
+      }
       return await this.client.ping();
     } catch (error) {
-      this.handleError("Error pinging Redis", error);
+      this.logger.error("Error pinging Redis", error);
       throw error;
     }
   }
@@ -122,10 +245,24 @@ export class RedisService extends BaseService {
    */
   async setex(key: string, seconds: number, value: string): Promise<string> {
     try {
-      return await this.client.setex(key, seconds, value);
+      if (!this.shouldAttemptOperation()) {
+        return "OK"; // Return success to prevent breaking app flow
+      }
+
+      // Add a timeout wrapper to prevent hanging
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Command timed out')), 5000); // 5 second timeout
+      });
+
+      const redisPromise = this.client!.setex(key, seconds, value);
+      
+      return await Promise.race([redisPromise, timeoutPromise]);
     } catch (error) {
-      this.handleError("Error setting Redis key with expiration", error);
-      throw error;
+      // Open circuit breaker on repeated failures
+      this.openCircuitBreaker();
+      // Log error but don't throw to prevent breaking app flow
+      this.logger.error("Error setting Redis key with expiration", error);
+      return "OK"; // Return success to prevent breaking app flow
     }
   }
 
@@ -146,9 +283,20 @@ export class RedisService extends BaseService {
    */
   async get(key: string): Promise<string | null> {
     try {
-      return await this.client.get(key);
+      if (!this.shouldAttemptOperation()) {
+        return null;
+      }
+
+      // Add timeout protection
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Command timed out')), 3000); // 3 second timeout
+      });
+
+      const redisPromise = this.client!.get(key);
+      
+      return await Promise.race([redisPromise, timeoutPromise]);
     } catch (error) {
-      this.handleError("Error getting Redis key", error);
+      this.logger.error("Error getting Redis key", error);
       return null;
     }
   }

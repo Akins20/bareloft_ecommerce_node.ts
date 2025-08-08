@@ -127,7 +127,8 @@ export class MetricsService extends BaseService {
   constructor(cacheService: CacheService) {
     super();
     this.cache = cacheService;
-    this.initializeDefaultAlerts();
+    // Initialize default alerts asynchronously to not block startup
+    setTimeout(() => this.initializeDefaultAlerts(), 5000); // Delay 5 seconds
   }
 
   /**
@@ -458,8 +459,12 @@ export class MetricsService extends BaseService {
 
       this.alerts.set(alertRule.id, alertRule);
 
-      // Persist to cache
-      await this.cache.set(`alert:rule:${alertRule.id}`, alertRule, { ttl: 0 }); // No expiry
+      // Persist to cache (non-blocking, cache failures shouldn't break alert creation)
+      try {
+        await this.cache.set(`alert:rule:${alertRule.id}`, alertRule, { ttl: 0 }); // No expiry
+      } catch (cacheError) {
+        this.logger.warn("Failed to cache alert rule, continuing without cache", cacheError);
+      }
 
       return alertRule;
     } catch (error) {

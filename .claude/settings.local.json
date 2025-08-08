@@ -42,7 +42,8 @@
       "Bash(npm test:*)",
       "Bash(timeout:*)",
       "Bash(sed:*)",
-      "Bash(tsc --noEmit)"
+      "Bash(tsc --noEmit)",
+      "Bash(redis-cli:*)"
     ],
     "deny": []
   }

@@ -9,6 +9,7 @@ import rateLimit from "express-rate-limit";
 import { config } from "@/config/environment";
 import { PrismaClient } from "@prisma/client";
 import { getServiceContainer } from "@/config/serviceContainer";
+import { RedisService } from "@/services/cache/RedisService";
 
 // Type imports
 import {
@@ -48,11 +49,13 @@ class App {
   public app: Application;
   private readonly port: number;
   private prisma: PrismaClient;
+  private redis: RedisService;
 
   constructor() {
     this.app = express();
     this.port = config.port;
     this.prisma = new PrismaClient();
+    this.redis = new RedisService();
 
     this.initializeMiddleware();
     this.initializeRoutes();
@@ -418,6 +421,14 @@ class App {
       await this.prisma.$connect();
       console.log("✅ Database connected successfully");
 
+      // Initialize Redis connection
+      try {
+        await this.redis.connect();
+        console.log("✅ Redis connected successfully");
+      } catch (error) {
+        console.log("⚠️ Redis connection failed, continuing without cache");
+      }
+
       // Initialize service container with proper dependencies
       const serviceContainer = getServiceContainer();
       await serviceContainer.initialize();
@@ -496,6 +507,10 @@ class App {
       // Close database connection
       await this.prisma.$disconnect();
       console.log("✅ Database connection closed");
+
+      // Close Redis connection
+      await this.redis.disconnect();
+      console.log("✅ Redis connection closed");
 
       console.log("✅ Graceful shutdown completed");
       process.exit(0);
