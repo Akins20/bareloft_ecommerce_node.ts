@@ -353,7 +353,7 @@ export class SupportMessageService extends BaseService {
     pagination: PaginationOptions = { page: 1, limit: 20 }
   ): Promise<ApiResponse<PaginatedResult<MessageWithDetails>>> {
     try {
-      const messages = await this.messageRepository.findMany(filters, pagination);
+      const messages = await this.messageRepository.findManyWithFilters(filters, pagination);
       return this.createSuccessResponse(messages, 'Messages retrieved successfully');
     } catch (error) {
       throw new AppError(

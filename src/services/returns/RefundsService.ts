@@ -337,7 +337,7 @@ export class RefundsService extends BaseService {
         sortOrder: query.sortOrder || 'desc' as 'desc',
       };
 
-      const result = await this.refundRepository.findMany(filters, options);
+      const result = await this.refundRepository.findManyWithFilters(filters, options);
 
       // Create compatible pagination format
       const pagination = {

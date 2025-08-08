@@ -1,6 +1,6 @@
 // src/models/Shipment.ts
 import { PrismaClient } from '@prisma/client';
-import { db } from '../database/connection';
+import db from '../database/connection';
 
 const prisma = db as PrismaClient;
 

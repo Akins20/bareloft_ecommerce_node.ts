@@ -71,11 +71,11 @@ export interface TicketWithDetails extends SupportTicket {
   } | null;
 }
 
-export class SupportTicketRepository extends BaseRepository<SupportTicket> {
+export class SupportTicketRepository extends BaseRepository<SupportTicket, any, any> {
   protected db: PrismaClient;
 
   constructor(prisma?: PrismaClient) {
-    super(prisma);
+    super(prisma || new PrismaClient(), 'supportTicket');
     this.db = this.prisma;
   }
   async create(data: {
@@ -226,7 +226,7 @@ export class SupportTicketRepository extends BaseRepository<SupportTicket> {
     }) as Promise<TicketWithDetails | null>;
   }
 
-  async findMany(
+  async findManyWithFilters(
     filters: TicketFilters = {},
     pagination: PaginationOptions = { page: 1, limit: 20 }
   ): Promise<PaginatedResult<TicketWithDetails>> {

@@ -1,6 +1,5 @@
 import { BaseRepository } from './BaseRepository';
 import { PrismaClient } from '@prisma/client';
-import { PrismaClient } from '@prisma/client';
 import { 
   Refund,
   RefundListQuery,
@@ -394,7 +393,7 @@ export class RefundRepository extends BaseRepository<Refund, CreateRefundData, U
   /**
    * Get refunds with filtering and pagination
    */
-  async findMany(
+  async findManyWithFilters(
     filters: {
       status?: RefundStatus[];
       refundMethod?: RefundMethod[];
@@ -506,7 +505,15 @@ export class RefundRepository extends BaseRepository<Refund, CreateRefundData, U
         take: limit,
       });
 
-      const pagination = this.createPagination(page, limit, total);
+      const totalPages = Math.ceil(total / limit);
+      const pagination: PaginationMeta = {
+        currentPage: page,
+        totalPages,
+        totalItems: total,
+        itemsPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      };
 
       return {
         data: refunds.map(this.transformRefund),

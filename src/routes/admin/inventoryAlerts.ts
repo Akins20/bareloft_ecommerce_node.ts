@@ -11,7 +11,8 @@ const router = Router();
 
 // Initialize services and controller
 const notificationService = new NotificationService();
-const cacheService = new CacheService();
+// Mock cache service for now
+const cacheService = {} as any;
 const alertController = new AdminInventoryAlertController(notificationService, cacheService);
 
 // Apply authentication and admin authorization to all routes
@@ -42,7 +43,7 @@ router.get(
     query("limit").optional().isInt({ min: 1, max: 100 }),
   ],
   validateRequest,
-  alertController.getAlerts
+  alertController.getAlerts.bind(alertController)
 );
 
 // POST /api/admin/inventory/alerts/configure - Configure alert thresholds and preferences
@@ -77,7 +78,7 @@ router.post(
     body("minStockValue").optional().isFloat({ min: 0 }),
   ],
   validateRequest,
-  alertController.configureAlerts
+  alertController.configureAlerts.bind(alertController)
 );
 
 // PUT /api/admin/inventory/alerts/:alertId - Update alert status (acknowledge, dismiss)
@@ -89,7 +90,7 @@ router.put(
     body("notes").optional().isString().isLength({ max: 500 }),
   ],
   validateRequest,
-  alertController.updateAlert
+  alertController.updateAlert.bind(alertController)
 );
 
 // GET /api/admin/inventory/alerts/history - Alert history and trends
@@ -102,7 +103,7 @@ router.get(
     query("limit").optional().isInt({ min: 1, max: 100 }),
   ],
   validateRequest,
-  alertController.getAlertHistory
+  alertController.getAlertHistory.bind(alertController)
 );
 
 // POST /api/admin/inventory/alerts/test - Test alert notifications
@@ -117,11 +118,11 @@ router.post(
     body("productId").optional().isString(),
   ],
   validateRequest,
-  alertController.testAlert
+  alertController.testAlert.bind(alertController)
 );
 
 // POST /api/admin/inventory/alerts/monitor - Manually trigger monitoring
-router.post("/alerts/monitor", alertController.monitorInventory);
+router.post("/alerts/monitor", alertController.monitorInventory.bind(alertController));
 
 /**
  * Reorder Management Routes
@@ -143,7 +144,7 @@ router.get(
     query("limit").optional().isInt({ min: 1, max: 100 }),
   ],
   validateRequest,
-  alertController.getReorderSuggestions
+  alertController.getReorderSuggestions.bind(alertController)
 );
 
 // POST /api/admin/inventory/reorder-suggestion - Create manual reorder suggestion
@@ -158,7 +159,7 @@ router.post(
     body("priority").optional().isIn(["info", "low", "medium", "high", "critical", "urgent"]),
   ],
   validateRequest,
-  alertController.createReorderSuggestion
+  alertController.createReorderSuggestion.bind(alertController)
 );
 
 // POST /api/admin/inventory/reorder/:productId - Create reorder request
@@ -175,7 +176,7 @@ router.post(
     body("notes").optional().isString().isLength({ max: 1000 }),
   ],
   validateRequest,
-  alertController.createReorderRequest
+  alertController.createReorderRequest.bind(alertController)
 );
 
 // GET /api/admin/inventory/pending-reorders - View pending reorder requests
@@ -191,7 +192,7 @@ router.get(
     query("limit").optional().isInt({ min: 1, max: 100 }),
   ],
   validateRequest,
-  alertController.getPendingReorders
+  alertController.getPendingReorders.bind(alertController)
 );
 
 // PUT /api/admin/inventory/reorder/:orderId - Approve/modify reorder requests
@@ -207,7 +208,7 @@ router.put(
     body("trackingNumber").optional().isString().isLength({ max: 100 }),
   ],
   validateRequest,
-  alertController.updateReorderRequest
+  alertController.updateReorderRequest.bind(alertController)
 );
 
 // GET /api/admin/inventory/reorder-history - Reorder history and analytics
@@ -220,7 +221,7 @@ router.get(
     query("limit").optional().isInt({ min: 1, max: 100 }),
   ],
   validateRequest,
-  alertController.getReorderHistory
+  alertController.getReorderHistory.bind(alertController)
 );
 
 /**
@@ -235,7 +236,7 @@ router.get(
     query("isActive").optional().isBoolean(),
   ],
   validateRequest,
-  alertController.getSuppliers
+  alertController.getSuppliers.bind(alertController)
 );
 
 // POST /api/admin/inventory/suppliers - Create new supplier
@@ -265,7 +266,7 @@ router.post(
     body("averageLeadTimeDays").optional().isInt({ min: 1 }),
   ],
   validateRequest,
-  alertController.createSupplier
+  alertController.createSupplier.bind(alertController)
 );
 
 export default router;

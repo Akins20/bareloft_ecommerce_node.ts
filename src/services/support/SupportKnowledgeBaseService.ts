@@ -6,7 +6,7 @@ import {
   PrismaClient
 } from '@prisma/client';
 import { BaseService } from '../BaseService';
-import { PaginationOptions, PaginatedResult, ApiResponse, AppError, HTTP_STATUS } from '../../types';
+import { ApiResponse, AppError, HTTP_STATUS } from '../../types';
 import { IDGenerators } from '../../utils/helpers/generators';
 
 // Repository interfaces
@@ -35,6 +35,21 @@ interface KnowledgeBaseWithDetails {
   authorId: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+interface PaginationOptions {
+  page: number;
+  limit: number;
+}
+
+interface PaginatedResult<T> {
+  items: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
 }
 
 interface SupportKnowledgeBaseRepository {
@@ -301,7 +316,7 @@ export class SupportKnowledgeBaseService extends BaseService {
           counter++;
         }
 
-        updateData.slug = slug;
+        (updateData as any).slug = slug;
       }
 
       // Update search keywords if content changed
@@ -595,7 +610,14 @@ export class SupportKnowledgeBaseService extends BaseService {
       ]);
 
       const stats: KnowledgeBaseStats = {
-        ...basicStats,
+        total: (basicStats as any).total || 0,
+        published: (basicStats as any).published || 0,
+        draft: (basicStats as any).draft || 0,
+        archived: (basicStats as any).archived || 0,
+        totalViews: (basicStats as any).totalViews || 0,
+        totalVotes: (basicStats as any).totalVotes || 0,
+        byCategory: (basicStats as any).byCategory || {},
+        byLanguage: (basicStats as any).byLanguage || {},
         topArticles,
         recentUpdates,
       };
@@ -778,7 +800,7 @@ export class SupportKnowledgeBaseService extends BaseService {
       .filter(word => word.length > 2)
       .filter(word => !['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all'].includes(word));
 
-    return [...new Set(words)].slice(0, 20).join(' ');
+    return Array.from(new Set(words)).slice(0, 20).join(' ');
   }
 
   private async getTopPerformingArticles(limit = 10): Promise<Array<{

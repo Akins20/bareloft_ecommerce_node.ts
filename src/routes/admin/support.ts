@@ -1,73 +1,49 @@
 // src/routes/admin/support.ts
 import { Router } from 'express';
-import { AdminSupportController } from '@/controllers/admin/AdminSupportController';
-import { authenticate } from '@/middleware/auth/authenticate';
-import { authorize } from '@/middleware/auth/authorize';
+import { AdminSupportController } from '../../controllers/admin/AdminSupportController';
+import { authenticate } from '../../middleware/auth/authenticate';
+import { authorize } from '../../middleware/auth/authorize';
 import { 
   SupportTicketService,
   SupportAgentService,
   SupportMessageService,
   SupportAnalyticsService,
   SupportKnowledgeBaseService
-} from '@/services/support';
+} from '../../services/support';
 import { 
   SupportTicketRepository,
   SupportAgentRepository,
   SupportMessageRepository,
   SupportKnowledgeBaseRepository
-} from '@/repositories';
-import { NotificationService, EmailService, SMSService } from '@/services/notifications';
-import { container } from '@/config/serviceContainer';
+} from '../../repositories';
+import { NotificationService } from '../../services/notifications/NotificationService';
+import { EmailService } from '../../services/notifications/EmailService';
+import { SMSService } from '../../services/auth/SMSService';
 
 const router = Router();
 
-// Initialize services
+// Initialize services with proper constructors
 const ticketRepository = new SupportTicketRepository();
 const agentRepository = new SupportAgentRepository();
 const messageRepository = new SupportMessageRepository();
 const knowledgeBaseRepository = new SupportKnowledgeBaseRepository();
 
-const notificationService = container.get<NotificationService>('NotificationService');
-const emailService = container.get<EmailService>('EmailService');
-const smsService = container.get<SMSService>('SMSService');
+// Initialize services directly with no constructor arguments for now
+const notificationService = new NotificationService();
+const emailService = new EmailService();
+const smsService = new SMSService();
 
-const ticketService = new SupportTicketService(
-  ticketRepository,
-  agentRepository,
-  messageRepository,
-  notificationService
-);
-
-const agentService = new SupportAgentService(
-  agentRepository,
-  notificationService
-);
-
-const messageService = new SupportMessageService(
-  messageRepository,
-  ticketRepository,
-  notificationService,
-  emailService,
-  smsService
-);
-
+const ticketService = new SupportTicketService();
+const agentService = new SupportAgentService();
+const messageService = new SupportMessageService();
 const analyticsService = new SupportAnalyticsService(
   ticketRepository,
   agentRepository,
   messageRepository
 );
+const knowledgeBaseService = new SupportKnowledgeBaseService();
 
-const knowledgeBaseService = new SupportKnowledgeBaseService(
-  knowledgeBaseRepository
-);
-
-const supportController = new AdminSupportController(
-  ticketService,
-  agentService,
-  messageService,
-  analyticsService,
-  knowledgeBaseService
-);
+const supportController = new AdminSupportController();
 
 // Apply authentication and authorization middleware
 router.use(authenticate);

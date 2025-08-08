@@ -5,10 +5,11 @@
  */
 
 import { BaseService } from '../BaseService';
-import { ReturnRequestRepository } from '../../repositories/returns/ReturnRequestRepository';
+import { ReturnRepository } from '../../repositories/ReturnRepository';
 import { OrderRepository } from '../../repositories/OrderRepository';
 import { AddressRepository } from '../../repositories/AddressRepository';
-import { NotificationService } from '../notification/NotificationService';
+import { NotificationService } from '../notifications/NotificationService';
+import { PrismaClient } from '@prisma/client';
 import { 
   ReturnShippingMethod,
   ReturnStatus
@@ -126,15 +127,15 @@ interface ReturnTracking {
 }
 
 export class ReturnShippingService extends BaseService {
-  private returnRequestRepository: ReturnRequestRepository;
+  private returnRequestRepository: ReturnRepository;
   private orderRepository: OrderRepository;
   private addressRepository: AddressRepository;
   private notificationService: NotificationService;
 
   constructor() {
     super();
-    this.returnRequestRepository = new ReturnRequestRepository();
-    this.orderRepository = new OrderRepository();
+    this.returnRequestRepository = new ReturnRepository();
+    this.orderRepository = new OrderRepository(new PrismaClient());
     this.addressRepository = new AddressRepository();
     this.notificationService = new NotificationService();
   }
@@ -500,7 +501,7 @@ export class ReturnShippingService extends BaseService {
   ): Promise<ShippingCostEstimate> {
     try {
       const order = await this.orderRepository.findById(orderId);
-      if (!order || order.customerId !== customerId) {
+      if (!order || order.userId !== customerId) {
         throw new Error('Order not found or access denied');
       }
 

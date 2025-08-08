@@ -1,22 +1,35 @@
-import express from 'express';
+import { Router } from 'express';
 import { AdminReturnsController } from '../../controllers/admin/AdminReturnsController';
 import { AdminRefundsController } from '../../controllers/admin/AdminRefundsController';
-import { authMiddleware } from '../../middleware/auth';
-import { validateAdminRole } from '../../middleware/roleValidation';
-import { rateLimiter } from '../../middleware/rateLimiter';
-import { validateRequest } from '../../middleware/validation';
+import { authenticate } from '../../middleware/auth/authenticate';
+import { authorize } from '../../middleware/auth/authorize';
+import rateLimit from 'express-rate-limit';
+import { validationResult } from 'express-validator';
 import { body, param, query } from 'express-validator';
 
-const router = express.Router();
+// Simple validation result handler middleware
+const handleValidationErrors = (req: any, res: any, next: any) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: errors.array()
+    });
+  }
+  next();
+};
+
+const router = Router();
 const returnsController = new AdminReturnsController();
 const refundsController = new AdminRefundsController();
 
 // Apply authentication and admin role validation to all routes
-router.use(authMiddleware);
-router.use(validateAdminRole);
+router.use(authenticate);
+router.use(authorize(['ADMIN', 'SUPER_ADMIN']));
 
 // Apply rate limiting
-router.use(rateLimiter({
+router.use(rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // Limit each IP to 100 requests per windowMs
 }));
@@ -44,7 +57,7 @@ router.get(
     query('state').optional().isString(),
     query('priority').optional().isIn(['high', 'medium', 'low']),
   ],
-  validateRequest,
+  handleValidationErrors,
   returnsController.getReturnRequests.bind(returnsController)
 );
 
@@ -58,7 +71,7 @@ router.get(
   [
     query('period').optional().isInt({ min: 1, max: 365 }),
   ],
-  validateRequest,
+  handleValidationErrors,
   returnsController.getReturnDashboard.bind(returnsController)
 );
 
@@ -74,7 +87,7 @@ router.get(
     query('endDate').optional().isISO8601(),
     query('state').optional().isString(),
   ],
-  validateRequest,
+  handleValidationErrors,
   returnsController.getReturnAnalytics.bind(returnsController)
 );
 
@@ -92,7 +105,7 @@ router.get(
     query('status').optional().isString(),
     query('reason').optional().isString(),
   ],
-  validateRequest,
+  handleValidationErrors,
   returnsController.exportReturns.bind(returnsController)
 );
 
@@ -106,7 +119,7 @@ router.get(
   [
     param('returnId').isMongoId().withMessage('Invalid return ID'),
   ],
-  validateRequest,
+  handleValidationErrors,
   returnsController.getReturnRequest.bind(returnsController)
 );
 
@@ -126,7 +139,7 @@ router.put(
     body('estimatedPickupDate').optional().isISO8601(),
     body('returnTrackingNumber').optional().isString().trim(),
   ],
-  validateRequest,
+  handleValidationErrors,
   returnsController.updateReturnStatus.bind(returnsController)
 );
 
@@ -147,7 +160,7 @@ router.post(
     body('refundPreApproval.amount').optional().isFloat({ min: 0 }),
     body('refundPreApproval.method').optional().isIn(['ORIGINAL_PAYMENT', 'BANK_TRANSFER', 'WALLET_CREDIT', 'STORE_CREDIT']),
   ],
-  validateRequest,
+  handleValidationErrors,
   returnsController.approveReturn.bind(returnsController)
 );
 
@@ -168,7 +181,7 @@ router.post(
     body('detailedExplanation').optional().isString().trim(),
     body('alternativeOptions').optional().isArray(),
   ],
-  validateRequest,
+  handleValidationErrors,
   returnsController.rejectReturn.bind(returnsController)
 );
 
@@ -194,7 +207,7 @@ router.post(
     body('inspectorName').optional().isString().trim(),
     body('recommendRefundAmount').optional().isFloat({ min: 0 }),
   ],
-  validateRequest,
+  handleValidationErrors,
   returnsController.inspectReturn.bind(returnsController)
 );
 
@@ -209,7 +222,7 @@ router.post(
     param('returnId').isMongoId().withMessage('Invalid return ID'),
     body('completionNotes').optional().isString().trim(),
   ],
-  validateRequest,
+  handleValidationErrors,
   returnsController.completeReturn.bind(returnsController)
 );
 
@@ -228,7 +241,7 @@ router.post(
     body('data.notes').optional().isString().trim(),
     body('data.reason').optional().isString().trim(),
   ],
-  validateRequest,
+  handleValidationErrors,
   returnsController.bulkUpdateReturns.bind(returnsController)
 );
 
@@ -255,7 +268,7 @@ router.get(
     query('minAmount').optional().isFloat({ min: 0 }),
     query('maxAmount').optional().isFloat({ min: 0 }),
   ],
-  validateRequest,
+  handleValidationErrors,
   refundsController.getRefunds.bind(refundsController)
 );
 
@@ -269,7 +282,7 @@ router.get(
   [
     query('period').optional().isInt({ min: 1, max: 365 }),
   ],
-  validateRequest,
+  handleValidationErrors,
   refundsController.getRefundDashboard.bind(refundsController)
 );
 
@@ -285,7 +298,7 @@ router.get(
     query('endDate').optional().isISO8601(),
     query('customerId').optional().isMongoId(),
   ],
-  validateRequest,
+  handleValidationErrors,
   refundsController.getRefundAnalytics.bind(refundsController)
 );
 
@@ -299,7 +312,7 @@ router.get(
   [
     query('limit').optional().isInt({ min: 1, max: 100 }),
   ],
-  validateRequest,
+  handleValidationErrors,
   refundsController.getPendingRefunds.bind(refundsController)
 );
 
@@ -313,7 +326,7 @@ router.get(
   [
     query('period').optional().isInt({ min: 1, max: 365 }),
   ],
-  validateRequest,
+  handleValidationErrors,
   refundsController.getRefundStats.bind(refundsController)
 );
 
@@ -331,7 +344,7 @@ router.get(
     query('status').optional().isString(),
     query('refundMethod').optional().isString(),
   ],
-  validateRequest,
+  handleValidationErrors,
   refundsController.exportRefunds.bind(refundsController)
 );
 
@@ -345,7 +358,7 @@ router.get(
   [
     param('refundId').isMongoId().withMessage('Invalid refund ID'),
   ],
-  validateRequest,
+  handleValidationErrors,
   refundsController.getRefund.bind(refundsController)
 );
 
@@ -375,7 +388,7 @@ router.post(
     body('adminNotes').optional().isString().trim(),
     body('notifyCustomer').optional().isBoolean(),
   ],
-  validateRequest,
+  handleValidationErrors,
   refundsController.processRefund.bind(refundsController)
 );
 
@@ -399,7 +412,7 @@ router.post(
     body('notifyCustomers').optional().isBoolean(),
     body('adminNotes').optional().isString().trim(),
   ],
-  validateRequest,
+  handleValidationErrors,
   refundsController.processBulkRefunds.bind(refundsController)
 );
 
@@ -414,7 +427,7 @@ router.post(
     param('refundId').isMongoId().withMessage('Invalid refund ID'),
     body('approvalNotes').optional().isString().trim(),
   ],
-  validateRequest,
+  handleValidationErrors,
   refundsController.approveRefund.bind(refundsController)
 );
 
@@ -431,7 +444,7 @@ router.post(
       .withMessage('Account number must be 10 digits'),
     body('bankCode').notEmpty().withMessage('Bank code is required'),
   ],
-  validateRequest,
+  handleValidationErrors,
   refundsController.validateBankAccount.bind(refundsController)
 );
 

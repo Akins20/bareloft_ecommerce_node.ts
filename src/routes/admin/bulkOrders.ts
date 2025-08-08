@@ -3,7 +3,7 @@ import { AdminBulkOrderController } from "../../controllers/admin/AdminBulkOrder
 import { authenticate } from "../../middleware/auth/authenticate";
 import { authorize } from "../../middleware/auth/authorize";
 import { validateSchema } from "../../middleware/validation/validateSchema";
-import { rateLimiter } from "../../middleware/security/rateLimiter";
+import rateLimit from "express-rate-limit";
 import auditLogging from "../../middleware/logging/auditLogging";
 
 // Validation schemas for bulk operations
@@ -255,7 +255,7 @@ router.use(authorize(['ADMIN', 'SUPER_ADMIN']));
 router.use(auditLogging.adminAuditLogger);
 
 // Rate limiting for bulk operations (more restrictive)
-const bulkOperationLimiter = rateLimiter({
+const bulkOperationLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // 10 bulk operations per 15 minutes
   message: 'Too many bulk operations, please try again later',
@@ -263,7 +263,7 @@ const bulkOperationLimiter = rateLimiter({
   legacyHeaders: false,
 });
 
-const heavyOperationLimiter = rateLimiter({
+const heavyOperationLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 5, // 5 heavy operations per hour
   message: 'Too many heavy bulk operations, please try again later',
@@ -325,7 +325,7 @@ const heavyOperationLimiter = rateLimiter({
 router.post(
   '/status-update',
   bulkOperationLimiter,
-  validateSchema(bulkStatusUpdateSchema),
+  validateSchema(() => bulkStatusUpdateSchema as any),
   controller.bulkStatusUpdate
 );
 
@@ -372,7 +372,7 @@ router.post(
 router.post(
   '/assign-staff',
   bulkOperationLimiter,
-  validateSchema(bulkAssignStaffSchema),
+  validateSchema(() => bulkAssignStaffSchema as any),
   controller.bulkAssignStaff
 );
 
@@ -419,7 +419,7 @@ router.post(
 router.post(
   '/cancel',
   bulkOperationLimiter,
-  validateSchema(bulkCancelSchema),
+  validateSchema(() => bulkCancelSchema as any),
   controller.bulkCancelOrders
 );
 
@@ -471,7 +471,7 @@ router.post(
   '/refund',
   authorize(['SUPER_ADMIN']), // Super admin only for refunds
   heavyOperationLimiter,
-  validateSchema(bulkRefundSchema),
+  validateSchema(() => bulkRefundSchema as any),
   controller.bulkProcessRefunds
 );
 
@@ -488,7 +488,7 @@ router.post(
 router.post(
   '/priority',
   bulkOperationLimiter,
-  validateSchema(bulkPrioritySchema),
+  validateSchema(() => bulkPrioritySchema as any),
   controller.bulkSetPriority
 );
 
@@ -504,7 +504,7 @@ router.post(
  */
 router.post(
   '/export',
-  validateSchema(bulkExportSchema),
+  validateSchema(() => bulkExportSchema as any),
   controller.bulkExportData
 );
 
@@ -533,7 +533,7 @@ router.post('/print-labels', bulkOperationLimiter, controller.bulkGenerateLabels
 router.post(
   '/send-notifications',
   bulkOperationLimiter,
-  validateSchema(bulkNotificationSchema),
+  validateSchema(() => bulkNotificationSchema as any),
   controller.bulkSendNotifications
 );
 
@@ -550,7 +550,7 @@ router.post(
 router.post(
   '/import',
   bulkOperationLimiter,
-  validateSchema(bulkImportSchema),
+  validateSchema(() => bulkImportSchema as any),
   controller.bulkImportData
 );
 
@@ -599,7 +599,7 @@ router.get('/template', controller.getImportTemplate);
  */
 router.post(
   '/validation',
-  validateSchema(bulkValidationSchema),
+  validateSchema(() => bulkValidationSchema as any),
   controller.validateBulkData
 );
 

@@ -509,6 +509,7 @@ class NotificationService extends BaseService_1.BaseService {
         try {
             await this.sendNotification({
                 userId: customerId,
+                recipient: returnRequest.customer?.email || '',
                 type: 'RETURN_REQUEST_CREATED',
                 channel: types_1.NotificationChannel.EMAIL,
                 priority: 'NORMAL',
@@ -524,8 +525,9 @@ class NotificationService extends BaseService_1.BaseService {
             // Also send SMS for Nigerian customers
             await this.sendNotification({
                 userId: customerId,
+                recipient: returnRequest.customer?.phoneNumber || '',
                 type: 'RETURN_REQUEST_CREATED',
-                channel: 'SMS',
+                channel: types_1.NotificationChannel.SMS,
                 priority: 'NORMAL',
                 variables: {
                     returnNumber: returnRequest.returnNumber,
@@ -544,6 +546,7 @@ class NotificationService extends BaseService_1.BaseService {
         try {
             await this.sendNotification({
                 userId: customerId,
+                recipient: returnRequest.customer?.email || '',
                 type: 'RETURN_REQUEST_CANCELLED',
                 channel: types_1.NotificationChannel.EMAIL,
                 priority: 'NORMAL',
@@ -566,8 +569,9 @@ class NotificationService extends BaseService_1.BaseService {
         try {
             await this.sendNotification({
                 userId: customerId,
+                recipient: { phoneNumber: pickupDetails.contactPhone },
                 type: 'PICKUP_SCHEDULED',
-                channel: 'SMS',
+                channel: types_1.NotificationChannel.SMS,
                 priority: 'HIGH',
                 variables: {
                     confirmationNumber: pickupDetails.confirmationNumber,
@@ -588,6 +592,7 @@ class NotificationService extends BaseService_1.BaseService {
         try {
             await this.sendNotification({
                 userId: customerId,
+                recipient: ticket.customer?.email || '',
                 type: 'SUPPORT_TICKET_CREATED',
                 channel: types_1.NotificationChannel.EMAIL,
                 priority: 'NORMAL',
@@ -610,6 +615,7 @@ class NotificationService extends BaseService_1.BaseService {
         try {
             await this.sendNotification({
                 userId: agentId,
+                recipient: ticket.agent?.email || '',
                 type: 'NEW_CUSTOMER_MESSAGE',
                 channel: types_1.NotificationChannel.EMAIL,
                 priority: (ticket.priority === 'urgent' ? 'HIGH' : 'NORMAL'),
@@ -632,6 +638,7 @@ class NotificationService extends BaseService_1.BaseService {
         try {
             await this.sendNotification({
                 userId: agentId,
+                recipient: { email: '' },
                 type: 'TICKET_ASSIGNED',
                 channel: types_1.NotificationChannel.EMAIL,
                 priority: 'NORMAL',

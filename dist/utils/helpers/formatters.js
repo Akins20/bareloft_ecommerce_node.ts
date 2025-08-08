@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generatePDFReport = exports.generateCSVReport = exports.calculateVAT = exports.formatNigerianPhoneNumber = exports.formatNaira = exports.ReportFormatters = exports.DataFormatters = void 0;
+exports.generatePDFReport = exports.generateCSVReport = exports.calculateVAT = exports.formatNigerianPhoneNumber = exports.formatNairaAmount = exports.formatNaira = exports.ReportFormatters = exports.DataFormatters = void 0;
 /**
  * Data formatting utilities for consistent API responses
  */
@@ -393,11 +393,14 @@ exports.ReportFormatters = ReportFormatters;
  */
 const formatNaira = (amount) => DataFormatters.formatCurrency(amount);
 exports.formatNaira = formatNaira;
+const formatNairaAmount = (amount) => DataFormatters.formatCurrency(amount);
+exports.formatNairaAmount = formatNairaAmount;
 const formatNigerianPhoneNumber = (phone) => DataFormatters.formatPhoneNumber(phone);
 exports.formatNigerianPhoneNumber = formatNigerianPhoneNumber;
 const calculateVAT = (amount) => Math.round(amount * 0.075 * 100) / 100; // 7.5% VAT
 exports.calculateVAT = calculateVAT;
 exports.generateCSVReport = ReportFormatters.generateCSVReport;
 exports.generatePDFReport = ReportFormatters.generatePDFReport;
-exports.default = DataFormatters;
+// Default export for specific function imports
+exports.default = exports.formatNairaAmount;
 //# sourceMappingURL=formatters.js.map

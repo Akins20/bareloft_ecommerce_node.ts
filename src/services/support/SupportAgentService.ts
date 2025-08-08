@@ -234,10 +234,10 @@ export class SupportAgentService extends BaseService {
       const agentWithDetails = await this.agentRepository.findById(agent.id);
 
       return this.createSuccessResponse(
-        agentWithDetails!,
+        agentWithDetails! as any,
         'Support agent created successfully',
         HTTP_STATUS.CREATED
-      );
+      ) as any;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError(
@@ -260,7 +260,7 @@ export class SupportAgentService extends BaseService {
         );
       }
 
-      return this.createSuccessResponse(agent, 'Agent retrieved successfully');
+      return this.createSuccessResponse(agent as any, 'Agent retrieved successfully') as any;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError(
@@ -276,8 +276,8 @@ export class SupportAgentService extends BaseService {
     pagination: PaginationOptions = { page: 1, limit: 20 }
   ): Promise<ApiResponse<PaginatedResult<AgentWithDetails>>> {
     try {
-      const agents = await this.agentRepository.findMany(filters, pagination);
-      return this.createSuccessResponse(agents, 'Agents retrieved successfully');
+      const agents = await this.agentRepository.findMany(filters, pagination as any);
+      return this.createSuccessResponse(agents as any, 'Agents retrieved successfully') as any;
     } catch (error) {
       throw new AppError(
         'Failed to retrieve agents',
@@ -349,9 +349,9 @@ export class SupportAgentService extends BaseService {
       const updatedAgent = await this.agentRepository.findById(id);
 
       return this.createSuccessResponse(
-        updatedAgent!,
+        updatedAgent! as any,
         'Agent updated successfully'
-      );
+      ) as any;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError(
@@ -387,9 +387,9 @@ export class SupportAgentService extends BaseService {
       const updatedAgent = await this.agentRepository.findById(id);
 
       return this.createSuccessResponse(
-        updatedAgent!,
+        updatedAgent! as any,
         'Agent status updated successfully'
-      );
+      ) as any;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError(
@@ -413,9 +413,9 @@ export class SupportAgentService extends BaseService {
       );
 
       return this.createSuccessResponse(
-        agents,
+        agents as any,
         'Available agents retrieved successfully'
-      );
+      ) as any;
     } catch (error) {
       throw new AppError(
         'Failed to retrieve available agents',
@@ -474,10 +474,10 @@ export class SupportAgentService extends BaseService {
       await this.notificationService.sendAgentScheduleNotification(schedule.agentId, shift.id);
 
       return this.createSuccessResponse(
-        shift,
+        shift as any,
         'Agent scheduled successfully',
         HTTP_STATUS.CREATED
-      );
+      ) as any;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError(
@@ -516,9 +516,9 @@ export class SupportAgentService extends BaseService {
       });
 
       return this.createSuccessResponse(
-        performanceReports,
+        performanceReports as any,
         'Agent performance retrieved successfully'
-      );
+      ) as any;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError(
@@ -580,9 +580,9 @@ export class SupportAgentService extends BaseService {
       });
 
       return this.createSuccessResponse(
-        performance,
+        performance as any,
         'Performance metrics recorded successfully'
-      );
+      ) as any;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError(
@@ -622,9 +622,9 @@ export class SupportAgentService extends BaseService {
       const deactivatedAgent = await this.agentRepository.findById(id);
 
       return this.createSuccessResponse(
-        deactivatedAgent!,
+        deactivatedAgent! as any,
         'Agent deactivated successfully'
-      );
+      ) as any;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError(
@@ -655,9 +655,9 @@ export class SupportAgentService extends BaseService {
       const activatedAgent = await this.agentRepository.findById(id);
 
       return this.createSuccessResponse(
-        activatedAgent!,
+        activatedAgent! as any,
         'Agent activated successfully'
-      );
+      ) as any;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError(
@@ -671,7 +671,7 @@ export class SupportAgentService extends BaseService {
   async getAgentStats(): Promise<ApiResponse<any>> {
     try {
       const stats = await this.agentRepository.getAgentStats();
-      return this.createSuccessResponse(stats, 'Agent statistics retrieved successfully');
+      return this.createSuccessResponse(stats as any, 'Agent statistics retrieved successfully') as any;
     } catch (error) {
       throw new AppError(
         'Failed to retrieve agent statistics',

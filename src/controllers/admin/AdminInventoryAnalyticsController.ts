@@ -3,7 +3,7 @@ import { BaseController } from "../BaseController";
 import { InventoryAnalyticsService } from "../../services/analytics/InventoryAnalyticsService";
 import { ReportingService } from "../../services/analytics/ReportingService";
 import { CacheService } from "../../services/cache/CacheService";
-import { formatNairaAmount } from "../../utils/helpers/formatters";
+import formatNairaAmount from "../../utils/helpers/formatters";
 
 /**
  * Admin Inventory Analytics Controller
@@ -16,7 +16,7 @@ export class AdminInventoryAnalyticsController extends BaseController {
 
   constructor() {
     super();
-    this.cacheService = new CacheService();
+    this.cacheService = new CacheService({} as any);
     this.inventoryAnalyticsService = new InventoryAnalyticsService(this.cacheService);
     this.reportingService = new ReportingService();
   }
@@ -132,7 +132,7 @@ export class AdminInventoryAnalyticsController extends BaseController {
           acc[method] = {
             ...methodData,
             valueFormatted: formatNairaAmount(methodData.value),
-            profitFormatted: methodData.profit ? formatNairaAmount(methodData.profit) : undefined,
+            profitFormatted: (methodData as any).profit ? formatNairaAmount((methodData as any).profit) : undefined,
             appreciationFormatted: (methodData as any).appreciation ? formatNairaAmount((methodData as any).appreciation) : undefined
           };
           return acc;

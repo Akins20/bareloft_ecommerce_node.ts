@@ -61,11 +61,11 @@ export interface MessageWithDetails extends SupportTicketMessage {
   replyTo?: MessageWithDetails | null;
 }
 
-export class SupportMessageRepository extends BaseRepository<SupportTicketMessage> {
+export class SupportMessageRepository extends BaseRepository<SupportTicketMessage, any, any> {
   protected db: PrismaClient;
 
   constructor(prisma?: PrismaClient) {
-    super(prisma);
+    super(prisma || new PrismaClient(), 'supportTicketMessage');
     this.db = this.prisma;
   }
   async create(data: {
@@ -91,7 +91,6 @@ export class SupportMessageRepository extends BaseRepository<SupportTicketMessag
         ...data,
         isRead: false,
         createdAt: new Date(),
-        updatedAt: new Date(),
       },
     });
   }
@@ -195,7 +194,7 @@ export class SupportMessageRepository extends BaseRepository<SupportTicketMessag
           },
         },
       },
-    }) as Promise<MessageWithDetails | null>;
+    }) as any as MessageWithDetails | null;
   }
 
   async findByTicketId(
@@ -429,7 +428,7 @@ export class SupportMessageRepository extends BaseRepository<SupportTicketMessag
     }) as Promise<MessageWithDetails[]>;
   }
 
-  async findMany(
+  async findManyWithFilters(
     filters: MessageFilters = {},
     pagination: PaginationOptions = { page: 1, limit: 20 }
   ): Promise<PaginatedResult<MessageWithDetails>> {
@@ -655,7 +654,7 @@ export class SupportMessageRepository extends BaseRepository<SupportTicketMessag
       orderBy: {
         createdAt: 'desc',
       },
-    }) as Promise<MessageWithDetails | null>;
+    }) as any as MessageWithDetails | null;
   }
 
   async updateDeliveryStatus(id: string, deliveredAt: Date): Promise<SupportTicketMessage> {

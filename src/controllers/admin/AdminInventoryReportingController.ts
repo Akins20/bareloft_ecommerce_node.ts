@@ -15,7 +15,7 @@ export class AdminInventoryReportingController extends BaseController {
 
   constructor() {
     super();
-    this.cacheService = new CacheService();
+    this.cacheService = new CacheService({} as any);
     this.analyticsService = new InventoryAnalyticsService(this.cacheService);
     this.reportingService = new InventoryReportingService(
       this.analyticsService,

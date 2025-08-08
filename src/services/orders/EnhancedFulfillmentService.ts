@@ -118,7 +118,7 @@ export class EnhancedFulfillmentService extends BaseService {
         try {
           await this.createShipmentForOrder(order, preferredCarrierId);
         } catch (shippingError) {
-          this.logWarn('Failed to create shipment automatically', shippingError);
+          this.logger.warn('Failed to create shipment automatically', shippingError);
           // Continue with order confirmation even if shipping fails
         }
       }
@@ -220,7 +220,7 @@ export class EnhancedFulfillmentService extends BaseService {
       await this.createTimelineEvent(
         orderId,
         "SHIPPED" as any,
-        `Order shipped via ${shipment.carrier?.name} - Tracking: ${shipment.trackingNumber}`,
+        `Order shipped via carrier ${shipment.carrierId} - Tracking: ${shipment.trackingNumber}`,
         shippedBy,
         notes
       );
@@ -421,7 +421,7 @@ export class EnhancedFulfillmentService extends BaseService {
 
       return optimalRate.carrierId;
     } catch (error) {
-      this.logWarn('Error selecting optimal carrier, using default', error);
+      this.logger.warn('Error selecting optimal carrier, using default', error);
       return 'jumia_logistics'; // Fallback to Jumia
     }
   }
@@ -538,10 +538,18 @@ export class EnhancedFulfillmentService extends BaseService {
     }
 
     // Also send SMS notification for Nigerian customers
-    if (order.user?.phoneNumber && this.notificationService.sendSMSNotification) {
-      await this.notificationService.sendSMSNotification({
-        phoneNumber: order.user.phoneNumber,
-        message: `Your Bareloft order ${order.orderNumber} has been shipped! Track: ${shipment.trackingNumber}. Estimated delivery: ${shipment.estimatedDelivery?.toDateString()}`,
+    if (order.user?.phoneNumber) {
+      await this.notificationService.sendNotification({
+        userId: order.userId,
+        recipient: { phoneNumber: order.user.phoneNumber },
+        type: 'ORDER_SHIPPED' as any,
+        channel: 'SMS' as any,
+        priority: 'HIGH' as any,
+        variables: {
+          orderNumber: order.orderNumber,
+          trackingNumber: shipment.trackingNumber,
+          estimatedDelivery: shipment.estimatedDelivery?.toDateString()
+        }
       });
     }
   }

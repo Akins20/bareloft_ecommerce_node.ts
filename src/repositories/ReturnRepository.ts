@@ -92,7 +92,7 @@ export class ReturnRepository extends BaseRepository<ReturnRequest, any, any> {
   protected db: PrismaClient;
 
   constructor(prisma?: PrismaClient) {
-    super(prisma);
+    super(prisma || new PrismaClient(), 'returnRequest');
     this.db = this.prisma;
   }
 
@@ -472,7 +472,7 @@ export class ReturnRepository extends BaseRepository<ReturnRequest, any, any> {
   /**
    * Get return requests with filtering and pagination
    */
-  async findMany(
+  async findManyWithFilters(
     filters: {
       status?: ReturnStatus[];
       reason?: ReturnReason[];

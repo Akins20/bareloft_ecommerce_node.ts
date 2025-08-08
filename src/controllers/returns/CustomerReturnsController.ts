@@ -10,7 +10,7 @@ import { CustomerReturnsService } from '../../services/returns/CustomerReturnsSe
 import { ReturnPolicyService } from '../../services/returns/ReturnPolicyService';
 import { ReturnShippingService } from '../../services/returns/ReturnShippingService';
 import { CustomerSupportService } from '../../services/support/CustomerSupportService';
-import { NotificationService } from '../../services/notification/NotificationService';
+import { NotificationService } from '../../services/notifications/NotificationService';
 import { 
   CreateReturnRequest, 
   ReturnListQuery,
@@ -18,8 +18,8 @@ import {
   ReturnStatus,
   ReturnReason 
 } from '../../types/return.types';
-import { createSuccessResponse, createErrorResponse } from '../../utils/response/responseHelpers';
-import { HTTP_STATUS } from '../../constants/httpStatus';
+import { createSuccessResponse, createErrorResponse } from '../../utils/responses/responseHelpers';
+import { HTTP_STATUS } from '../../constants/http';
 import { logger } from '../../utils/logger/winston';
 
 export class CustomerReturnsController extends BaseController {
@@ -77,7 +77,7 @@ export class CustomerReturnsController extends BaseController {
 
       // Create return request
       const returnRequest = await this.customerReturnsService.createReturnRequest(
-        returnRequestData,
+        returnRequestData as any,
         customerId
       );
 
@@ -145,7 +145,7 @@ export class CustomerReturnsController extends BaseController {
 
       const result = await this.customerReturnsService.getCustomerReturns(
         customerId,
-        query
+        query as any
       );
 
       res.json(

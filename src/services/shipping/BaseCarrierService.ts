@@ -9,8 +9,8 @@ import {
   CarrierAPIResponse,
   NigerianAddress,
   PackageDimensions,
-} from "@/types";
-import { AppError, HTTP_STATUS, ERROR_CODES } from "@/types";
+} from "../../types";
+import { AppError, HTTP_STATUS, ERROR_CODES } from "../../types";
 
 /**
  * Base Carrier Service - Abstract class for Nigerian shipping carriers
@@ -235,7 +235,7 @@ export abstract class BaseCarrierService extends BaseService {
   protected handleCarrierError(error: any, operation: string): never {
     let errorMessage = `${this.carrierName} ${operation} failed`;
     let errorCode = ERROR_CODES.EXTERNAL_SERVICE_ERROR;
-    let statusCode = HTTP_STATUS.BAD_GATEWAY;
+    let statusCode = HTTP_STATUS.SERVICE_UNAVAILABLE;
 
     if (error.response) {
       const { status, data } = error.response;
@@ -243,23 +243,23 @@ export abstract class BaseCarrierService extends BaseService {
       switch (status) {
         case 401:
           errorMessage = `${this.carrierName} authentication failed. Please check API credentials.`;
-          errorCode = ERROR_CODES.UNAUTHORIZED;
-          statusCode = HTTP_STATUS.UNAUTHORIZED;
+          errorCode = ERROR_CODES.EXTERNAL_SERVICE_ERROR;
+          statusCode = HTTP_STATUS.SERVICE_UNAVAILABLE;
           break;
         case 400:
           errorMessage = `Invalid request to ${this.carrierName}: ${data?.message || 'Bad request'}`;
-          errorCode = ERROR_CODES.VALIDATION_ERROR;
-          statusCode = HTTP_STATUS.BAD_REQUEST;
+          errorCode = ERROR_CODES.EXTERNAL_SERVICE_ERROR;
+          statusCode = HTTP_STATUS.SERVICE_UNAVAILABLE;
           break;
         case 404:
           errorMessage = `${this.carrierName} resource not found: ${data?.message || 'Not found'}`;
-          errorCode = ERROR_CODES.RESOURCE_NOT_FOUND;
-          statusCode = HTTP_STATUS.NOT_FOUND;
+          errorCode = ERROR_CODES.EXTERNAL_SERVICE_ERROR;
+          statusCode = HTTP_STATUS.SERVICE_UNAVAILABLE;
           break;
         case 429:
           errorMessage = `${this.carrierName} API rate limit exceeded. Please try again later.`;
-          errorCode = ERROR_CODES.RATE_LIMIT_EXCEEDED;
-          statusCode = HTTP_STATUS.TOO_MANY_REQUESTS;
+          errorCode = ERROR_CODES.EXTERNAL_SERVICE_ERROR;
+          statusCode = HTTP_STATUS.SERVICE_UNAVAILABLE;
           break;
         case 500:
         case 502:
@@ -283,7 +283,7 @@ export abstract class BaseCarrierService extends BaseService {
       }
     }
 
-    this.logError(`${this.carrierName} API Error`, {
+    this.logger.error(`${this.carrierName} API Error`, {
       operation,
       error: error.message,
       response: error.response?.data,
@@ -327,7 +327,7 @@ export abstract class BaseCarrierService extends BaseService {
    * Log carrier operation with Nigerian context
    */
   protected logCarrierOperation(operation: string, data: any): void {
-    this.logInfo(`${this.carrierName} Operation`, {
+    this.logger.info(`${this.carrierName} Operation`, {
       operation,
       carrierCode: this.carrierCode,
       testMode: this.testMode,

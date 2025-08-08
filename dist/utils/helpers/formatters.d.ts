@@ -155,9 +155,10 @@ export declare class ReportFormatters {
  * Convenience functions for common formatting tasks
  */
 export declare const formatNaira: (amount: number) => string;
+export declare const formatNairaAmount: (amount: number) => string;
 export declare const formatNigerianPhoneNumber: (phone: string) => string;
 export declare const calculateVAT: (amount: number) => number;
 export declare const generateCSVReport: typeof ReportFormatters.generateCSVReport;
 export declare const generatePDFReport: typeof ReportFormatters.generatePDFReport;
-export default DataFormatters;
+export default formatNairaAmount;
 //# sourceMappingURL=formatters.d.ts.map
