@@ -43,7 +43,8 @@
       "Bash(timeout:*)",
       "Bash(sed:*)",
       "Bash(tsc --noEmit)",
-      "Bash(redis-cli:*)"
+      "Bash(redis-cli:*)",
+      "Bash(tsx scripts/createTestUser.ts:*)"
     ],
     "deny": []
   }

@@ -70,7 +70,7 @@ export const rateLimiter = {
   // General API requests (generous for mobile users)
   general: createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000, // 1000 requests per 15 minutes
+    max: 5000, // 1000 requests per 15 minutes
     message: "Too many requests, please slow down",
   }),
 
