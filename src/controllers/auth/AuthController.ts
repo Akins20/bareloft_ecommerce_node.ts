@@ -14,6 +14,7 @@ import {
   LogoutRequest,
   ResetPasswordRequest,
   ChangePasswordRequest,
+  OTPPurpose,
 } from "../../types/auth.types";
 import { ApiResponse } from "../../types/api.types";
 import { AuthenticatedRequest } from "../../types/auth.types";
@@ -85,17 +86,8 @@ export class AuthController extends BaseController {
         }
       }
 
-      // Verify OTP before creating account
-      const otpVerification = await this.otpService.verifyOTP(
-        signupData.phoneNumber,
-        signupData.otpCode,
-        "signup"
-      );
-
-      if (!otpVerification.success) {
-        this.sendError(res, "Invalid or expired OTP code", 400, "INVALID_OTP");
-        return;
-      }
+      // OTP verification is handled inside AuthService.signup method
+      // No need for duplicate verification here
 
       // Create user account
       const result = await this.authService.signup(signupData);
@@ -152,17 +144,8 @@ export class AuthController extends BaseController {
         return;
       }
 
-      // Verify OTP
-      const otpVerification = await this.otpService.verifyOTP(
-        loginData.phoneNumber,
-        loginData.otpCode,
-        "login"
-      );
-
-      if (!otpVerification.success) {
-        this.sendError(res, "Invalid or expired OTP code", 400, "INVALID_OTP");
-        return;
-      }
+      // OTP verification is handled inside AuthService.login method
+      // No need for duplicate verification here
 
       // Authenticate user
       const result = await this.authService.login(loginData);
@@ -268,14 +251,14 @@ export class AuthController extends BaseController {
         }
       }
 
-      // Generate and send OTP
-      const result = await this.otpService.generateAndSendOTP(
+      // Generate and send OTP using AuthService
+      const result = await this.authService.requestOTP({
         phoneNumber,
-        purpose || "login"
-      );
+        purpose: purpose || "LOGIN"
+      });
 
       if (!result.success) {
-        this.sendError(res, result.message, 400, "OTP_REQUEST_FAILED");
+        this.sendError(res, result.message || "Failed to send OTP", 400, "OTP_REQUEST_FAILED");
         return;
       }
 
@@ -291,8 +274,8 @@ export class AuthController extends BaseController {
         data: {
           success: true,
           message: `Verification code sent to your phone`,
-          expiresIn: result.expiresIn,
-          canResendIn: result.canResendIn,
+          expiresIn: result.data?.expiresIn || 600,
+          canResendIn: 60,
         },
       };
 
@@ -331,21 +314,21 @@ export class AuthController extends BaseController {
         return;
       }
 
-      // Verify OTP
-      const result = await this.otpService.verifyOTP(
+      // Verify OTP using AuthService
+      const result = await this.authService.verifyOTP({
         phoneNumber,
         code,
-        purpose || "login"
-      );
+        purpose: (purpose || "login").toUpperCase() as OTPPurpose
+      });
 
-      if (!result.success) {
+      if (!result.isValid) {
         this.logAction("OTP_VERIFY_FAILED", undefined, "OTP", undefined, {
           phoneNumber: this.maskPhoneNumber(phoneNumber),
           purpose: purpose || "login",
-          reason: result.message,
+          reason: "Invalid OTP code",
         });
 
-        this.sendError(res, result.message || "OTP verification failed", 400, "OTP_VERIFICATION_FAILED");
+        this.sendError(res, "Invalid or expired OTP code", 400, "OTP_VERIFICATION_FAILED");
         return;
       }
 

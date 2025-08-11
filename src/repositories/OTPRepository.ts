@@ -130,8 +130,10 @@ export class OTPRepository extends BaseRepository<
     purpose: OTPPurpose
   ): Promise<void> {
     try {
+      console.log(`Attempting to invalidate OTPs for phone: ${phoneNumber}, purpose: ${purpose}`);
+      
       // Use direct Prisma query
-      await this.prisma.oTPCode.updateMany({
+      const result = await this.prisma.oTPCode.updateMany({
         where: {
           phoneNumber,
           purpose,
@@ -141,8 +143,15 @@ export class OTPRepository extends BaseRepository<
           isUsed: true,
         }
       });
+      
+      console.log(`Successfully invalidated ${result.count} OTPs for ${phoneNumber}`);
     } catch (error) {
       console.error('Database error in invalidateExistingOTP:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        meta: error.meta
+      });
       throw new AppError(
         "Error invalidating existing OTPs",
         HTTP_STATUS.INTERNAL_SERVER_ERROR,

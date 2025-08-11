@@ -2336,7 +2336,14 @@ export class AdminDashboardController extends BaseAdminController {
   // Helper methods for activities dashboard
 
   private async getRecentActivitiesInternal(limit: number, type: string, dateFrom?: Date) {
-    // Placeholder implementation - would integrate with actual activity logging
+    // Production safety check
+    if (process.env.NODE_ENV === 'production') {
+      // In production, return empty array until proper implementation
+      console.warn('getRecentActivitiesInternal called in production - returning empty results');
+      return [];
+    }
+    
+    // Development placeholder implementation - would integrate with actual activity logging
     const sampleActivities = [
       {
         id: '1',
@@ -2398,7 +2405,14 @@ export class AdminDashboardController extends BaseAdminController {
   }
 
   private async getSystemEventsInternal(limit: number, dateFrom?: Date) {
-    // Placeholder implementation - would integrate with system event monitoring
+    // Production safety check
+    if (process.env.NODE_ENV === 'production') {
+      // In production, return empty array until proper implementation
+      console.warn('getSystemEventsInternal called in production - returning empty results');
+      return [];
+    }
+    
+    // Development placeholder implementation - would integrate with system event monitoring
     const sampleEvents = [
       {
         id: '1',

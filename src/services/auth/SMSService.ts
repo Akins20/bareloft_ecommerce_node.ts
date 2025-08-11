@@ -1,5 +1,6 @@
 import axios from "axios";
 import { config } from "../../config/environment";
+import { smsConfig } from "../../config/sms";
 import { SMSNotification, NigerianPhoneNumber } from "../../types";
 import { AppError, HTTP_STATUS, ERROR_CODES } from "../../types/api.types";
 
@@ -15,12 +16,15 @@ export class SMSService {
   private apiKey: string;
   private senderId: string;
   private baseUrl: string;
+  private channel: string;
+  private type: string;
 
   constructor() {
-    this.apiKey = config.sms.apiKey;
-    this.senderId = config.sms.senderId;
-    // Using a generic SMS provider URL - replace with actual Nigerian SMS provider
-    this.baseUrl = "https://api.sms-provider.com/v1";
+    this.apiKey = smsConfig.provider.apiKey;
+    this.senderId = smsConfig.provider.senderId;
+    this.baseUrl = smsConfig.provider.baseUrl;
+    this.channel = smsConfig.provider.channel;
+    this.type = smsConfig.provider.type;
   }
 
   /**
@@ -84,9 +88,16 @@ export class SMSService {
    */
   async sendOTP(
     phoneNumber: NigerianPhoneNumber,
-    code: string
+    code: string,
+    purpose: string = 'login'
   ): Promise<boolean> {
-    const message = `Your Bareloft verification code is: ${code}. Valid for 10 minutes. Do not share this code.`;
+    // Use template from config based on purpose
+    const template = smsConfig.templates.otp[purpose as keyof typeof smsConfig.templates.otp] || 
+                    smsConfig.templates.otp.login;
+    
+    const message = template
+      .replace('{code}', code)
+      .replace('{minutes}', '10');
 
     return await this.sendSMS({
       to: phoneNumber,
@@ -288,39 +299,41 @@ export class SMSService {
     message: string
   ): Promise<{ success: boolean; messageId?: string; error?: string }> {
     try {
-      // Replace with actual SMS provider implementation
-      // Example for a generic SMS provider:
-
+      // Termii API format
       const payload = {
         to: to,
-        message: message,
-        sender: this.senderId,
+        from: this.senderId,
+        sms: message,
+        type: this.type,
+        channel: this.channel,
+        api_key: this.apiKey,
       };
 
-      const response = await axios.post(`${this.baseUrl}/send`, payload, {
+      const response = await axios.post(`${this.baseUrl}/sms/send`, payload, {
         headers: {
-          Authorization: `Bearer ${this.apiKey}`,
           "Content-Type": "application/json",
         },
-        timeout: 10000, // 10 second timeout
+        timeout: smsConfig.settings.timeout,
       });
 
-      if (response.data.success) {
+      // Termii returns different response structure
+      if (response.data && (response.data.message_id || response.data.code === "ok")) {
         return {
           success: true,
-          messageId: response.data.messageId,
+          messageId: response.data.message_id,
         };
       } else {
         return {
           success: false,
-          error: response.data.error || "Unknown error",
+          error: response.data?.message || "Failed to send SMS",
         };
       }
     } catch (error) {
       if (axios.isAxiosError(error)) {
+        const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message;
         return {
           success: false,
-          error: error.response?.data?.message || error.message,
+          error: errorMessage,
         };
       }
 

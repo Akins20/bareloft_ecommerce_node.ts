@@ -133,12 +133,8 @@ export class AuthService extends BaseService {
         maxAttempts: CONSTANTS.MAX_OTP_ATTEMPTS,
       });
 
-      // Send SMS (in production, replace with actual SMS service)
-      const smsMessage = this.generateOTPMessage(otpCode, purpose);
-      await this.smsService.sendSMS({
-        to: phoneNumber,
-        message: smsMessage,
-      });
+      // Send SMS using the SMS service
+      await this.smsService.sendOTP(phoneNumber, otpCode, purpose.toLowerCase());
 
       console.log(`🔐 OTP sent to ${phoneNumber}: ${otpCode} (DEV ONLY)`);
 

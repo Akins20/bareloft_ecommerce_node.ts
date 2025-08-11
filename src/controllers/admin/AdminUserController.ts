@@ -77,7 +77,13 @@ export class AdminUserController extends BaseAdminController {
         if (dateTo) filters.createdAt.lte = dateTo;
       }
 
-      // For now, return placeholder user data - actual implementation would use repository
+      // Production safety check - prevent mock data in production
+      if (process.env.NODE_ENV === 'production') {
+        this.sendError(res, "User management endpoint not implemented for production. Please contact system administrator.", 501, "NOT_IMPLEMENTED");
+        return;
+      }
+      
+      // Development/testing placeholder data - actual implementation would use repository
       const users = [
         {
           id: 'u1',
@@ -386,7 +392,13 @@ export class AdminUserController extends BaseAdminController {
 
       this.logAction('get_user_statistics', userId, 'admin_user_stats');
 
-      // For now, return placeholder statistics
+      // Production safety check
+      if (process.env.NODE_ENV === 'production') {
+        this.sendError(res, "User statistics endpoint not implemented for production. Please contact system administrator.", 501, "NOT_IMPLEMENTED");
+        return;
+      }
+      
+      // Development/testing placeholder statistics
       const statistics = {
         total: {
           users: 1247,
