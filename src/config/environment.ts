@@ -8,7 +8,7 @@ export interface Config {
   port: number;
   nodeEnv: "development" | "production" | "test";
   cors: {
-    origin: string | string[];
+    origin: string | string[] | boolean;
     credentials: boolean;
   };
   database: {
@@ -40,9 +40,11 @@ export interface Config {
     allowedFormats: string[];
   };
   email: {
-    apiKey: string;
+    user: string;
+    password: string;
     fromEmail: string;
     fromName: string;
+    replyTo: string;
   };
   sms: {
     apiKey: string;
@@ -75,9 +77,9 @@ export const config: Config = {
   nodeEnv: (process.env.NODE_ENV as Config["nodeEnv"]) || "development",
 
   cors: {
-    origin:
-      process.env.CORS_ORIGIN?.split(",") ||
-      "http://localhost:3001, http://localhost:3000",
+    origin: process.env.NODE_ENV === 'development' 
+      ? true // Allow all origins in development for easier debugging
+      : process.env.CORS_ORIGIN?.split(",") || ["http://localhost:3000", "http://localhost:3001", "http://localhost:3003", "http://localhost:3004"],
     credentials: true,
   },
 
@@ -115,9 +117,11 @@ export const config: Config = {
   },
 
   email: {
-    apiKey: process.env.SENDGRID_API_KEY || "",
+    user: process.env.SMTP_USER || "",
+    password: process.env.SMTP_PASSWORD || "",
     fromEmail: process.env.FROM_EMAIL || "noreply@bareloft.com",
     fromName: process.env.FROM_NAME || "Bareloft",
+    replyTo: process.env.REPLY_TO_EMAIL || process.env.FROM_EMAIL || "noreply@bareloft.com",
   },
 
   sms: {
@@ -128,7 +132,7 @@ export const config: Config = {
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000", 10), // 15 minutes
     maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100", 10),
-    authMaxRequests: parseInt(process.env.AUTH_RATE_LIMIT_MAX || "5", 10),
+    authMaxRequests: parseInt(process.env.AUTH_RATE_LIMIT_MAX || "10", 10),
   },
 };
 

@@ -798,6 +798,50 @@ export class OrderController extends BaseController {
     return estimatedDate;
   }
 
+  /**
+   * Create guest order (no authentication required)
+   * POST /api/v1/orders/guest/create
+   */
+  public createGuestOrder = async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const orderData = req.body;
+
+      // Validate required guest info
+      if (!orderData.guestInfo || !orderData.guestInfo.email || !orderData.guestInfo.firstName || !orderData.guestInfo.lastName) {
+        res.status(400).json({
+          success: false,
+          message: "Guest information (email, firstName, lastName) is required",
+        });
+        return;
+      }
+
+      // Validate shipping address
+      if (!orderData.shippingAddress) {
+        res.status(400).json({
+          success: false,
+          message: "Shipping address is required",
+        });
+        return;
+      }
+
+      // Create guest order - Paystack will handle payment processing
+      const result = await this.orderService.createGuestOrder(orderData);
+
+      const response: ApiResponse<CreateOrderResponse> = {
+        success: true,
+        message: "Guest order created successfully. Redirecting to payment...",
+        data: result,
+      };
+
+      res.status(201).json(response);
+    } catch (error) {
+      this.handleError(error, req, res);
+    }
+  };
+
   private getStatusDescription(status: string): string {
     const descriptions: Record<string, string> = {
       'PENDING': 'Order is pending confirmation',

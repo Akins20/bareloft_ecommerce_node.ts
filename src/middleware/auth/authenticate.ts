@@ -121,7 +121,7 @@ export const authenticate = async (
     // Check if session exists and is valid
     const serviceContainer = getServiceContainer();
     const sessionRepo = serviceContainer.getService<SessionRepository>('sessionRepository');
-    const session = await sessionRepo.findById(decoded.sessionId);
+    const session = await sessionRepo.findBySessionId(decoded.sessionId);
 
     if (!session || session.expiresAt < new Date()) {
       logger.warn("Invalid or expired session", {

@@ -5,6 +5,7 @@ import { SessionRepository } from "../../repositories/SessionRepository";
 import { JWTService } from "./JWTService";
 import { OTPService } from "./OTPService";
 import { SMSService } from "./SMSService";
+import { EmailHelper } from "../../utils/email/emailHelper";
 import {
   User,
   RequestOTPRequest,
@@ -47,27 +48,47 @@ export class AuthService extends BaseService {
   }
 
   /**
-   * Request OTP for phone number verification
-   * Implements rate limiting and Nigerian phone validation
+   * Request OTP for phone or email verification
+   * Implements rate limiting and validation
    */
   async requestOTP(data: RequestOTPRequest): Promise<any> {
     try {
-      const { phoneNumber, purpose } = data;
+      const { phoneNumber, email, purpose } = data;
+      const contactMethod = phoneNumber || email;
+      
+      if (!contactMethod) {
+        throw new AppError(
+          "Either phone number or email is required",
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_CODES.INVALID_INPUT
+        );
+      }
 
-      // Validate Nigerian phone number format
-      if (!this.isValidNigerianPhone(phoneNumber)) {
+      // Convert purpose to uppercase for internal use
+      const normalizedPurpose = this.normalizePurpose(purpose);
+
+      // Validate contact method format
+      if (phoneNumber && !this.isValidNigerianPhone(phoneNumber)) {
         throw new AppError(
           "Invalid Nigerian phone number format. Use +234XXXXXXXXXX",
           HTTP_STATUS.BAD_REQUEST,
           ERROR_CODES.INVALID_INPUT
         );
       }
+      
+      if (email && !EmailHelper.isValidEmail(email)) {
+        throw new AppError(
+          "Invalid email address format",
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_CODES.INVALID_INPUT
+        );
+      }
 
       // Check rate limiting
-      const rateLimitKey = `otp_rate_limit:${phoneNumber}`;
+      const rateLimitKey = `otp_rate_limit:${contactMethod}`;
       const rateLimitResult = await redisClient.checkRateLimit(
         rateLimitKey,
-        3, // Max 3 OTP requests
+        10, // Max 10 OTP requests
         CONSTANTS.OTP_RATE_LIMIT_MINUTES * 60 // per 15 minutes
       );
 
@@ -81,12 +102,15 @@ export class AuthService extends BaseService {
       }
 
       // For signup, check if user already exists
-      if (purpose === "SIGNUP") {
-        const existingUser =
-          await this.userRepository.findByPhoneNumber(phoneNumber);
+      if (normalizedPurpose === "SIGNUP") {
+        const existingUser = phoneNumber 
+          ? await this.userRepository.findByPhoneNumber(phoneNumber)
+          : await this.userRepository.findByEmail(email!);
+          
         if (existingUser) {
+          const method = phoneNumber ? "Phone number" : "Email address";
           throw new AppError(
-            "Phone number already registered. Try logging in instead.",
+            `${method} already registered. Try logging in instead.`,
             HTTP_STATUS.CONFLICT,
             ERROR_CODES.RESOURCE_ALREADY_EXISTS
           );
@@ -94,11 +118,15 @@ export class AuthService extends BaseService {
       }
 
       // For login, check if user exists
-      if (purpose === "LOGIN") {
-        const user = await this.userRepository.findByPhoneNumber(phoneNumber);
+      if (normalizedPurpose === "LOGIN") {
+        const user = phoneNumber 
+          ? await this.userRepository.findByPhoneNumber(phoneNumber)
+          : await this.userRepository.findByEmail(email!);
+          
         if (!user) {
+          const method = phoneNumber ? "Phone number" : "Email address";
           throw new AppError(
-            "Phone number not registered. Please sign up first.",
+            `${method} not registered. Please sign up first.`,
             HTTP_STATUS.NOT_FOUND,
             ERROR_CODES.RESOURCE_NOT_FOUND
           );
@@ -119,30 +147,36 @@ export class AuthService extends BaseService {
         Date.now() + CONSTANTS.OTP_EXPIRY_MINUTES * 60 * 1000
       );
 
-      // Invalidate any existing OTP for this phone/purpose
-      await this.otpRepository.invalidateExistingOTP(phoneNumber, purpose);
+      // Invalidate any existing OTP for this contact method/purpose
+      await this.otpRepository.invalidateExistingOTP(contactMethod, normalizedPurpose);
 
       // Store OTP in database
       await this.otpRepository.create({
-        phoneNumber,
+        phoneNumber: phoneNumber || null,
+        email: email || null,
         code: otpCode,
-        purpose,
+        purpose: normalizedPurpose,
         expiresAt,
         isUsed: false,
         attempts: 0,
         maxAttempts: CONSTANTS.MAX_OTP_ATTEMPTS,
       });
 
-      // Send SMS using the SMS service
-      await this.smsService.sendOTP(phoneNumber, otpCode, purpose.toLowerCase());
-
-      console.log(`🔐 OTP sent to ${phoneNumber}: ${otpCode} (DEV ONLY)`);
+      // Send OTP via SMS or Email
+      if (phoneNumber) {
+        await this.smsService.sendOTP(phoneNumber, otpCode, normalizedPurpose.toLowerCase());
+        console.log(`🔐 SMS OTP sent to ${phoneNumber}: ${otpCode} (DEV ONLY)`);
+      } else if (email) {
+        await this.sendEmailOTP(email, otpCode, normalizedPurpose);
+        console.log(`📧 Email OTP sent to ${email}: ${otpCode} (DEV ONLY)`);
+      }
 
       return {
         success: true,
-        message: `OTP sent to ${phoneNumber}`,
+        message: `OTP sent to ${phoneNumber || email}`,
         data: {
           phoneNumber,
+          email,
           expiresIn: CONSTANTS.OTP_EXPIRY_MINUTES * 60,
           canRetryAt: new Date(rateLimitResult.resetTime),
         },
@@ -161,18 +195,20 @@ export class AuthService extends BaseService {
   }
 
   /**
-   * Verify OTP code
+   * Verify OTP code for phone or email
    */
   async verifyOTP(
     data: VerifyOTPRequest
   ): Promise<{ isValid: boolean; userId?: string }> {
     try {
-      const { phoneNumber, code, purpose } = data;
+      const { phoneNumber, email, code, purpose } = data;
+      const contactMethod = phoneNumber || email;
+      const normalizedPurpose = this.normalizePurpose(purpose);
 
       // Find OTP record
       const otpRecord = await this.otpRepository.findValidOTP(
-        phoneNumber,
-        purpose
+        contactMethod,
+        normalizedPurpose
       );
 
       if (!otpRecord) {
@@ -234,8 +270,10 @@ export class AuthService extends BaseService {
 
       // For login, get user ID
       let userId: string | undefined;
-      if (purpose === "LOGIN") {
-        const user = await this.userRepository.findByPhoneNumber(phoneNumber);
+      if (normalizedPurpose === "LOGIN") {
+        const user = phoneNumber 
+          ? await this.userRepository.findByPhoneNumber(phoneNumber)
+          : await this.userRepository.findByEmail(email!);
         userId = user?.id;
       }
 
@@ -259,10 +297,19 @@ export class AuthService extends BaseService {
   async signup(data: SignupRequest): Promise<any> {
     try {
       const { phoneNumber, firstName, lastName, email, otpCode } = data;
+      
+      if (!phoneNumber && !email) {
+        throw new AppError(
+          "Either phone number or email is required for signup",
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_CODES.INVALID_INPUT
+        );
+      }
 
       // Verify OTP first
       const otpVerification = await this.verifyOTP({
         phoneNumber,
+        email,
         code: otpCode,
         purpose: "SIGNUP",
       });
@@ -275,35 +322,16 @@ export class AuthService extends BaseService {
         );
       }
 
-      // Check if user already exists (double-check)
-      const existingUser =
-        await this.userRepository.findByPhoneNumber(phoneNumber);
-      if (existingUser) {
-        throw new AppError(
-          "User already exists",
-          HTTP_STATUS.CONFLICT,
-          ERROR_CODES.RESOURCE_ALREADY_EXISTS
-        );
-      }
+      // Note: User existence was already validated during OTP request phase
+      // The OTP verification confirms this is a valid signup attempt
+      // No need for redundant existence checks here
 
-      // Check email uniqueness if provided
-      if (email) {
-        const emailExists = await this.userRepository.emailExists(email);
-        if (emailExists) {
-          throw new AppError(
-            "Email address already registered",
-            HTTP_STATUS.CONFLICT,
-            ERROR_CODES.RESOURCE_ALREADY_EXISTS
-          );
-        }
-      }
-
-      // Create user
+      // Create user with proper contact method handling
       const user = await this.userRepository.createUser({
-        phoneNumber,
+        phoneNumber: phoneNumber || null, // Only set if provided
         firstName,
         lastName,
-        email,
+        email: email || null, // Only set if provided  
         role: "CUSTOMER",
       });
 
@@ -344,11 +372,20 @@ export class AuthService extends BaseService {
    */
   async login(data: LoginRequest): Promise<any> {
     try {
-      const { phoneNumber, otpCode } = data;
+      const { phoneNumber, email, otpCode } = data;
+      
+      if (!phoneNumber && !email) {
+        throw new AppError(
+          "Either phone number or email is required for login",
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_CODES.INVALID_INPUT
+        );
+      }
 
       // Verify OTP
       const otpVerification = await this.verifyOTP({
         phoneNumber,
+        email,
         code: otpCode,
         purpose: "LOGIN",
       });
@@ -549,6 +586,21 @@ export class AuthService extends BaseService {
     return nigerianPhoneRegex.test(phone);
   }
 
+  private normalizePurpose(purpose: string): OTPPurpose {
+    const purposeMap: { [key: string]: OTPPurpose } = {
+      'login': 'LOGIN',
+      'signup': 'SIGNUP', 
+      'password_reset': 'PASSWORD_RESET',
+      'phone_verification': 'PHONE_VERIFICATION',
+      'LOGIN': 'LOGIN',
+      'SIGNUP': 'SIGNUP',
+      'PASSWORD_RESET': 'PASSWORD_RESET',
+      'PHONE_VERIFICATION': 'PHONE_VERIFICATION'
+    };
+    
+    return purposeMap[purpose] || 'LOGIN';
+  }
+
   private generateOTPMessage(code: string, purpose: OTPPurpose): string {
     const messages = {
       signup: `Welcome to Bareloft! Your verification code is: ${code}. Valid for 10 minutes.`,
@@ -571,12 +623,14 @@ export class AuthService extends BaseService {
         phoneNumber: user.phoneNumber,
         role: user.role,
         sessionId,
+        type: 'access'
       }),
       this.jwtService.generateRefreshToken({
         userId: user.id,
         phoneNumber: user.phoneNumber,
         role: user.role,
         sessionId,
+        type: 'refresh'
       }),
     ]);
 
@@ -653,6 +707,128 @@ export class AuthService extends BaseService {
    */
   async findUserById(userId: string): Promise<User | null> {
     return await this.userRepository.findById(userId);
+  }
+
+  /**
+   * Send OTP via email
+   */
+  private async sendEmailOTP(email: string, otpCode: string, purpose: OTPPurpose): Promise<void> {
+    try {
+      const subject = this.getEmailOTPSubject(purpose);
+      const html = this.getEmailOTPTemplate(otpCode, purpose);
+      
+      await EmailHelper.sendPlainEmail({
+        to: email,
+        subject,
+        text: `Your Bareloft verification code is: ${otpCode}. Valid for 10 minutes.`,
+        html,
+      });
+    } catch (error) {
+      console.error("Failed to send email OTP:", error);
+      throw new AppError(
+        "Failed to send OTP email. Please try again.",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.INTERNAL_ERROR
+      );
+    }
+  }
+
+  /**
+   * Get email subject for OTP based on purpose
+   */
+  private getEmailOTPSubject(purpose: OTPPurpose): string {
+    const subjects = {
+      SIGNUP: "🎉 Welcome to Bareloft - Your Verification Code",
+      LOGIN: "🔐 Bareloft Login - Your Verification Code", 
+      PASSWORD_RESET: "🔑 Bareloft Password Reset - Your Verification Code",
+      PHONE_VERIFICATION: "📱 Bareloft Phone Verification - Your Verification Code",
+    };
+    return subjects[purpose] || "🔐 Bareloft - Your Verification Code";
+  }
+
+  /**
+   * Get email HTML template for OTP
+   */
+  private getEmailOTPTemplate(otpCode: string, purpose: OTPPurpose): string {
+    const purposeText = {
+      SIGNUP: "complete your account registration",
+      LOGIN: "sign in to your account",
+      PASSWORD_RESET: "reset your password", 
+      PHONE_VERIFICATION: "verify your phone number",
+    };
+
+    // Bareloft brand colors
+    const colors = {
+      primary: "#007cba",      // Bareloft blue
+      primaryDark: "#005a8b",  // Darker blue
+      neutral900: "#1a202c",   // Dark text
+      neutral700: "#4a5568",   // Medium text
+      neutral500: "#718096",   // Light text
+      neutral200: "#e2e8f0",   // Light border
+      neutral100: "#f7fafc",   // Light background
+      success: "#38a169",      // Success green
+    };
+
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Bareloft Verification Code</title>
+    </head>
+    <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); overflow: hidden;">
+            <!-- Header with brand colors -->
+            <div style="background: linear-gradient(135deg, ${colors.primary} 0%, ${colors.primaryDark} 100%); padding: 40px 20px; text-align: center;">
+                <h1 style="color: #ffffff; font-size: 28px; margin: 0; font-weight: 600; letter-spacing: 1px;">Bareloft</h1>
+                <p style="color: rgba(255, 255, 255, 0.9); font-size: 14px; margin: 8px 0 0 0;">Nigerian E-commerce Platform</p>
+            </div>
+            
+            <div style="padding: 40px 30px;">
+                <div style="text-align: center; margin-bottom: 40px;">
+                    <h2 style="color: ${colors.neutral900}; font-size: 24px; margin: 0 0 16px 0; font-weight: 600;">Your Verification Code</h2>
+                    <p style="color: ${colors.neutral700}; font-size: 16px; line-height: 1.6; margin: 0;">
+                        Use this code to ${purposeText[purpose] || "verify your account"}:
+                    </p>
+                </div>
+                
+                <!-- OTP Code with Bareloft branding -->
+                <div style="text-align: center; margin: 40px 0;">
+                    <div style="display: inline-block; background: linear-gradient(135deg, ${colors.neutral100} 0%, #ffffff 100%); border: 3px solid ${colors.primary}; border-radius: 16px; padding: 24px 32px; box-shadow: 0 2px 8px rgba(0, 124, 186, 0.15);">
+                        <span style="font-size: 36px; font-weight: bold; color: ${colors.primary}; letter-spacing: 6px; font-family: 'Courier New', monospace;">${otpCode}</span>
+                    </div>
+                </div>
+                
+                <!-- Instructions -->
+                <div style="text-align: center; margin-bottom: 32px;">
+                    <div style="background-color: ${colors.neutral100}; border-left: 4px solid ${colors.success}; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                        <p style="color: ${colors.neutral700}; font-size: 14px; line-height: 1.6; margin: 0;">
+                            <strong style="color: ${colors.neutral900};">⏰ This code will expire in 10 minutes</strong><br>
+                            If you didn't request this code, please ignore this email.
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Support section -->
+                <div style="text-align: center; border-top: 1px solid ${colors.neutral200}; padding-top: 24px;">
+                    <p style="color: ${colors.neutral500}; font-size: 13px; line-height: 1.5; margin: 0;">
+                        Need help? Contact us at <a href="mailto:support@bareloft.com" style="color: ${colors.primary}; text-decoration: none;">support@bareloft.com</a>
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div style="background-color: ${colors.neutral100}; padding: 24px; text-align: center; border-top: 1px solid ${colors.neutral200};">
+                <p style="color: ${colors.neutral500}; font-size: 12px; margin: 0; line-height: 1.4;">
+                    © 2025 Bareloft. All rights reserved.<br>
+                    <span style="color: ${colors.neutral700};">🇳🇬 Proudly serving Nigerian e-commerce</span>
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
   }
 
   /**

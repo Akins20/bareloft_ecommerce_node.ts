@@ -13,7 +13,8 @@ export type OTPPurpose = 'LOGIN' | 'SIGNUP' | 'PASSWORD_RESET' | 'PHONE_VERIFICA
 
 // Authentication interfaces
 export interface OTPCode extends BaseEntity {
-  phoneNumber: NigerianPhoneNumber;
+  phoneNumber?: NigerianPhoneNumber;
+  email?: string;
   code: string; // 6-digit code
   purpose: OTPPurpose;
   expiresAt: Date;
@@ -40,47 +41,53 @@ export interface OTPCode extends BaseEntity {
 
 // Authentication request/response types
 export interface OTPRequest {
-  phoneNumber: NigerianPhoneNumber;
+  phoneNumber?: NigerianPhoneNumber;
+  email?: string;
   purpose: OTPPurpose;
 }
 
 export interface RequestOTPRequest {
-  phoneNumber: NigerianPhoneNumber;
-  purpose: OTPPurpose;
+  phoneNumber?: NigerianPhoneNumber;
+  email?: string;
+  purpose: OTPPurpose | string; // Allow both uppercase and lowercase for API flexibility
 }
 
 export interface RequestOTPResponse {
   success: boolean;
   message: string;
   data: {
-    phoneNumber: NigerianPhoneNumber;
+    phoneNumber?: NigerianPhoneNumber;
+    email?: string;
     expiresIn: number; // seconds
     canRetryAt: Date;
   };
 }
 
 export interface OTPVerificationRequest {
-  phoneNumber: NigerianPhoneNumber;
+  phoneNumber?: NigerianPhoneNumber;
+  email?: string;
   code: string;
   purpose: OTPPurpose;
 }
 
 export interface VerifyOTPRequest {
-  phoneNumber: NigerianPhoneNumber;
+  phoneNumber?: NigerianPhoneNumber;
+  email?: string;
   code: string;
   purpose: OTPPurpose;
 }
 
 export interface SignupRequest {
-  phoneNumber: NigerianPhoneNumber;
+  phoneNumber?: NigerianPhoneNumber;
+  email?: string;
   firstName: string;
   lastName: string;
-  email?: string;
   otpCode: string;
 }
 
 export interface LoginRequest {
-  phoneNumber: NigerianPhoneNumber;
+  phoneNumber?: NigerianPhoneNumber;
+  email?: string;
   otpCode: string;
 }
 
@@ -140,7 +147,8 @@ export interface TokenPair {
 // JWT payload interface
 export interface JWTPayload {
   userId: string;
-  phoneNumber: NigerianPhoneNumber;
+  phoneNumber?: NigerianPhoneNumber;
+  email?: string;
   role: UserRole;
   sessionId: string;
   iat: number;
@@ -149,7 +157,8 @@ export interface JWTPayload {
 
 // Password reset types (for future implementation)
 export interface ResetPasswordRequest {
-  phoneNumber: NigerianPhoneNumber;
+  phoneNumber?: NigerianPhoneNumber;
+  email?: string;
   otpCode: string;
   newPassword: string;
 }

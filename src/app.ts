@@ -101,6 +101,12 @@ class App {
           if (!origin) return callback(null, true);
 
           const allowedOrigins = config.cors.origin;
+          
+          // If allowedOrigins is true (development mode), allow all origins
+          if (allowedOrigins === true) {
+            return callback(null, true);
+          }
+          
           if (Array.isArray(allowedOrigins)) {
             if (allowedOrigins.includes(origin)) {
               callback(null, true);
@@ -120,6 +126,10 @@ class App {
           "X-HTTP-Method-Override",
           "Accept",
           "Cache-Control",
+          "X-Country",
+          "X-Currency", 
+          "X-Timezone",
+          "X-Session-ID",
         ],
         exposedHeaders: ["X-Total-Count", "X-Page-Count"],
       })
@@ -473,6 +483,11 @@ class App {
       const serviceContainer = getServiceContainer();
       await serviceContainer.initialize();
       console.log("✅ Service container initialized successfully");
+
+      // Initialize email service
+      const { EmailHelper } = await import('./utils/email/emailHelper');
+      await EmailHelper.initialize();
+      console.log("✅ Email service initialized successfully");
 
       // Run database migrations if needed
       // await this.runMigrations();

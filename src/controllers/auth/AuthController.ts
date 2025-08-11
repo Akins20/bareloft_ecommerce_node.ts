@@ -56,18 +56,20 @@ export class AuthController extends BaseController {
         return;
       }
 
-      // Check if phone number is already registered
-      const existingUser = await this.authService.findUserByPhone(
-        signupData.phoneNumber
-      );
-      if (existingUser) {
-        this.sendError(
-          res,
-          "Phone number is already registered",
-          409,
-          "PHONE_EXISTS"
+      // Check if phone number is already registered (if provided)
+      if (signupData.phoneNumber) {
+        const existingUser = await this.authService.findUserByPhone(
+          signupData.phoneNumber
         );
-        return;
+        if (existingUser) {
+          this.sendError(
+            res,
+            "Phone number is already registered",
+            409,
+            "PHONE_EXISTS"
+          );
+          return;
+        }
       }
 
       // Check if email is already registered (if provided)
@@ -98,11 +100,18 @@ export class AuthController extends BaseController {
       }
 
       // Log successful signup
-      this.logAction("USER_SIGNUP", result.user.id, "USER", result.user.id, {
-        phoneNumber: this.maskPhoneNumber(signupData.phoneNumber),
-        email: signupData.email,
+      const signupLogData: any = {
         hasEmail: !!signupData.email,
-      });
+      };
+      
+      if (signupData.phoneNumber) {
+        signupLogData.phoneNumber = this.maskPhoneNumber(signupData.phoneNumber);
+      }
+      if (signupData.email) {
+        signupLogData.email = this.maskEmail(signupData.email);
+      }
+      
+      this.logAction("USER_SIGNUP", result.data.user.id, "USER", result.data.user.id, signupLogData);
 
       const response: ApiResponse<AuthResponse> = {
         success: true,
@@ -110,10 +119,10 @@ export class AuthController extends BaseController {
         data: {
           success: true,
           message: "Account created successfully",
-          user: result.user,
-          accessToken: result.accessToken,
-          refreshToken: result.refreshToken,
-          expiresIn: result.expiresIn,
+          user: result.data.user,
+          accessToken: result.data.accessToken,
+          refreshToken: result.data.refreshToken,
+          expiresIn: result.data.expiresIn,
         },
       };
 
@@ -156,14 +165,22 @@ export class AuthController extends BaseController {
       }
 
       // Update last login
-      await this.authService.updateLastLogin(result.user.id);
+      await this.authService.updateLastLogin(result.data.user.id);
 
       // Log successful login
-      this.logAction("USER_LOGIN", result.user.id, "USER", result.user.id, {
-        phoneNumber: this.maskPhoneNumber(loginData.phoneNumber),
+      const loginLogData: any = {
         ipAddress: req.ip,
         userAgent: req.get("User-Agent"),
-      });
+      };
+      
+      if (loginData.phoneNumber) {
+        loginLogData.phoneNumber = this.maskPhoneNumber(loginData.phoneNumber);
+      }
+      if (loginData.email) {
+        loginLogData.email = this.maskEmail(loginData.email);
+      }
+      
+      this.logAction("USER_LOGIN", result.data.user.id, "USER", result.data.user.id, loginLogData);
 
       const response: ApiResponse<AuthResponse> = {
         success: true,
@@ -171,10 +188,10 @@ export class AuthController extends BaseController {
         data: {
           success: true,
           message: "Login successful",
-          user: result.user,
-          accessToken: result.accessToken,
-          refreshToken: result.refreshToken,
-          expiresIn: result.expiresIn,
+          user: result.data.user,
+          accessToken: result.data.accessToken,
+          refreshToken: result.data.refreshToken,
+          expiresIn: result.data.expiresIn,
         },
       };
 
@@ -190,15 +207,37 @@ export class AuthController extends BaseController {
    */
   public requestOTP = async (req: Request, res: Response, next?: unknown): Promise<void> => {
     try {
-      const { phoneNumber, purpose }: RequestOTPRequest = req.body;
+      const { phoneNumber, email, purpose }: RequestOTPRequest = req.body;
 
-      // Validate request
-      if (!phoneNumber || !this.isValidNigerianPhone(phoneNumber)) {
+      // Validate that either phone number or email is provided
+      if (!phoneNumber && !email) {
         this.sendError(
           res,
-          "Valid Nigerian phone number is required",
+          "Either phone number or email is required",
+          400,
+          "MISSING_CONTACT_INFO"
+        );
+        return;
+      }
+
+      // Validate phone number format if provided
+      if (phoneNumber && !this.isValidNigerianPhone(phoneNumber)) {
+        this.sendError(
+          res,
+          "Invalid Nigerian phone number format. Use +234XXXXXXXXXX",
           400,
           "INVALID_PHONE"
+        );
+        return;
+      }
+
+      // Validate email format if provided
+      if (email && !this.isValidEmail(email)) {
+        this.sendError(
+          res,
+          "Invalid email address format",
+          400,
+          "INVALID_EMAIL"
         );
         return;
       }
@@ -209,8 +248,9 @@ export class AuthController extends BaseController {
         return;
       }
 
-      // Check rate limiting
-      const canRequest = await this.otpService.checkRateLimit(phoneNumber);
+      // Check rate limiting using the contact method
+      const rateLimitKey = phoneNumber || email;
+      const canRequest = await this.otpService.checkRateLimit(rateLimitKey!);
       if (!canRequest) {
         this.sendError(
           res,
@@ -221,40 +261,70 @@ export class AuthController extends BaseController {
         return;
       }
 
-      // For signup, check if phone doesn't exist
-      if (purpose === "SIGNUP") {
-        const existingUser =
-          await this.authService.findUserByPhone(phoneNumber);
-        if (existingUser) {
-          this.sendError(
-            res,
-            "Phone number is already registered. Use login instead.",
-            409,
-            "PHONE_EXISTS"
-          );
-          return;
+      // Normalize purpose for internal comparisons
+      const normalizedPurpose = purpose?.toUpperCase() as OTPPurpose;
+
+      // For signup, check if contact method doesn't already exist
+      if (normalizedPurpose === "SIGNUP") {
+        let existingUser;
+        if (phoneNumber) {
+          existingUser = await this.authService.findUserByPhone(phoneNumber);
+          if (existingUser) {
+            this.sendError(
+              res,
+              "Phone number is already registered. Use login instead.",
+              409,
+              "PHONE_EXISTS"
+            );
+            return;
+          }
+        } else if (email) {
+          existingUser = await this.authService.findUserByEmail(email);
+          if (existingUser) {
+            this.sendError(
+              res,
+              "Email address is already registered. Use login instead.",
+              409,
+              "EMAIL_EXISTS"
+            );
+            return;
+          }
         }
       }
 
-      // For login, check if phone exists
-      if (purpose === "LOGIN") {
-        const existingUser =
-          await this.authService.findUserByPhone(phoneNumber);
-        if (!existingUser) {
-          this.sendError(
-            res,
-            "Phone number not registered. Please sign up first.",
-            404,
-            "PHONE_NOT_FOUND"
-          );
-          return;
+      // For login, check if contact method exists
+      if (normalizedPurpose === "LOGIN") {
+        let existingUser;
+        if (phoneNumber) {
+          existingUser = await this.authService.findUserByPhone(phoneNumber);
+          if (!existingUser) {
+            this.sendError(
+              res,
+              "Phone number not registered. Please sign up first.",
+              404,
+              "PHONE_NOT_FOUND"
+            );
+            return;
+          }
+        } else if (email) {
+          existingUser = await this.authService.findUserByEmail(email);
+          if (!existingUser) {
+            this.sendError(
+              res,
+              "Email address not registered. Please sign up first.",
+              404,
+              "EMAIL_NOT_FOUND"
+            );
+            return;
+          }
         }
       }
 
       // Generate and send OTP using AuthService
       const result = await this.authService.requestOTP({
         phoneNumber,
-        purpose: purpose || "LOGIN"
+        email,
+        purpose: normalizedPurpose || "LOGIN"
       });
 
       if (!result.success) {
@@ -263,17 +333,28 @@ export class AuthController extends BaseController {
       }
 
       // Log OTP request
-      this.logAction("OTP_REQUESTED", undefined, "OTP", undefined, {
-        phoneNumber: this.maskPhoneNumber(phoneNumber),
+      const logData: any = {
         purpose: purpose || "login",
-      });
+      };
+      
+      if (phoneNumber) {
+        logData.phoneNumber = this.maskPhoneNumber(phoneNumber);
+      }
+      if (email) {
+        logData.email = this.maskEmail(email);
+      }
+      
+      this.logAction("OTP_REQUESTED", undefined, "OTP", undefined, logData);
 
+      const maskedContact = phoneNumber ? this.maskPhoneNumber(phoneNumber) : this.maskEmail(email!);
+      const contactType = phoneNumber ? 'phone' : 'email';
+      
       const response: ApiResponse<OTPResponse> = {
         success: true,
-        message: `OTP sent to ${this.maskPhoneNumber(phoneNumber)}`,
+        message: `OTP sent to ${maskedContact}`,
         data: {
           success: true,
-          message: `Verification code sent to your phone`,
+          message: `Verification code sent to your ${contactType}`,
           expiresIn: result.data?.expiresIn || 600,
           canResendIn: 60,
         },
@@ -291,15 +372,37 @@ export class AuthController extends BaseController {
    */
   public verifyOTP = async (req: Request, res: Response, next?: unknown): Promise<void> => {
     try {
-      const { phoneNumber, code, purpose }: VerifyOTPRequest = req.body;
+      const { phoneNumber, email, code, purpose }: VerifyOTPRequest = req.body;
 
-      // Validate request
-      if (!phoneNumber || !this.isValidNigerianPhone(phoneNumber)) {
+      // Validate that either phone number or email is provided
+      if (!phoneNumber && !email) {
         this.sendError(
           res,
-          "Valid Nigerian phone number is required",
+          "Either phone number or email is required",
+          400,
+          "MISSING_CONTACT_INFO"
+        );
+        return;
+      }
+
+      // Validate phone number format if provided
+      if (phoneNumber && !this.isValidNigerianPhone(phoneNumber)) {
+        this.sendError(
+          res,
+          "Invalid Nigerian phone number format. Use +234XXXXXXXXXX",
           400,
           "INVALID_PHONE"
+        );
+        return;
+      }
+
+      // Validate email format if provided
+      if (email && !this.isValidEmail(email)) {
+        this.sendError(
+          res,
+          "Invalid email address format",
+          400,
+          "INVALID_EMAIL"
         );
         return;
       }
@@ -317,26 +420,43 @@ export class AuthController extends BaseController {
       // Verify OTP using AuthService
       const result = await this.authService.verifyOTP({
         phoneNumber,
+        email,
         code,
         purpose: (purpose || "login").toUpperCase() as OTPPurpose
       });
 
       if (!result.isValid) {
-        this.logAction("OTP_VERIFY_FAILED", undefined, "OTP", undefined, {
-          phoneNumber: this.maskPhoneNumber(phoneNumber),
+        const verifyLogData: any = {
           purpose: purpose || "login",
           reason: "Invalid OTP code",
-        });
+        };
+        
+        if (phoneNumber) {
+          verifyLogData.phoneNumber = this.maskPhoneNumber(phoneNumber);
+        }
+        if (email) {
+          verifyLogData.email = this.maskEmail(email);
+        }
+        
+        this.logAction("OTP_VERIFY_FAILED", undefined, "OTP", undefined, verifyLogData);
 
         this.sendError(res, "Invalid or expired OTP code", 400, "OTP_VERIFICATION_FAILED");
         return;
       }
 
       // Log successful verification
-      this.logAction("OTP_VERIFIED", undefined, "OTP", undefined, {
-        phoneNumber: this.maskPhoneNumber(phoneNumber),
+      const verifiedLogData: any = {
         purpose: purpose || "login",
-      });
+      };
+      
+      if (phoneNumber) {
+        verifiedLogData.phoneNumber = this.maskPhoneNumber(phoneNumber);
+      }
+      if (email) {
+        verifiedLogData.email = this.maskEmail(email);
+      }
+      
+      this.logAction("OTP_VERIFIED", undefined, "OTP", undefined, verifiedLogData);
 
       const response: ApiResponse<{ verified: boolean }> = {
         success: true,
@@ -528,9 +648,19 @@ req: Request, res: Response, next?: unknown  ): Promise<void> => {
   private validateSignupRequest(data: SignupRequest): string[] {
     const errors: string[] = [];
 
-    // Phone number validation
-    if (!data.phoneNumber || !this.isValidNigerianPhone(data.phoneNumber)) {
+    // Either phone number or email is required
+    if (!data.phoneNumber && !data.email) {
+      errors.push("Either phone number or email is required");
+    }
+
+    // Phone number validation (if provided)
+    if (data.phoneNumber && !this.isValidNigerianPhone(data.phoneNumber)) {
       errors.push("Valid Nigerian phone number is required");
+    }
+
+    // Email validation (if provided)
+    if (data.email && !this.isValidEmail(data.email)) {
+      errors.push("Valid email address is required");
     }
 
     // Name validation
@@ -540,11 +670,6 @@ req: Request, res: Response, next?: unknown  ): Promise<void> => {
 
     if (!data.lastName || data.lastName.trim().length < 2) {
       errors.push("Last name must be at least 2 characters long");
-    }
-
-    // Email validation (if provided)
-    if (data.email && !this.isValidEmail(data.email)) {
-      errors.push("Valid email address is required");
     }
 
     // OTP code validation
@@ -561,9 +686,19 @@ req: Request, res: Response, next?: unknown  ): Promise<void> => {
   private validateLoginRequest(data: LoginRequest): string[] {
     const errors: string[] = [];
 
-    // Phone number validation
-    if (!data.phoneNumber || !this.isValidNigerianPhone(data.phoneNumber)) {
+    // Either phone number or email is required
+    if (!data.phoneNumber && !data.email) {
+      errors.push("Either phone number or email is required");
+    }
+
+    // Phone number validation (if provided)
+    if (data.phoneNumber && !this.isValidNigerianPhone(data.phoneNumber)) {
       errors.push("Valid Nigerian phone number is required");
+    }
+
+    // Email validation (if provided)
+    if (data.email && !this.isValidEmail(data.email)) {
+      errors.push("Valid email address is required");
     }
 
     // OTP code validation
@@ -574,11 +709,12 @@ req: Request, res: Response, next?: unknown  ): Promise<void> => {
     return errors;
   }
 
+
   /**
    * Mask phone number for security/privacy
    */
-  private maskPhoneNumber(phoneNumber: string): string {
-    if (phoneNumber.length < 4) return "****";
+  private maskPhoneNumber(phoneNumber?: string): string {
+    if (!phoneNumber || phoneNumber.length < 4) return "****";
 
     const cleaned = phoneNumber.replace(/\D/g, "");
     if (cleaned.length < 8) return "****";
@@ -587,5 +723,20 @@ req: Request, res: Response, next?: unknown  ): Promise<void> => {
     const masked = "*".repeat(cleaned.length - 4) + lastFour;
 
     return masked;
+  }
+
+  /**
+   * Mask email for security/privacy
+   */
+  private maskEmail(email: string): string {
+    if (!email || !email.includes('@')) return "****";
+
+    const [username, domain] = email.split('@');
+    if (username.length <= 2) {
+      return `**@${domain}`;
+    }
+    
+    const maskedUsername = username.charAt(0) + '*'.repeat(username.length - 2) + username.charAt(username.length - 1);
+    return `${maskedUsername}@${domain}`;
   }
 }

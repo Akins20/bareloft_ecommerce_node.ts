@@ -12,7 +12,7 @@ datasource db {
 
 model User {
   id            String    @id @default(cuid())
-  phoneNumber   String    @unique
+  phoneNumber   String?   @unique
   email         String?   @unique
   firstName     String
   lastName      String
@@ -302,7 +302,8 @@ model Session {
 
 model OTPCode {
   id          String    @id @default(cuid())
-  phoneNumber String
+  phoneNumber String?
+  email       String?
   code        String
   purpose     OTPPurpose
   expiresAt   DateTime

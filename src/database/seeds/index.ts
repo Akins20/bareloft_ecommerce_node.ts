@@ -23,21 +23,21 @@ async function main() {
         await prisma.category.createMany({
           data: [
             {
-              name: 'Electronics',
-              slug: 'electronics',
-              description: 'Electronic devices and accessories',
+              name: 'Men\'s Fashion',
+              slug: 'mens-fashion',
+              description: 'Stylish clothing and accessories for men',
               isActive: true
             },
             {
-              name: 'Fashion',
-              slug: 'fashion',
-              description: 'Clothing and fashion accessories',
+              name: 'Women\'s Fashion',
+              slug: 'womens-fashion',
+              description: 'Trendy outfits and accessories for women',
               isActive: true
             },
             {
-              name: 'Home & Living',
-              slug: 'home-living',
-              description: 'Home decor and living essentials',
+              name: 'Traditional Wear',
+              slug: 'traditional-wear',
+              description: 'Nigerian traditional clothing and attire',
               isActive: true
             }
           ]
@@ -59,43 +59,42 @@ async function main() {
       await prisma.orderItem.deleteMany();
       await prisma.cartItem.deleteMany();
       await prisma.order.deleteMany();
-      await prisma.cart.deleteMany();
       await prisma.product.deleteMany();
       await prisma.category.deleteMany();
       await prisma.address.deleteMany();
       await prisma.user.deleteMany();
       
-      // Seed categories
+      // Seed fashion-focused categories
       const categories = await prisma.category.createMany({
         data: [
           {
-            name: 'Electronics',
-            slug: 'electronics',
-            description: 'Electronic devices and accessories',
+            name: 'Men\'s Fashion',
+            slug: 'mens-fashion',
+            description: 'Stylish clothing and accessories for men',
             isActive: true
           },
           {
-            name: 'Fashion',
-            slug: 'fashion',
-            description: 'Clothing and fashion accessories',
+            name: 'Women\'s Fashion',
+            slug: 'womens-fashion',
+            description: 'Trendy outfits and accessories for women',
             isActive: true
           },
           {
-            name: 'Home & Living',
-            slug: 'home-living',
-            description: 'Home decor and living essentials',
+            name: 'Shoes & Footwear',
+            slug: 'shoes-footwear',
+            description: 'Fashionable shoes for all occasions',
             isActive: true
           },
           {
-            name: 'Books',
-            slug: 'books',
-            description: 'Books and educational materials',
+            name: 'Bags & Accessories',
+            slug: 'bags-accessories',
+            description: 'Handbags, jewelry, and fashion accessories',
             isActive: true
           },
           {
-            name: 'Sports',
-            slug: 'sports',
-            description: 'Sports equipment and accessories',
+            name: 'Traditional Wear',
+            slug: 'traditional-wear',
+            description: 'Nigerian traditional clothing and attire',
             isActive: true
           }
         ]
@@ -106,50 +105,158 @@ async function main() {
       // Get created categories for product seeding
       const createdCategories = await prisma.category.findMany();
       
-      // Seed sample products
+      // Seed fashion products with Nigerian market pricing
       const products = await prisma.product.createMany({
         data: [
           {
-            name: 'iPhone 15 Pro Max',
-            slug: 'iphone-15-pro-max',
-            description: 'Latest iPhone with advanced features',
-            price: 75000000, // ₦750,000 in kobo
-            costPrice: 65000000,
-            sku: 'IPHONE15PM001',
-            categoryId: createdCategories.find(c => c.slug === 'electronics')?.id || createdCategories[0].id,
-            stockQuantity: 25,
+            name: 'Classic Men\'s Ankara Shirt',
+            slug: 'classic-mens-ankara-shirt',
+            description: 'Premium quality Nigerian Ankara fabric shirt with modern tailoring',
+            price: 2500000, // ₦25,000 in kobo
+            costPrice: 1800000,
+            sku: 'ANKM001',
+            categoryId: createdCategories.find(c => c.slug === 'mens-fashion')?.id || createdCategories[0].id,
+            trackQuantity: true,
+            stock: 30,
             isActive: true,
             isFeatured: true,
-            weight: 500,
-            dimensions: '15x7.5x1cm'
+            weight: 250,
+            dimensions: 'S, M, L, XL, XXL'
           },
           {
-            name: 'Nike Air Max 270',
-            slug: 'nike-air-max-270',
-            description: 'Comfortable running shoes',
+            name: 'Elegant Gele Head Wrap',
+            slug: 'elegant-gele-head-wrap',
+            description: 'Beautiful Nigerian gele for special occasions and weddings',
+            price: 1500000, // ₦15,000 in kobo
+            costPrice: 1000000,
+            sku: 'GELEW001',
+            categoryId: createdCategories.find(c => c.slug === 'womens-fashion')?.id || createdCategories[1].id,
+            trackQuantity: true,
+            stock: 45,
+            isActive: true,
+            isFeatured: true,
+            weight: 150,
+            dimensions: '2.5m x 1.2m'
+          },
+          {
+            name: 'Designer Agbada with Embroidery',
+            slug: 'designer-agbada-embroidery',
+            description: 'Luxurious Nigerian Agbada with intricate embroidery for special events',
             price: 8500000, // ₦85,000 in kobo
             costPrice: 6000000,
-            sku: 'NIKE270001',
-            categoryId: createdCategories.find(c => c.slug === 'fashion')?.id || createdCategories[1].id,
-            stockQuantity: 50,
+            sku: 'AGBEM001',
+            categoryId: createdCategories.find(c => c.slug === 'traditional-wear')?.id || createdCategories[4].id,
+            trackQuantity: true,
+            stock: 15,
+            isActive: true,
+            isFeatured: true,
+            weight: 800,
+            dimensions: 'S, M, L, XL, XXL'
+          },
+          {
+            name: 'Premium Leather Loafers',
+            slug: 'premium-leather-loafers',
+            description: 'Italian-style leather loafers perfect for business and casual wear',
+            price: 4500000, // ₦45,000 in kobo
+            costPrice: 3200000,
+            sku: 'LOAFM001',
+            categoryId: createdCategories.find(c => c.slug === 'shoes-footwear')?.id || createdCategories[2].id,
+            trackQuantity: true,
+            stock: 25,
+            isActive: true,
+            isFeatured: false,
+            weight: 600,
+            dimensions: '40, 41, 42, 43, 44, 45'
+          },
+          {
+            name: 'Handwoven Aso-Oke Fabric',
+            slug: 'handwoven-aso-oke-fabric',
+            description: 'Authentic handwoven Aso-Oke fabric for traditional Nigerian attire',
+            price: 3500000, // ₦35,000 in kobo
+            costPrice: 2500000,
+            sku: 'ASOOKF001',
+            categoryId: createdCategories.find(c => c.slug === 'traditional-wear')?.id || createdCategories[4].id,
+            trackQuantity: true,
+            stock: 20,
+            isActive: true,
+            isFeatured: true,
+            weight: 400,
+            dimensions: '5 yards'
+          },
+          {
+            name: 'Stylish Ankara Handbag',
+            slug: 'stylish-ankara-handbag',
+            description: 'Fashionable handbag made from authentic Nigerian Ankara fabric',
+            price: 1800000, // ₦18,000 in kobo
+            costPrice: 1200000,
+            sku: 'ANKBAG001',
+            categoryId: createdCategories.find(c => c.slug === 'bags-accessories')?.id || createdCategories[3].id,
+            trackQuantity: true,
+            stock: 35,
             isActive: true,
             isFeatured: false,
             weight: 300,
-            dimensions: '30x20x10cm'
+            dimensions: '35cm x 25cm x 15cm'
           },
           {
-            name: 'Samsung 4K Smart TV 55"',
-            slug: 'samsung-4k-smart-tv-55',
-            description: '55-inch 4K Smart TV with HDR',
-            price: 45000000, // ₦450,000 in kobo
-            costPrice: 38000000,
-            sku: 'SAMSUNG55TV001',
-            categoryId: createdCategories.find(c => c.slug === 'electronics')?.id || createdCategories[0].id,
-            stockQuantity: 15,
+            name: 'Women\'s Kaftan Dress',
+            slug: 'womens-kaftan-dress',
+            description: 'Flowing kaftan dress in vibrant African prints, perfect for any occasion',
+            price: 2200000, // ₦22,000 in kobo
+            costPrice: 1600000,
+            sku: 'KAFTW001',
+            categoryId: createdCategories.find(c => c.slug === 'womens-fashion')?.id || createdCategories[1].id,
+            trackQuantity: true,
+            stock: 40,
             isActive: true,
             isFeatured: true,
-            weight: 18000,
-            dimensions: '123x71x6cm'
+            weight: 350,
+            dimensions: 'S, M, L, XL, XXL'
+          },
+          {
+            name: 'Gold-Plated African Jewelry Set',
+            slug: 'gold-plated-african-jewelry-set',
+            description: 'Beautiful gold-plated jewelry set with traditional African motifs',
+            price: 2800000, // ₦28,000 in kobo
+            costPrice: 2000000,
+            sku: 'JEWSET001',
+            categoryId: createdCategories.find(c => c.slug === 'bags-accessories')?.id || createdCategories[3].id,
+            trackQuantity: true,
+            stock: 18,
+            isActive: true,
+            isFeatured: true,
+            weight: 100,
+            dimensions: 'One Size'
+          },
+          {
+            name: 'Casual Denim Jacket',
+            slug: 'casual-denim-jacket',
+            description: 'Trendy denim jacket perfect for layering and casual outfits',
+            price: 3200000, // ₦32,000 in kobo
+            costPrice: 2400000,
+            sku: 'DENIM001',
+            categoryId: createdCategories.find(c => c.slug === 'mens-fashion')?.id || createdCategories[0].id,
+            trackQuantity: true,
+            stock: 28,
+            isActive: true,
+            isFeatured: false,
+            weight: 450,
+            dimensions: 'S, M, L, XL, XXL'
+          },
+          {
+            name: 'High-Heel Sandals',
+            slug: 'high-heel-sandals',
+            description: 'Elegant high-heel sandals for formal occasions and parties',
+            price: 2600000, // ₦26,000 in kobo
+            costPrice: 1900000,
+            sku: 'HEELSF001',
+            categoryId: createdCategories.find(c => c.slug === 'shoes-footwear')?.id || createdCategories[2].id,
+            trackQuantity: true,
+            stock: 22,
+            isActive: true,
+            isFeatured: false,
+            weight: 400,
+            dimensions: '36, 37, 38, 39, 40, 41'
           }
         ]
       });

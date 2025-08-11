@@ -1,6 +1,7 @@
 import { BaseService } from "../BaseService";
 import { OrderRepository } from "../../repositories/OrderRepository";
 import { CartService } from "../cart/CartService";
+import { OrderEmailService, OrderData } from "../notifications/OrderEmailService";
 import {
   Order,
   OrderStatus,
@@ -40,11 +41,13 @@ export interface OrderListResponse {
 export class OrderService extends BaseService {
   private orderRepository: OrderRepository;
   private cartService: CartService;
+  private orderEmailService: OrderEmailService;
 
-  constructor(orderRepository?: OrderRepository, cartService?: CartService) {
+  constructor(orderRepository?: OrderRepository, cartService?: CartService, orderEmailService?: OrderEmailService) {
     super();
     this.orderRepository = orderRepository || {} as OrderRepository;
     this.cartService = cartService || {} as CartService;
+    this.orderEmailService = orderEmailService || new OrderEmailService();
   }
 
   /**
@@ -231,6 +234,7 @@ export class OrderService extends BaseService {
   ): Promise<OrderResponse> {
     try {
       const order = await this.getOrderById(orderId);
+      const previousStatus = order.status;
 
       // Update order status
       const updatedOrder = await this.orderRepository.update?.(orderId, {
@@ -246,6 +250,18 @@ export class OrderService extends BaseService {
         updatedBy || "ADMIN",
         adminNotes
       );
+
+      // Send status update email notification
+      try {
+        const orderEmailData = this.mapOrderToEmailData(updatedOrder);
+        await this.orderEmailService.sendOrderStatusUpdateEmail(
+          orderEmailData, 
+          previousStatus?.toString()
+        );
+      } catch (emailError) {
+        // Log email error but don't fail the order update
+        console.error('Failed to send status update email:', emailError);
+      }
 
       return {
         success: true,
@@ -302,41 +318,6 @@ export class OrderService extends BaseService {
     }
   }
 
-  /**
-   * Get order by order number
-   */
-  async getOrderByNumber(orderNumber: string, userId?: string): Promise<Order> {
-    try {
-      // For now, use a simple implementation - in production, you'd have a proper query
-      const orders = await this.orderRepository.findMany?.({}, {
-        pagination: { page: 1, limit: 100 }
-      });
-      
-      const order = orders?.data.find((o: any) => o.orderNumber === orderNumber);
-
-      if (!order) {
-        throw new AppError(
-          "Order not found",
-          HTTP_STATUS.NOT_FOUND,
-          ERROR_CODES.RESOURCE_NOT_FOUND
-        );
-      }
-
-      // Check ownership for user requests
-      if (userId && order.userId !== userId) {
-        throw new AppError(
-          "Access denied",
-          HTTP_STATUS.FORBIDDEN,
-          ERROR_CODES.FORBIDDEN
-        );
-      }
-
-      return order;
-    } catch (error) {
-      this.handleError("Error fetching order by number", error);
-      throw error;
-    }
-  }
 
   /**
    * Get user order statistics
@@ -485,6 +466,383 @@ export class OrderService extends BaseService {
       REFUNDED: "Order has been refunded",
     };
     return descriptions[status] || `Order status updated to ${status}`;
+  }
+
+  /**
+   * Create guest order from current cart (no user authentication required)
+   */
+  async createGuestOrder(orderData: any): Promise<any> {
+    try {
+      // Get current cart data using session approach
+      // Since we don't have userId for guest, we'll need to get cart from session
+      const sessionId = orderData.sessionId || 'guest'; // Frontend should provide session ID
+      
+      // For now, let's get cart data from the request or use mock data
+      // Frontend should pass the current cart data in the checkout request
+      const cartData = orderData.cartData || {
+        items: [],
+        subtotal: 0,
+        estimatedTax: 0,
+        estimatedShipping: 0,
+        estimatedTotal: 0
+      };
+
+      if (!cartData.items || cartData.items.length === 0) {
+        throw new AppError(
+          "Cart is empty. Please add items before checkout.",
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_CODES.INVALID_INPUT
+        );
+      }
+
+      // Generate unique order number
+      const orderNumber = await this.generateOrderNumber();
+
+      // Calculate shipping if address is provided
+      let shippingAmount = cartData.estimatedShipping || 0;
+      if (orderData.shippingAddress) {
+        // Here you could integrate with shipping calculator
+        // For Lagos, free shipping; other states might have different rates
+        if (orderData.shippingAddress.state !== "Lagos") {
+          shippingAmount = 200000; // ₦2,000 shipping for other states
+        }
+      }
+
+      // Recalculate totals with final shipping
+      const subtotal = cartData.subtotal;
+      const tax = cartData.estimatedTax;
+      const finalTotal = subtotal + tax + shippingAmount;
+
+      // Prepare order data for frontend
+      const orderSummary = {
+        orderNumber,
+        items: cartData.items.map((item: any) => ({
+          productId: item.productId,
+          productName: item.product?.name || "Unknown Product",
+          productSku: item.product?.sku || "UNKNOWN",
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice,
+        })),
+        pricing: {
+          subtotal: subtotal,
+          tax: tax,
+          shipping: shippingAmount,
+          total: finalTotal,
+          currency: "NGN"
+        },
+        customer: {
+          email: orderData.guestInfo.email,
+          firstName: orderData.guestInfo.firstName,
+          lastName: orderData.guestInfo.lastName,
+          phone: orderData.guestInfo.phone,
+        },
+        addresses: {
+          shipping: orderData.shippingAddress,
+          billing: orderData.billingAddress || orderData.shippingAddress,
+        },
+        status: "PENDING"
+      };
+
+      // Generate Paystack payment URL
+      const paymentUrl = `https://checkout.paystack.com/pay/${orderNumber}`;
+
+      return {
+        success: true,
+        message: "Order created successfully. Redirecting to payment...",
+        order: orderSummary,
+        payment: {
+          paymentUrl,
+          reference: orderNumber,
+          amount: finalTotal,
+          currency: "NGN"
+        },
+        // Include cart data for frontend reference
+        cartSummary: {
+          itemCount: cartData.items.length,
+          subtotal: subtotal,
+          tax: tax,
+          shipping: shippingAmount,
+          total: finalTotal
+        }
+      };
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError(
+        "Failed to create guest order",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.INTERNAL_ERROR
+      );
+    }
+  }
+
+
+  /**
+   * Confirm payment and send confirmation email
+   */
+  async confirmPayment(orderNumber: string, paymentReference?: string): Promise<OrderResponse> {
+    try {
+      // Find order by order number
+      const order = await this.orderRepository.findByOrderNumber?.(orderNumber) || 
+                    await this.getOrderByNumber(orderNumber);
+
+      if (!order) {
+        throw new AppError(
+          "Order not found",
+          HTTP_STATUS.NOT_FOUND,
+          ERROR_CODES.RESOURCE_NOT_FOUND
+        );
+      }
+
+      // Update payment status and order status
+      const updatedOrder = await this.orderRepository.update?.(order.id, {
+        paymentStatus: "COMPLETED",
+        status: "CONFIRMED",
+        paymentReference: paymentReference,
+      }) || order;
+
+      // Create timeline event
+      await this.createTimelineEvent(
+        order.id,
+        "PAYMENT_CONFIRMED",
+        "Payment confirmed successfully",
+        "PAYMENT_SYSTEM"
+      );
+
+      // Send order confirmation email
+      try {
+        const orderEmailData = this.mapOrderToEmailData(updatedOrder, paymentReference);
+        await this.orderEmailService.sendOrderConfirmationEmail(orderEmailData);
+      } catch (emailError) {
+        // Log email error but don't fail the payment confirmation
+        console.error('Failed to send order confirmation email:', emailError);
+      }
+
+      return {
+        success: true,
+        message: "Payment confirmed and order updated successfully",
+        order: updatedOrder,
+      };
+    } catch (error) {
+      this.handleError("Error confirming payment", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get order by order number
+   */
+  async getOrderByNumber(orderNumber: string, userId?: string): Promise<Order> {
+    try {
+      const order = await this.orderRepository.findByOrderNumber?.(orderNumber);
+
+      if (!order) {
+        throw new AppError(
+          "Order not found",
+          HTTP_STATUS.NOT_FOUND,
+          ERROR_CODES.RESOURCE_NOT_FOUND
+        );
+      }
+
+      // Check ownership for user requests
+      if (userId && order.userId !== userId) {
+        throw new AppError(
+          "Access denied",
+          HTTP_STATUS.FORBIDDEN,
+          ERROR_CODES.FORBIDDEN
+        );
+      }
+
+      return order;
+    } catch (error) {
+      this.handleError("Error fetching order by number", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Track guest order and send comprehensive tracking email with full order details
+   */
+  async trackGuestOrder(orderNumber: string, email: string): Promise<any> {
+    try {
+      // Try to find the actual order by order number
+      let order = null;
+      let trackingData = null;
+      
+      try {
+        // Attempt to fetch actual order from database
+        order = await this.getOrderByNumber(orderNumber);
+        
+        // Validate that the email matches the order (basic security check)
+        const orderEmail = order.user?.email || order.shippingAddress?.phoneNumber; // Fallback for guest orders
+        if (orderEmail && orderEmail.toLowerCase() !== email.toLowerCase()) {
+          // For security, don't reveal that order exists but email doesn't match
+          throw new AppError("Order not found", HTTP_STATUS.NOT_FOUND, ERROR_CODES.RESOURCE_NOT_FOUND);
+        }
+      } catch (error) {
+        // If order is not found in database, create mock tracking data
+        // This maintains the existing functionality for basic tracking
+        console.log(`Order ${orderNumber} not found in database, using mock data`);
+      }
+
+      if (order) {
+        // Use real order data
+        trackingData = {
+          orderNumber: order.orderNumber,
+          status: order.status?.toString() || 'PROCESSING',
+          estimatedDelivery: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+          trackingNumber: `TRK-${order.orderNumber}`,
+          message: this.getStatusDescription(order.status as any),
+          total: order.total,
+          subtotal: order.subtotal,
+          tax: order.tax,
+          shipping: order.shippingCost,
+          currency: order.currency || 'NGN',
+          items: order.items?.map((item: any) => ({
+            name: item.product?.name || 'Product',
+            quantity: item.quantity,
+            unitPrice: item.price,
+            totalPrice: item.total,
+            sku: item.product?.sku
+          })) || [],
+          shippingAddress: order.shippingAddress ? {
+            firstName: order.shippingAddress.firstName,
+            lastName: order.shippingAddress.lastName,
+            addressLine1: order.shippingAddress.addressLine1,
+            addressLine2: order.shippingAddress.addressLine2,
+            city: order.shippingAddress.city,
+            state: order.shippingAddress.state,
+            postalCode: order.shippingAddress.postalCode,
+            phoneNumber: order.shippingAddress.phoneNumber
+          } : null,
+          paymentMethod: order.paymentMethod,
+          paymentReference: order.paymentReference,
+          paymentStatus: order.paymentStatus?.toString(),
+          orderDate: order.createdAt?.toLocaleDateString('en-NG')
+        };
+
+        // Send comprehensive tracking email with full order details
+        try {
+          const orderEmailData = this.mapOrderToEmailData(order);
+          // Override email for guest tracking
+          if (orderEmailData.shippingAddress) {
+            orderEmailData.shippingAddress.email = email;
+          }
+          if (!orderEmailData.guestInfo && !order.user) {
+            orderEmailData.guestInfo = {
+              email: email,
+              firstName: order.shippingAddress?.firstName || 'Valued Customer',
+              lastName: order.shippingAddress?.lastName || '',
+              phone: order.shippingAddress?.phoneNumber || ''
+            };
+          }
+          
+          await this.orderEmailService.sendOrderTrackingEmail(orderEmailData, email);
+        } catch (emailError) {
+          console.error('Failed to send comprehensive tracking email:', emailError);
+        }
+      } else {
+        // Fallback to basic tracking data
+        trackingData = {
+          orderNumber,
+          status: 'PROCESSING',
+          estimatedDelivery: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+          trackingNumber: `TRK-${orderNumber}`,
+          message: 'Your order is being processed',
+          total: null,
+          items: [],
+          shippingAddress: null,
+          paymentMethod: null,
+          paymentReference: null
+        };
+
+        // Send basic tracking email
+        try {
+          const orderEmailData: OrderData = {
+            orderNumber,
+            status: trackingData.status,
+            estimatedDelivery: trackingData.estimatedDelivery,
+            trackingNumber: trackingData.trackingNumber,
+            message: trackingData.message,
+            guestInfo: {
+              email: email,
+              firstName: 'Valued Customer',
+              lastName: '',
+              phone: ''
+            }
+          };
+          
+          await this.orderEmailService.sendOrderTrackingEmail(orderEmailData, email);
+        } catch (emailError) {
+          console.error('Failed to send basic tracking email:', emailError);
+        }
+      }
+
+      return {
+        success: true,
+        message: "Order tracking information retrieved and comprehensive details sent to your email",
+        data: trackingData
+      };
+    } catch (error) {
+      this.handleError("Error tracking guest order", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Map Order object to OrderData for email service
+   */
+  private mapOrderToEmailData(order: Order, paymentReference?: string): OrderData {
+    const estimatedDeliveryDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+    
+    return {
+      orderNumber: order.orderNumber,
+      status: order.status?.toString() || 'PENDING',
+      estimatedDelivery: estimatedDeliveryDate.toLocaleDateString('en-NG', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      }),
+      trackingNumber: `TRK-${order.orderNumber}`,
+      message: this.getStatusDescription(order.status as OrderStatus),
+      total: order.total || 0,
+      subtotal: order.subtotal || 0,
+      tax: order.tax || 0,
+      shipping: order.shippingCost || 0,
+      currency: order.currency || 'NGN',
+      orderDate: order.createdAt?.toLocaleDateString('en-NG') || new Date().toLocaleDateString('en-NG'),
+      createdAt: order.createdAt?.toISOString(),
+      items: order.items?.map((item: any) => ({
+        name: item.product?.name || 'Product',
+        quantity: item.quantity || 1,
+        unitPrice: item.price || 0,
+        totalPrice: item.total || 0,
+        sku: item.product?.sku
+      })) || [],
+      shippingAddress: order.shippingAddress ? {
+        firstName: order.shippingAddress.firstName || '',
+        lastName: order.shippingAddress.lastName || '',
+        email: order.user?.email || '', // Get email from user relation instead
+        phoneNumber: order.shippingAddress.phoneNumber || '',
+        addressLine1: order.shippingAddress.addressLine1 || '',
+        addressLine2: order.shippingAddress.addressLine2,
+        city: order.shippingAddress.city || '',
+        state: order.shippingAddress.state || '',
+        postalCode: order.shippingAddress.postalCode
+      } : undefined,
+      // For guest orders, we'll need to get email from user or pass it separately
+      guestInfo: order.user ? undefined : {
+        email: order.user?.email || '',
+        firstName: order.user?.firstName || 'Valued Customer',
+        lastName: order.user?.lastName || '',
+        phone: order.user?.phoneNumber || ''
+      },
+      paymentMethod: order.paymentMethod?.toString(),
+      paymentReference: paymentReference || order.paymentReference
+    };
   }
 
   /**

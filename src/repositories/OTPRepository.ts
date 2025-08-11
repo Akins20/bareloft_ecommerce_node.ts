@@ -10,7 +10,8 @@ import {
 import { OTPCode, OTPPurpose } from "../types/auth.types";
 
 interface CreateOTPData {
-  phoneNumber: NigerianPhoneNumber;
+  phoneNumber?: NigerianPhoneNumber;
+  email?: string;
   code: string;
   purpose: OTPPurpose;
   expiresAt: Date;
@@ -43,7 +44,8 @@ export class OTPRepository extends BaseRepository<
       // Use direct Prisma query to avoid BaseRepository issues
       return await this.prisma.oTPCode.create({
         data: {
-          phoneNumber: data.phoneNumber,
+          phoneNumber: data.phoneNumber || null,
+          email: data.email || null,
           code: data.code,
           purpose: data.purpose,
           expiresAt: data.expiresAt,
@@ -64,17 +66,23 @@ export class OTPRepository extends BaseRepository<
   }
 
   /**
-   * Find valid OTP for phone number and purpose
+   * Find valid OTP for contact method and purpose
    */
   async findValidOTP(
-    phoneNumber: NigerianPhoneNumber,
+    contactMethod: NigerianPhoneNumber | string,
     purpose: OTPPurpose
   ): Promise<OTPCode | null> {
     try {
+      // Determine if it's phone or email
+      const isEmail = contactMethod.includes('@');
+      const whereClause = isEmail 
+        ? { email: contactMethod }
+        : { phoneNumber: contactMethod };
+        
       // Use direct Prisma query instead of BaseRepository method to avoid issues
       return await this.prisma.oTPCode.findFirst({
         where: {
-          phoneNumber,
+          ...whereClause,
           purpose,
           isUsed: false,
           expiresAt: {
@@ -96,16 +104,22 @@ export class OTPRepository extends BaseRepository<
   }
 
   /**
-   * Find OTP by phone number and code
+   * Find OTP by contact method and code
    */
-  async findByPhoneAndCode(
-    phoneNumber: NigerianPhoneNumber,
+  async findByContactAndCode(
+    contactMethod: NigerianPhoneNumber | string,
     code: string,
     purpose: OTPPurpose
   ): Promise<OTPCode | null> {
     try {
+      // Determine if it's phone or email
+      const isEmail = contactMethod.includes('@');
+      const whereClause = isEmail 
+        ? { email: contactMethod }
+        : { phoneNumber: contactMethod };
+        
       return await this.findFirst({
-        phoneNumber,
+        ...whereClause,
         code,
         purpose,
         isUsed: false,
@@ -115,7 +129,7 @@ export class OTPRepository extends BaseRepository<
       });
     } catch (error) {
       throw new AppError(
-        "Error finding OTP by phone and code",
+        "Error finding OTP by contact method and code",
         HTTP_STATUS.INTERNAL_SERVER_ERROR,
         ERROR_CODES.DATABASE_ERROR
       );
@@ -123,19 +137,36 @@ export class OTPRepository extends BaseRepository<
   }
 
   /**
-   * Invalidate existing OTPs for phone number and purpose
+   * Find OTP by phone number and code (legacy compatibility)
+   */
+  async findByPhoneAndCode(
+    phoneNumber: NigerianPhoneNumber,
+    code: string,
+    purpose: OTPPurpose
+  ): Promise<OTPCode | null> {
+    return this.findByContactAndCode(phoneNumber, code, purpose);
+  }
+
+  /**
+   * Invalidate existing OTPs for contact method and purpose
    */
   async invalidateExistingOTP(
-    phoneNumber: NigerianPhoneNumber,
+    contactMethod: NigerianPhoneNumber | string,
     purpose: OTPPurpose
   ): Promise<void> {
     try {
-      console.log(`Attempting to invalidate OTPs for phone: ${phoneNumber}, purpose: ${purpose}`);
+      console.log(`Attempting to invalidate OTPs for contact: ${contactMethod}, purpose: ${purpose}`);
       
+      // Determine if it's phone or email
+      const isEmail = contactMethod.includes('@');
+      const whereClause = isEmail 
+        ? { email: contactMethod }
+        : { phoneNumber: contactMethod };
+        
       // Use direct Prisma query
       const result = await this.prisma.oTPCode.updateMany({
         where: {
-          phoneNumber,
+          ...whereClause,
           purpose,
           isUsed: false,
         },
@@ -144,7 +175,7 @@ export class OTPRepository extends BaseRepository<
         }
       });
       
-      console.log(`Successfully invalidated ${result.count} OTPs for ${phoneNumber}`);
+      console.log(`Successfully invalidated ${result.count} OTPs for ${contactMethod}`);
     } catch (error) {
       console.error('Database error in invalidateExistingOTP:', error);
       console.error('Error details:', {

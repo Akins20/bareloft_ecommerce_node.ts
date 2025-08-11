@@ -126,14 +126,16 @@ export class UserRepository extends BaseRepository<
    */
   async createUser(userData: CreateUserData): Promise<User> {
     try {
-      // Check if phone number already exists
-      const existingUser = await this.findByPhoneNumber(userData.phoneNumber);
-      if (existingUser) {
-        throw new AppError(
-          "Phone number already registered",
-          HTTP_STATUS.CONFLICT,
-          ERROR_CODES.RESOURCE_ALREADY_EXISTS
-        );
+      // Check if phone number already exists (only if phone number is provided)
+      if (userData.phoneNumber) {
+        const existingUser = await this.findByPhoneNumber(userData.phoneNumber);
+        if (existingUser) {
+          throw new AppError(
+            "Phone number already registered",
+            HTTP_STATUS.CONFLICT,
+            ERROR_CODES.RESOURCE_ALREADY_EXISTS
+          );
+        }
       }
 
       // Check if email already exists (if provided)

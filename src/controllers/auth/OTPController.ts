@@ -155,38 +155,56 @@ export class OTPController extends BaseController {
    */
   public resendOTP = async (req: Request, res: Response, next?: unknown): Promise<void> => {
     try {
-      const { phoneNumber, purpose } = req.body;
+      const { phoneNumber, email, purpose } = req.body;
+      const contactMethod = phoneNumber || email;
 
-      // Validate input
-      if (!phoneNumber || !this.isValidNigerianPhone(phoneNumber)) {
+      // Validate input - require either phone or email
+      if (!contactMethod) {
         this.sendError(
           res,
-          "Valid Nigerian phone number is required",
+          "Either phone number or email is required",
+          400,
+          "INVALID_INPUT"
+        );
+        return;
+      }
+
+      // Validate phone number format if provided
+      if (phoneNumber && !this.isValidNigerianPhone(phoneNumber)) {
+        this.sendError(
+          res,
+          "Invalid Nigerian phone number format",
           400,
           "INVALID_PHONE"
         );
         return;
       }
 
-      // Check if can resend
-      const canResend = await this.otpService.canResendOTP(phoneNumber);
-      if (!canResend.allowed) {
-        this.sendError(res, canResend.message || "Resend not allowed", 429, "RESEND_NOT_ALLOWED");
+      // Validate email format if provided
+      if (email && !this.isValidEmail(email)) {
+        this.sendError(
+          res,
+          "Invalid email address format",
+          400,
+          "INVALID_EMAIL"
+        );
         return;
       }
 
-      const result = await this.otpService.resendOTP(
+      // Use the AuthService resend functionality instead of OTPService
+      // since AuthService already supports both phone and email
+      const authService = require('../../services/auth/AuthService').AuthService;
+      const serviceContainer = require('../../config/serviceContainer').getServiceContainer();
+      const authServiceInstance = serviceContainer.getService('authService');
+
+      const result = await authServiceInstance.requestOTP({
         phoneNumber,
-        purpose || "login"
-      );
-
-      if (!result.success) {
-        this.sendError(res, result.message, 400, "OTP_RESEND_FAILED");
-        return;
-      }
+        email,
+        purpose: purpose || "login"
+      });
 
       this.logAction("OTP_RESENT", undefined, "OTP", undefined, {
-        phoneNumber: this.maskPhoneNumber(phoneNumber),
+        contactMethod: phoneNumber ? this.maskPhoneNumber(phoneNumber) : email,
         purpose,
       });
 
@@ -195,9 +213,9 @@ export class OTPController extends BaseController {
         message: "OTP resent successfully",
         data: {
           success: true,
-          message: `New OTP sent to ${this.maskPhoneNumber(phoneNumber)}`,
-          expiresIn: result.expiresIn,
-          canResendIn: result.canResendIn,
+          message: `New OTP sent to ${phoneNumber ? this.maskPhoneNumber(phoneNumber) : email}`,
+          expiresIn: result.data.expiresIn || 600,
+          canResendIn: result.data.canResendIn || 60,
         },
       };
 
@@ -350,4 +368,5 @@ req: Request, res: Response, next?: unknown  ): Promise<void> => {
 
     return masked;
   }
+
 }

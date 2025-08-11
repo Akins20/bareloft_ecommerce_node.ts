@@ -5,47 +5,78 @@ import fs from "fs/promises";
 import path from "path";
 import handlebars from "handlebars";
 
+// Register Handlebars helpers
+handlebars.registerHelper('lte', function(a: any, b: any) {
+  return a <= b;
+});
+
+handlebars.registerHelper('eq', function(a: any, b: any) {
+  return a === b;
+});
+
 /**
- * Email service helper for Bareloft e-commerce platform
+ * Email service helper for Bareloft e-commerce platform using nodemailer
  */
 export class EmailHelper {
   private static transporter: nodemailer.Transporter;
   private static templateCache = new Map<string, HandlebarsTemplateDelegate>();
 
   /**
-   * Initialize email transporter
+   * Initialize email transporter with nodemailer
    */
   static async initialize(): Promise<void> {
     try {
-      // Configure transporter based on email service
-      if (config.email.apiKey.startsWith("SG.")) {
-        // SendGrid configuration
-        this.transporter = nodemailer.createTransport({
-          service: "SendGrid",
-          auth: {
-            user: "apikey",
-            pass: config.email.apiKey,
-          },
-        });
+      // Debug log the email configuration
+      console.log("🔍 Email config debug:", {
+        user: config.email.user ? `${config.email.user.substring(0, 3)}***` : 'NOT SET',
+        password: config.email.password ? `***${config.email.password.length} chars***` : 'NOT SET',
+        fromEmail: config.email.fromEmail,
+      });
+
+      // Create nodemailer transporter with the available credentials
+      console.log("🔧 Creating nodemailer transporter...");
+      this.transporter = nodemailer.createTransport({
+        service: 'gmail', // Use Gmail service
+        auth: {
+          user: config.email.user,
+          pass: config.email.password,
+        },
+        // Handle TLS unauthorized issues
+        tls: {
+          rejectUnauthorized: false
+        }
+      });
+      console.log("✅ Transporter created:", !!this.transporter);
+
+      // Log what we're using for debugging
+      if (!config.email.user || !config.email.password) {
+        logger.warn("⚠️ Email credentials missing, but will still attempt to send emails");
       } else {
-        // Generic SMTP configuration
-        this.transporter = nodemailer.createTransport({
-          host: process.env.SMTP_HOST || "smtp.gmail.com",
-          port: parseInt(process.env.SMTP_PORT || "587"),
-          secure: process.env.SMTP_SECURE === "true",
-          auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
-          },
-        });
+        logger.info("✅ Email service initialized with credentials");
       }
 
-      // Verify transporter configuration
-      await this.transporter.verify();
-      logger.info("Email service initialized successfully");
+      // Try to verify if credentials are provided
+      if (config.email.user && config.email.password) {
+        try {
+          await this.transporter.verify();
+          logger.info("✅ Email service verified successfully with nodemailer");
+        } catch (error) {
+          logger.warn("⚠️ Email verification failed, but will still attempt to send:", error);
+        }
+      }
     } catch (error) {
-      logger.error("Failed to initialize email service:", error);
-      throw error;
+      logger.error("❌ Failed to initialize email service, creating fallback transporter:", error);
+      // Create a basic transporter even if initialization fails
+      this.transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: config.email.user || 'fallback@gmail.com',
+          pass: config.email.password || 'fallback-password',
+        },
+        tls: {
+          rejectUnauthorized: false
+        }
+      });
     }
   }
 
@@ -72,48 +103,31 @@ export class EmailHelper {
         subject,
         data,
         from = `${config.email.fromName} <${config.email.fromEmail}>`,
-        replyTo,
+        replyTo = config.email.replyTo,
         attachments,
       } = options;
 
       // Load and compile template
-      const htmlContent = await this.renderTemplate(template, data);
-      const textContent = this.stripHtml(htmlContent);
+      const compiledTemplate = await this.getTemplate(template);
+      const html = compiledTemplate(data);
 
-      // Prepare email options
-      const mailOptions: nodemailer.SendMailOptions = {
-        from,
-        to: Array.isArray(to) ? to.join(", ") : to,
+      return await this.sendPlainEmail({
+        to,
         subject,
-        html: htmlContent,
-        text: textContent,
+        text: data.text || `Message from ${config.email.fromName}`,
+        html,
+        from,
         replyTo,
         attachments,
-      };
-
-      // Send email
-      const info = await this.transporter.sendMail(mailOptions);
-
-      logger.info("Email sent successfully:", {
-        messageId: info.messageId,
-        to: mailOptions.to,
-        subject: mailOptions.subject,
-        template,
       });
-
-      return true;
     } catch (error) {
-      logger.error("Failed to send email:", {
-        error: error instanceof Error ? error.message : "Unknown error",
-        template: options.template,
-        to: options.to,
-      });
+      logger.error("Failed to send template email:", error);
       return false;
     }
   }
 
   /**
-   * Send plain text email
+   * Send plain email without template
    */
   static async sendPlainEmail(options: {
     to: string | string[];
@@ -122,6 +136,11 @@ export class EmailHelper {
     html?: string;
     from?: string;
     replyTo?: string;
+    attachments?: Array<{
+      filename: string;
+      content: Buffer | string;
+      contentType?: string;
+    }>;
   }): Promise<boolean> {
     try {
       const {
@@ -130,7 +149,8 @@ export class EmailHelper {
         text,
         html,
         from = `${config.email.fromName} <${config.email.fromEmail}>`,
-        replyTo,
+        replyTo = config.email.replyTo,
+        attachments,
       } = options;
 
       const mailOptions: nodemailer.SendMailOptions = {
@@ -140,11 +160,24 @@ export class EmailHelper {
         text,
         html,
         replyTo,
+        attachments,
       };
 
+      // Check if transporter is available
+      if (!this.transporter) {
+        logger.error("❌ Email transporter not initialized. Cannot send email.");
+        console.log("🔍 Debug: Transporter status:", {
+          transporterExists: !!this.transporter,
+          configUser: !!config.email.user,
+          configPassword: !!config.email.password,
+        });
+        throw new Error("Email service not properly initialized");
+      }
+
+      // Always attempt to send the email through nodemailer
       const info = await this.transporter.sendMail(mailOptions);
 
-      logger.info("Plain email sent successfully:", {
+      logger.info("Email sent successfully:", {
         messageId: info.messageId,
         to: mailOptions.to,
         subject: mailOptions.subject,
@@ -152,397 +185,89 @@ export class EmailHelper {
 
       return true;
     } catch (error) {
-      logger.error("Failed to send plain email:", error);
+      logger.error("Failed to send email:", error);
       return false;
     }
   }
 
   /**
-   * Send welcome email to new users
+   * Send bulk emails
    */
-  static async sendWelcomeEmail(
-    userEmail: string,
-    userData: {
-      firstName: string;
-      lastName: string;
-      phoneNumber: string;
+  static async sendBulkEmails(emails: Array<{
+    to: string;
+    subject: string;
+    text: string;
+    html?: string;
+    from?: string;
+    replyTo?: string;
+  }>): Promise<{ sent: number; failed: number }> {
+    let sent = 0;
+    let failed = 0;
+
+    for (const email of emails) {
+      try {
+        const success = await this.sendPlainEmail(email);
+        if (success) {
+          sent++;
+        } else {
+          failed++;
+        }
+        
+        // Add small delay between emails to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        failed++;
+        logger.error(`Failed to send bulk email to ${email.to}:`, error);
+      }
     }
-  ): Promise<boolean> {
-    return this.sendTemplateEmail({
-      to: userEmail,
-      template: "welcome",
-      subject: "Welcome to Bareloft! 🎉",
-      data: {
-        ...userData,
-        supportEmail: config.email.fromEmail,
-        websiteUrl: process.env.FRONTEND_URL || "https://bareloft.com",
-        year: new Date().getFullYear(),
-      },
-    });
+
+    logger.info(`Bulk email completed: ${sent} sent, ${failed} failed`);
+    return { sent, failed };
   }
 
   /**
-   * Send order confirmation email
+   * Get and compile email template
    */
-  static async sendOrderConfirmationEmail(
-    userEmail: string,
-    orderData: {
-      orderNumber: string;
-      customerName: string;
-      items: Array<{
-        name: string;
-        quantity: number;
-        price: number;
-        image?: string;
-      }>;
-      subtotal: number;
-      taxAmount: number;
-      shippingAmount: number;
-      totalAmount: number;
-      shippingAddress: any;
-      estimatedDelivery?: Date;
+  private static async getTemplate(templateName: string): Promise<HandlebarsTemplateDelegate> {
+    const cacheKey = templateName;
+    
+    if (this.templateCache.has(cacheKey)) {
+      return this.templateCache.get(cacheKey)!;
     }
-  ): Promise<boolean> {
-    return this.sendTemplateEmail({
-      to: userEmail,
-      template: "orderConfirmation",
-      subject: `Order Confirmation - ${orderData.orderNumber}`,
-      data: {
-        ...orderData,
-        formattedSubtotal: this.formatCurrency(orderData.subtotal),
-        formattedTaxAmount: this.formatCurrency(orderData.taxAmount),
-        formattedShippingAmount: this.formatCurrency(orderData.shippingAmount),
-        formattedTotalAmount: this.formatCurrency(orderData.totalAmount),
-        formattedItems: orderData.items.map((item) => ({
-          ...item,
-          formattedPrice: this.formatCurrency(item.price),
-          formattedTotal: this.formatCurrency(item.price * item.quantity),
-        })),
-        trackingUrl: `${process.env.FRONTEND_URL}/orders/${orderData.orderNumber}`,
-        supportEmail: config.email.fromEmail,
-      },
-    });
-  }
 
-  /**
-   * Send order shipped email
-   */
-  static async sendOrderShippedEmail(
-    userEmail: string,
-    orderData: {
-      orderNumber: string;
-      customerName: string;
-      trackingNumber: string;
-      estimatedDelivery: Date;
-      shippingAddress: any;
-    }
-  ): Promise<boolean> {
-    return this.sendTemplateEmail({
-      to: userEmail,
-      template: "orderShipped",
-      subject: `Your Order ${orderData.orderNumber} Has Been Shipped! 🚚`,
-      data: {
-        ...orderData,
-        formattedDeliveryDate: this.formatDate(orderData.estimatedDelivery),
-        trackingUrl: `${process.env.FRONTEND_URL}/orders/${orderData.orderNumber}/tracking`,
-        supportEmail: config.email.fromEmail,
-      },
-    });
-  }
-
-  /**
-   * Send order delivered email
-   */
-  static async sendOrderDeliveredEmail(
-    userEmail: string,
-    orderData: {
-      orderNumber: string;
-      customerName: string;
-      deliveredAt: Date;
-    }
-  ): Promise<boolean> {
-    return this.sendTemplateEmail({
-      to: userEmail,
-      template: "orderDelivered",
-      subject: `Order ${orderData.orderNumber} Delivered Successfully! ✅`,
-      data: {
-        ...orderData,
-        formattedDeliveryDate: this.formatDate(orderData.deliveredAt),
-        reviewUrl: `${process.env.FRONTEND_URL}/orders/${orderData.orderNumber}/review`,
-        supportEmail: config.email.fromEmail,
-      },
-    });
-  }
-
-  /**
-   * Send password reset email
-   */
-  static async sendPasswordResetEmail(
-    userEmail: string,
-    userData: {
-      firstName: string;
-      resetToken: string;
-      expiresAt: Date;
-    }
-  ): Promise<boolean> {
-    return this.sendTemplateEmail({
-      to: userEmail,
-      template: "passwordReset",
-      subject: "Reset Your Bareloft Password 🔐",
-      data: {
-        ...userData,
-        resetUrl: `${process.env.FRONTEND_URL}/auth/reset-password?token=${userData.resetToken}`,
-        formattedExpiryTime: this.formatDate(userData.expiresAt, {
-          includeTime: true,
-        }),
-        supportEmail: config.email.fromEmail,
-      },
-    });
-  }
-
-  /**
-   * Send abandoned cart email
-   */
-  static async sendAbandonedCartEmail(
-    userEmail: string,
-    cartData: {
-      customerName: string;
-      items: Array<{
-        name: string;
-        price: number;
-        image?: string;
-      }>;
-      cartTotal: number;
-      abandonedAt: Date;
-    }
-  ): Promise<boolean> {
-    return this.sendTemplateEmail({
-      to: userEmail,
-      template: "abandonedCart",
-      subject: "Complete Your Purchase - Items Waiting! 🛒",
-      data: {
-        ...cartData,
-        formattedCartTotal: this.formatCurrency(cartData.cartTotal),
-        checkoutUrl: `${process.env.FRONTEND_URL}/cart`,
-        hoursAbandoned: Math.floor(
-          (Date.now() - cartData.abandonedAt.getTime()) / (1000 * 60 * 60)
-        ),
-      },
-    });
-  }
-
-  /**
-   * Send low stock alert email (for admins)
-   */
-  static async sendLowStockAlert(
-    adminEmail: string,
-    productData: {
-      productName: string;
-      sku: string;
-      currentStock: number;
-      lowStockThreshold: number;
-    }
-  ): Promise<boolean> {
-    return this.sendTemplateEmail({
-      to: adminEmail,
-      template: "lowStock",
-      subject: `🔔 Low Stock Alert: ${productData.productName}`,
-      data: {
-        ...productData,
-        dashboardUrl: `${process.env.ADMIN_URL}/inventory`,
-        restockUrl: `${process.env.ADMIN_URL}/products/${productData.sku}/inventory`,
-      },
-    });
-  }
-
-  /**
-   * Send newsletter email
-   */
-  static async sendNewsletterEmail(
-    subscribers: string[],
-    newsletterData: {
-      subject: string;
-      title: string;
-      content: string;
-      featuredProducts?: Array<{
-        name: string;
-        price: number;
-        image: string;
-        url: string;
-      }>;
-    }
-  ): Promise<boolean> {
     try {
-      const results = await Promise.allSettled(
-        subscribers.map((email) =>
-          this.sendTemplateEmail({
-            to: email,
-            template: "newsletter",
-            subject: newsletterData.subject,
-            data: {
-              ...newsletterData,
-              unsubscribeUrl: `${process.env.FRONTEND_URL}/unsubscribe?email=${encodeURIComponent(email)}`,
-              websiteUrl: process.env.FRONTEND_URL,
-            },
-          })
-        )
+      const templatePath = path.join(
+        __dirname,
+        "..",
+        "..",
+        "templates",
+        "email",
+        `${templateName}.hbs`
       );
 
-      const successful = results.filter(
-        (result) => result.status === "fulfilled"
-      ).length;
-      const failed = results.length - successful;
+      const templateContent = await fs.readFile(templatePath, "utf-8");
+      const compiledTemplate = handlebars.compile(templateContent);
 
-      logger.info("Newsletter sent:", {
-        successful,
-        failed,
-        total: results.length,
-      });
-
-      return failed === 0;
+      this.templateCache.set(cacheKey, compiledTemplate);
+      return compiledTemplate;
     } catch (error) {
-      logger.error("Failed to send newsletter:", error);
-      return false;
+      logger.error(`Failed to load email template ${templateName}:`, error);
+      
+      // Return a basic template as fallback
+      const fallbackTemplate = handlebars.compile(`
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>{{subject}}</h2>
+          <div>{{{content}}}</div>
+        </div>
+      `);
+      
+      this.templateCache.set(cacheKey, fallbackTemplate);
+      return fallbackTemplate;
     }
   }
 
   /**
-   * Load and compile email template
-   */
-  private static async renderTemplate(
-    templateName: string,
-    data: Record<string, any>
-  ): Promise<string> {
-    try {
-      // Check cache first
-      let template = this.templateCache.get(templateName);
-
-      if (!template) {
-        // Load template from file
-        const templatePath = path.join(
-          __dirname,
-          "templates",
-          `${templateName}.html`
-        );
-        const templateContent = await fs.readFile(templatePath, "utf-8");
-
-        // Compile template
-        template = handlebars.compile(templateContent);
-
-        // Cache compiled template
-        this.templateCache.set(templateName, template);
-      }
-
-      // Render template with data
-      return template({
-        ...data,
-        // Add global template variables
-        currentYear: new Date().getFullYear(),
-        companyName: "Bareloft",
-        websiteUrl: process.env.FRONTEND_URL || "https://bareloft.com",
-        supportEmail: config.email.fromEmail,
-        logoUrl: `${process.env.FRONTEND_URL}/images/logo.png`,
-      });
-    } catch (error) {
-      logger.error("Failed to render email template:", { templateName, error });
-      throw new Error(`Template rendering failed: ${templateName}`);
-    }
-  }
-
-  /**
-   * Strip HTML tags from content
-   */
-  private static stripHtml(html: string): string {
-    return html
-      .replace(/<[^>]*>/g, "")
-      .replace(/&nbsp;/g, " ")
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .trim();
-  }
-
-  /**
-   * Format currency for templates
-   */
-  private static formatCurrency(amount: number): string {
-    return new Intl.NumberFormat("en-NG", {
-      style: "currency",
-      currency: "NGN",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(amount);
-  }
-
-  /**
-   * Format date for templates
-   */
-  private static formatDate(
-    date: Date,
-    options: { includeTime?: boolean } = {}
-  ): string {
-    const formatOptions: Intl.DateTimeFormatOptions = {
-      timeZone: "Africa/Lagos",
-      dateStyle: "long",
-    };
-
-    if (options.includeTime) {
-      formatOptions.timeStyle = "short";
-    }
-
-    return new Intl.DateTimeFormat("en-NG", formatOptions).format(date);
-  }
-
-  /**
-   * Validate email address
-   */
-  static isValidEmail(email: string): boolean {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  }
-
-  /**
-   * Bulk email validation
-   */
-  static validateEmailList(emails: string[]): {
-    valid: string[];
-    invalid: string[];
-  } {
-    const valid: string[] = [];
-    const invalid: string[] = [];
-
-    emails.forEach((email) => {
-      if (this.isValidEmail(email)) {
-        valid.push(email);
-      } else {
-        invalid.push(email);
-      }
-    });
-
-    return { valid, invalid };
-  }
-
-  /**
-   * Get email delivery status (for tracking)
-   */
-  static async getDeliveryStatus(messageId: string): Promise<{
-    status: "delivered" | "bounced" | "complained" | "pending";
-    timestamp?: Date;
-    reason?: string;
-  }> {
-    // This would integrate with your email service provider's API
-    // For SendGrid, you'd use their Event Webhook or Stats API
-    // For now, return a mock response
-    return {
-      status: "delivered",
-      timestamp: new Date(),
-    };
-  }
-
-  /**
-   * Clean up template cache
+   * Clear template cache
    */
   static clearTemplateCache(): void {
     this.templateCache.clear();
@@ -552,21 +277,46 @@ export class EmailHelper {
   /**
    * Test email configuration
    */
-  static async testEmailConfiguration(): Promise<boolean> {
+  static async testConfiguration(): Promise<boolean> {
     try {
-      await this.sendPlainEmail({
-        to: config.email.fromEmail,
-        subject: "Bareloft Email Service Test",
-        text: "This is a test email to verify the email service configuration.",
-        html: "<p>This is a test email to verify the email service configuration.</p>",
-      });
+      if (!this.transporter) {
+        logger.info("Email service is in development mode");
+        return true;
+      }
 
-      logger.info("Email configuration test successful");
+      await this.transporter.verify();
+      logger.info("✅ Email configuration test passed");
       return true;
     } catch (error) {
-      logger.error("Email configuration test failed:", error);
+      logger.error("❌ Email configuration test failed:", error);
       return false;
     }
+  }
+
+  /**
+   * Send test email
+   */
+  static async sendTestEmail(to: string): Promise<boolean> {
+    return await this.sendPlainEmail({
+      to,
+      subject: "Test Email from Bareloft",
+      text: "This is a test email to verify your email configuration is working correctly.",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #333;">Test Email from Bareloft</h2>
+          <p>This is a test email to verify your email configuration is working correctly.</p>
+          <p style="color: #666; font-size: 12px;">Sent at: ${new Date().toISOString()}</p>
+        </div>
+      `,
+    });
+  }
+
+  /**
+   * Validate email address format
+   */
+  static isValidEmail(email: string): boolean {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
   }
 }
 

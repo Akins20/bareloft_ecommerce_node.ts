@@ -108,11 +108,23 @@ export abstract class BaseRepository<T, CreateData, UpdateData> {
   async create(data: CreateData, include?: any): Promise<T> {
     try {
       const model = this.getModel();
-      return await model.create({
+      console.log(`🔍 DEBUG: Creating ${this.modelName} with data:`, JSON.stringify(data, null, 2));
+      console.log(`🔍 DEBUG: Include:`, JSON.stringify(include, null, 2));
+      
+      const result = await model.create({
         data,
         include,
       });
+      
+      console.log(`✅ DEBUG: Successfully created ${this.modelName}:`, result.id);
+      return result;
     } catch (error) {
+      console.log(`❌ DEBUG: Prisma error creating ${this.modelName}:`, {
+        message: error.message,
+        code: error.code,
+        meta: error.meta,
+        stack: error.stack
+      });
       this.handleError("Error creating record", error);
       throw error;
     }

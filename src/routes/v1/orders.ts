@@ -225,8 +225,31 @@ router.post(
 // ==================== GUEST ORDER ENDPOINTS ====================
 
 /**
+ * @route   POST /api/v1/orders/guest/create
+ * @desc    Create order for guest users (no authentication required)
+ * @access  Public
+ * @body    CreateGuestOrderRequest {
+ *   shippingAddress: OrderAddress,
+ *   billingAddress?: OrderAddress,
+ *   customerNotes?: string,
+ *   guestInfo: { email: string, firstName: string, lastName: string, phone: string }
+ * }
+ */
+router.post(
+  "/guest/create",
+  rateLimiter.general,
+  async (req, res, next) => {
+    try {
+      await orderController.createGuestOrder(req as any, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * @route   GET /api/v1/orders/guest/track/:orderNumber
- * @desc    Track order for guest users (with email verification)
+ * @desc    Track order for guest users (with email verification and email notification)
  * @access  Public
  * @param   orderNumber - Order number
  * @query   { email: string }
@@ -247,20 +270,10 @@ router.get(
         return;
       }
 
-      // Basic guest order tracking (in production, would validate email against order)
-      const trackingData = {
-        orderNumber,
-        status: 'PROCESSING',
-        estimatedDelivery: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-        trackingNumber: `TRK-${orderNumber}`,
-        message: 'Your order is being processed'
-      };
-
-      res.json({
-        success: true,
-        message: "Order tracking information retrieved",
-        data: trackingData
-      });
+      // Use the order service to track guest order and send email
+      const result = await orderService.trackGuestOrder(orderNumber, email as string);
+      
+      res.json(result);
     } catch (error) {
       next(error);
     }
@@ -271,7 +284,7 @@ router.get(
 
 /**
  * @route   POST /api/v1/orders/webhook/payment-update
- * @desc    Handle payment status updates from payment provider
+ * @desc    Handle payment status updates from payment provider with email notification
  * @access  Internal (Payment provider webhooks)
  */
 router.post("/webhook/payment-update", async (req, res, next) => {
@@ -279,19 +292,37 @@ router.post("/webhook/payment-update", async (req, res, next) => {
     const { event, data } = req.body;
     
     // Log webhook receipt (in production, verify signature)
-    console.log('Payment webhook received:', { event, orderId: data?.metadata?.orderId });
+    console.log('Payment webhook received:', { event, data });
     
-    if (event === 'charge.success' && data?.metadata?.orderId) {
-      // Update order payment status
-      // In production, would use OrderService to update payment status
-      console.log(`Payment confirmed for order: ${data.metadata.orderId}`);
+    if (event === 'charge.success' && data?.reference) {
+      // Confirm payment and send confirmation email
+      try {
+        const orderNumber = data.reference; // Assuming reference is the order number
+        const paymentReference = data.id || data.reference;
+        
+        const result = await orderService.confirmPayment(orderNumber, paymentReference);
+        console.log(`✅ Payment confirmed and email sent for order: ${orderNumber}`);
+        
+        res.status(200).json({
+          success: true,
+          message: "Payment confirmed and customer notified",
+          data: { orderNumber }
+        });
+      } catch (confirmError) {
+        console.error('Error confirming payment:', confirmError);
+        res.status(500).json({
+          success: false,
+          message: "Payment received but confirmation failed",
+        });
+      }
+    } else {
+      res.status(200).json({
+        success: true,
+        message: "Webhook received but no action required",
+      });
     }
-
-    res.status(200).json({
-      success: true,
-      message: "Webhook processed successfully",
-    });
   } catch (error) {
+    console.error('Payment webhook error:', error);
     next(error);
   }
 });
