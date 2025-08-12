@@ -14,6 +14,8 @@ import {
 } from "../../types";
 import { PaystackService } from "./PaystackService";
 import { NotificationService } from "../notifications/NotificationService";
+import { OrderService } from "../orders/OrderService";
+import { redisClient } from "../../config/redis";
 
 interface PaymentSummary {
   totalTransactions: number;
@@ -27,14 +29,17 @@ interface PaymentSummary {
 export class PaymentService extends BaseService {
   private paystackService: any;
   private notificationService: any;
+  private orderService: OrderService | null = null;
 
   constructor(
     paystackService?: any,
-    notificationService?: any
+    notificationService?: any,
+    orderService?: OrderService
   ) {
     super();
     this.paystackService = paystackService || {};
     this.notificationService = notificationService || {};
+    this.orderService = orderService || null;
   }
 
   /**
@@ -391,11 +396,77 @@ export class PaymentService extends BaseService {
   }
 
   private async handleSuccessfulPayment(data: any): Promise<void> {
+    console.log("🎉 ===== HANDLING SUCCESSFUL PAYMENT WEBHOOK =====");
+    console.log("💳 Payment data:", JSON.stringify(data, null, 2));
+    
     const transaction = await PaymentTransactionModel.findFirst({
       where: { reference: data.reference },
     });
 
     if (transaction && transaction.status as string !== "COMPLETED") {
+      console.log(`📋 Found transaction: ${transaction.id}`);
+      
+      // Check if this is a guest order that hasn't been created yet
+      // Guest orders will have pending orderData in the payment metadata or cache
+      console.log("🔍 Checking if order exists in database...");
+      const existingOrder = await OrderModel.findUnique({
+        where: { id: transaction.orderId },
+      });
+
+      if (!existingOrder) {
+        console.log("⚠️ Order not found in database - this might be a guest order that needs to be created post-payment");
+        
+        // Check if we have OrderService and can create the order
+        if (this.orderService && this.orderService.createOrderAfterPayment) {
+          try {
+            console.log("🔄 Attempting to create order after payment confirmation...");
+            
+            // Try to retrieve pending order data from Redis using the payment reference (order number)
+            const orderNumber = data.reference;
+            const pendingOrderKey = `pending_order:${orderNumber}`;
+            
+            console.log(`🔍 Looking for pending order data in Redis with key: ${pendingOrderKey}`);
+            const pendingOrderData = await redisClient.get<any>(pendingOrderKey);
+            
+            if (pendingOrderData && pendingOrderData.orderData && pendingOrderData.orderItems) {
+              const { orderData, orderItems } = pendingOrderData;
+              
+              console.log("📦 Found pending order data in Redis, creating order...");
+              console.log("📊 Order data:", JSON.stringify(orderData, null, 2));
+              console.log("📋 Order items:", JSON.stringify(orderItems, null, 2));
+              
+              await this.orderService.createOrderAfterPayment(orderData, orderItems, data.reference);
+              console.log("✅ Order created successfully after payment confirmation");
+              
+              // Clean up the pending data from Redis
+              await redisClient.delete(pendingOrderKey);
+              console.log("🗑️ Cleaned up pending order data from Redis");
+            } else {
+              console.warn("⚠️ No pending order data found in Redis - order creation skipped");
+              console.warn(`   - Searched for key: ${pendingOrderKey}`);
+              console.warn(`   - Payment reference: ${data.reference}`);
+            }
+          } catch (error) {
+            console.error("❌ Failed to create order after payment:", error);
+            // Don't throw error as payment was successful, just log it
+          }
+        } else {
+          console.warn("⚠️ OrderService not available - cannot create order after payment");
+        }
+      } else {
+        console.log("✅ Order exists, updating payment status...");
+        
+        // Update existing order
+        await OrderModel.update({
+          where: { id: transaction.orderId },
+          data: {
+            paymentStatus: "COMPLETED" as any,
+            paymentReference: data.reference,
+          },
+        });
+      }
+
+      // Update transaction status
       await PaymentTransactionModel.update({
         where: { id: transaction.id },
         data: {
@@ -405,18 +476,11 @@ export class PaymentService extends BaseService {
         },
       });
 
-      // Update order
-      await OrderModel.update({
-        where: { id: transaction.orderId },
-        data: {
-          paymentStatus: "COMPLETED" as any,
-          paymentReference: data.reference,
-        },
-      });
-
       // Send confirmation
       await this.sendPaymentConfirmation(transaction);
     }
+    
+    console.log("✅ ===== PAYMENT WEBHOOK HANDLING COMPLETE =====");
   }
 
   private async handleFailedPayment(data: any): Promise<void> {

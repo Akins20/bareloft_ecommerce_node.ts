@@ -354,4 +354,88 @@ router.post("/webhook/shipping-update", async (req, res, next) => {
   }
 });
 
+/**
+ * @route   POST /api/v1/orders/confirm-payment
+ * @desc    Create order after payment confirmation (called by frontend after successful Paystack payment)
+ * @access  Public (but requires valid payment reference)
+ * @body    { paymentReference: string, orderNumber: string }
+ */
+router.post("/confirm-payment", orderCreationLimit, async (req, res, next) => {
+  try {
+    const { paymentReference, orderNumber } = req.body;
+
+    console.log("💳 Payment confirmation request received:", {
+      paymentReference,
+      orderNumber
+    });
+
+    if (!paymentReference || !orderNumber) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment reference and order number are required",
+      });
+    }
+
+    // Verify payment with Paystack first
+    const paystackService = serviceContainer.getPaystackService();
+    console.log("🔍 Verifying payment with Paystack...");
+    
+    try {
+      const paystackVerification = await paystackService.verifyPayment(paymentReference);
+      console.log("📋 Paystack verification result:", paystackVerification);
+
+      if (!paystackVerification.data || paystackVerification.data.status !== 'success') {
+        return res.status(400).json({
+          success: false,
+          message: "Payment verification failed - payment was not successful",
+          paymentStatus: paystackVerification.data?.status
+        });
+      }
+
+      console.log("✅ Payment verified successfully with Paystack");
+    } catch (verificationError) {
+      console.error("❌ Payment verification failed:", verificationError);
+      return res.status(400).json({
+        success: false,
+        message: "Payment verification failed",
+      });
+    }
+
+    // Try to retrieve pending order data from Redis
+    console.log(`🔍 Looking for pending order data for ${orderNumber}...`);
+    const redisClient = require('../../config/redis').redisClient;
+    const pendingOrderKey = `pending_order:${orderNumber}`;
+    const pendingOrderData = await redisClient.get(pendingOrderKey);
+
+    if (!pendingOrderData || !pendingOrderData.orderData || !pendingOrderData.orderItems) {
+      console.error("❌ No pending order data found in Redis");
+      return res.status(404).json({
+        success: false,
+        message: "Order data not found or has expired. Please try placing the order again.",
+      });
+    }
+
+    console.log("📦 Found pending order data, creating order...");
+    const { orderData, orderItems } = pendingOrderData;
+
+    // Create the order using OrderService
+    const orderService = serviceContainer.getOrderService();
+    const result = await orderService.createOrderAfterPayment(orderData, orderItems, paymentReference);
+
+    // Clean up pending data from Redis
+    await redisClient.delete(pendingOrderKey);
+    console.log("🗑️ Cleaned up pending order data from Redis");
+
+    console.log("🎉 Order created successfully after payment confirmation");
+    res.status(201).json({
+      success: true,
+      message: "Order created successfully after payment confirmation",
+      order: result.order,
+    });
+  } catch (error) {
+    console.error("❌ Error confirming payment and creating order:", error);
+    next(error);
+  }
+});
+
 export default router;

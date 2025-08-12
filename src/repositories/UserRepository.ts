@@ -14,7 +14,7 @@ import {
 } from "../types";
 
 export interface CreateUserData {
-  phoneNumber: string;
+  phoneNumber?: string;  // Made optional to match Prisma schema
   firstName: string;
   lastName: string;
   email?: string;

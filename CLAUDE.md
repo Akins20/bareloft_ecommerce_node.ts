@@ -69,6 +69,7 @@ This is a Nigerian e-commerce backend API built with a strict layered architectu
 - OTP-based phone authentication (Nigerian market optimization)
 - JWT tokens with refresh token rotation
 - Role-based access control (CUSTOMER, ADMIN, SUPER_ADMIN)
+- **Email verification is optional** - Users can place orders and use all features without email verification
 
 **Database:**
 - PostgreSQL with Prisma ORM

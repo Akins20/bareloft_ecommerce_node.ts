@@ -96,8 +96,8 @@ export class ServiceContainer {
     // Initialize cart service with proper dependencies
     const cartService = new CartService(cartRepository, productRepository);
 
-    // Initialize order service with proper dependencies
-    const orderService = new OrderService(orderRepository, cartService);
+    // Initialize order service with proper dependencies including ProductRepository for validation
+    const orderService = new OrderService(orderRepository, userRepository, cartService, undefined, productRepository);
 
     // Initialize user services
     const userService = new UserService();
@@ -106,7 +106,7 @@ export class ServiceContainer {
 
     // Initialize payment services
     const paystackService = new PaystackService();
-    const paymentService = new PaymentService(paystackService);
+    const paymentService = new PaymentService(paystackService, undefined, orderService);
 
     // Store repositories in container
     this.services.set('userRepository', userRepository);

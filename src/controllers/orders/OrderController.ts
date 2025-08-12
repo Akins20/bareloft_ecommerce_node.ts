@@ -355,9 +355,7 @@ export class OrderController extends BaseController {
       if (!data.shippingAddress.state || data.shippingAddress.state.trim().length === 0) {
         errors.push("Shipping address state is required");
       }
-      if (!data.shippingAddress.country || data.shippingAddress.country.trim().length === 0) {
-        errors.push("Shipping address country is required");
-      }
+      // Country is optional - defaults to Nigeria in most cases
       if (!data.shippingAddress.phoneNumber || data.shippingAddress.phoneNumber.trim().length === 0) {
         errors.push("Shipping address phone number is required");
       }
@@ -369,10 +367,8 @@ export class OrderController extends BaseController {
       }
     }
 
-    // Validate payment method
-    if (!data.paymentMethod) {
-      errors.push("Payment method is required");
-    } else {
+    // Validate payment method (optional - can be set during payment flow)
+    if (data.paymentMethod) {
       const validPaymentMethods = ["CARD", "BANK_TRANSFER", "PAYSTACK", "CASH_ON_DELIVERY"];
       if (!validPaymentMethods.includes(data.paymentMethod)) {
         errors.push("Invalid payment method");

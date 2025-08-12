@@ -25,7 +25,6 @@ export interface CreateOrderData {
   userId: string;
   status?: PrismaOrderStatus;
   subtotal: number;
-  tax?: number;
   shippingCost?: number;
   discount?: number;
   total: number;
@@ -143,16 +142,41 @@ export class OrderRepository extends BaseRepository<
       total: number;
     }>
   ): Promise<OrderWithDetails> {
+    console.log("\n🔧 ===== REPOSITORY: createOrderWithItems STARTED =====");
+    console.log("📦 ORDER DATA RECEIVED:", JSON.stringify(orderData, null, 2));
+    console.log("📋 ITEMS DATA RECEIVED:", JSON.stringify(items, null, 2));
+
     try {
+      console.log("🔄 REPO Step 1: Starting database transaction...");
       return await this.transaction(async (prisma) => {
-        // Create the order
+        console.log("🔄 REPO Step 2: Inside transaction - creating order...");
+        
+        // Create the order (tax included in product prices, set to 0)
+        console.log("📝 Creating order with data:", JSON.stringify({
+          orderNumber: orderData.orderNumber,
+          userId: orderData.userId,
+          status: orderData.status || "PENDING",
+          subtotal: orderData.subtotal,
+          tax: 0,
+          shippingCost: orderData.shippingCost || 0,
+          discount: orderData.discount || 0,
+          total: orderData.total,
+          currency: orderData.currency || "NGN",
+          paymentStatus: orderData.paymentStatus || "PENDING",
+          paymentMethod: orderData.paymentMethod,
+          paymentReference: orderData.paymentReference,
+          notes: orderData.notes,
+          shippingAddressId: orderData.shippingAddressId,
+          billingAddressId: orderData.billingAddressId,
+        }, null, 2));
+
         const order = await prisma.order.create({
           data: {
             orderNumber: orderData.orderNumber,
             userId: orderData.userId,
             status: orderData.status || PrismaOrderStatus.PENDING,
             subtotal: orderData.subtotal,
-            tax: orderData.tax || 0,
+            tax: 0, // Tax is included in product prices
             shippingCost: orderData.shippingCost || 0,
             discount: orderData.discount || 0,
             total: orderData.total,
@@ -169,18 +193,24 @@ export class OrderRepository extends BaseRepository<
           },
         });
 
-        // Create order items
-        await prisma.orderItem.createMany({
-          data: items.map((item) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            price: item.price,
-            total: item.total,
-            orderId: order.id,
-          })),
-        });
+        console.log("✅ REPO Step 2 Complete: Order created with ID:", order.id);
 
-        // Create initial timeline event
+        console.log("🔄 REPO Step 3: Creating order items...");
+        const orderItemsData = items.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          price: item.price,
+          total: item.total,
+          orderId: order.id,
+        }));
+        console.log("📋 Order items to create:", JSON.stringify(orderItemsData, null, 2));
+
+        await prisma.orderItem.createMany({
+          data: orderItemsData,
+        });
+        console.log("✅ REPO Step 3 Complete: Order items created");
+
+        console.log("🔄 REPO Step 4: Creating timeline event...");
         await prisma.orderTimelineEvent.create({
           data: {
             orderId: order.id,
@@ -188,17 +218,24 @@ export class OrderRepository extends BaseRepository<
             message: "Order created",
           },
         });
+        console.log("✅ REPO Step 4 Complete: Timeline event created");
 
+        console.log("🔄 REPO Step 5: Retrieving complete order...");
         // Get the complete order with all relations
         const completeOrder = await this.findByOrderNumber(order.orderNumber);
 
         if (!completeOrder) {
+          console.error("❌ Failed to retrieve created order");
           throw new Error("Failed to retrieve created order");
         }
 
+        console.log("✅ REPO Step 5 Complete: Complete order retrieved");
+        console.log("🎉 ===== REPOSITORY: createOrderWithItems SUCCESS =====");
         return completeOrder;
       });
     } catch (error) {
+      console.error("❌ ===== REPOSITORY: createOrderWithItems FAILED =====");
+      console.error("❌ REPO Error:", error);
       this.handleError("Error creating order with items", error);
       throw error;
     }

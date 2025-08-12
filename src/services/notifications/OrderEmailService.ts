@@ -14,6 +14,8 @@ export interface OrderData {
   shipping?: number;
   currency?: string;
   createdAt?: string;
+  orderDate?: string;
+  paymentStatus?: string;
   items?: Array<{
     name: string;
     quantity: number;

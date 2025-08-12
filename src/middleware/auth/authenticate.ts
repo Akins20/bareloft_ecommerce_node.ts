@@ -159,14 +159,15 @@ export const authenticate = async (
     }
 
     // Check if user account is active
+    // Note: Email verification is optional for checkout and orders
+    // Users can place orders and use all features without email verification
     if (!user.isVerified) {
-      res.status(401).json({
-        success: false,
-        error: "ACCOUNT_NOT_VERIFIED",
-        message: "Please verify your account to continue",
-        code: "AUTH_008",
+      // Log but don't block unverified users for orders/checkout
+      logger.debug("User proceeding without email verification", {
+        userId: user.id,
+        path: req.path,
+        method: req.method,
       });
-      return;
     }
 
     // Set user context in request

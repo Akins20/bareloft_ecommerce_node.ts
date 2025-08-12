@@ -334,6 +334,11 @@ export abstract class BaseRepository<T, CreateData, UpdateData> {
     try {
       return await this.prisma.$transaction(callback);
     } catch (error) {
+      console.error("🔴 PRISMA TRANSACTION ERROR:", error);
+      console.error("🔴 ERROR MESSAGE:", (error as any)?.message);
+      console.error("🔴 ERROR CODE:", (error as any)?.code);
+      console.error("🔴 ERROR META:", JSON.stringify((error as any)?.meta, null, 2));
+      console.error("🔴 ERROR STACK:", (error as any)?.stack);
       this.handleError("Error executing transaction", error);
       throw error;
     }

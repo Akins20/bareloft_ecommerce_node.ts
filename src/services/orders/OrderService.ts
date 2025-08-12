@@ -1,7 +1,9 @@
 import { BaseService } from "../BaseService";
 import { OrderRepository } from "../../repositories/OrderRepository";
+import { UserRepository } from "../../repositories/UserRepository";
 import { CartService } from "../cart/CartService";
 import { OrderEmailService, OrderData } from "../notifications/OrderEmailService";
+import { PaystackService } from "../payments/PaystackService";
 import {
   Order,
   OrderStatus,
@@ -40,14 +42,20 @@ export interface OrderListResponse {
 
 export class OrderService extends BaseService {
   private orderRepository: OrderRepository;
+  private userRepository: UserRepository;
   private cartService: CartService;
   private orderEmailService: OrderEmailService;
+  private paystackService: PaystackService;
+  private productRepository: any; // Will be injected for product validation
 
-  constructor(orderRepository?: OrderRepository, cartService?: CartService, orderEmailService?: OrderEmailService) {
+  constructor(orderRepository?: OrderRepository, userRepository?: UserRepository, cartService?: CartService, orderEmailService?: OrderEmailService, productRepository?: any) {
     super();
     this.orderRepository = orderRepository || {} as OrderRepository;
+    this.userRepository = userRepository || {} as UserRepository;
     this.cartService = cartService || {} as CartService;
     this.orderEmailService = orderEmailService || new OrderEmailService();
+    this.paystackService = new PaystackService();
+    this.productRepository = productRepository || {} as any;
   }
 
   /**
@@ -62,7 +70,6 @@ export class OrderService extends BaseService {
       const cartSummary = await this.cartService.getCart?.(userId) || {
         items: [],
         subtotal: 0,
-        tax: 0,
         total: 0,
         itemCount: 0
       };
@@ -78,12 +85,11 @@ export class OrderService extends BaseService {
       // Generate order number
       const orderNumber = await this.generateOrderNumber();
 
-      // Calculate totals
+      // Calculate totals (tax is included in product prices)
       const subtotal = cartSummary.subtotal;
       const shippingAmount = this.calculateShippingAmount(subtotal, request.shippingAddress?.state);
-      const taxAmount = cartSummary.tax || this.calculateTaxAmount(subtotal);
       const discountAmount = request.couponCode ? await this.calculateDiscount(request.couponCode, subtotal) : 0;
-      const totalAmount = subtotal + shippingAmount + taxAmount - discountAmount;
+      const totalAmount = subtotal + shippingAmount - discountAmount;
 
       // Create order data
       const orderData = {
@@ -91,7 +97,6 @@ export class OrderService extends BaseService {
         userId,
         status: "PENDING" as any,
         subtotal,
-        tax: taxAmount,
         shippingCost: shippingAmount,
         discount: discountAmount,
         total: totalAmount,
@@ -390,29 +395,10 @@ export class OrderService extends BaseService {
   }
 
   private calculateShippingAmount(subtotal: number, state?: string): number {
-    // Free shipping for orders over ₦50,000
-    if (subtotal >= 50000) {
-      return 0;
-    }
-
-    // Nigerian shipping rates
-    if (state?.toLowerCase() === "lagos") {
-      return 1500; // Lagos shipping
-    }
-    
-    // Major cities
-    const majorCities = ["abuja", "kano", "ibadan", "port harcourt"];
-    if (state && majorCities.includes(state.toLowerCase())) {
-      return 2000;
-    }
-
-    return 2500; // Default shipping fee
+    // Fixed ₦2,500 shipping fee - no free shipping threshold
+    return 2500;
   }
 
-  private calculateTaxAmount(subtotal: number): number {
-    // 7.5% VAT in Nigeria
-    return Math.round(subtotal * 0.075);
-  }
 
   private async calculateDiscount(couponCode: string, subtotal: number): Promise<number> {
     // Simple discount calculation - in production, use CouponService
@@ -472,10 +458,15 @@ export class OrderService extends BaseService {
    * Create guest order from current cart (no user authentication required)
    */
   async createGuestOrder(orderData: any): Promise<any> {
+    console.log("\n🎯 ===== GUEST ORDER CREATION STARTED =====");
+    console.log("📥 INCOMING ORDER DATA:", JSON.stringify(orderData, null, 2));
+    
     try {
+      console.log("🔄 Step 1: Processing cart data...");
       // Get current cart data using session approach
       // Since we don't have userId for guest, we'll need to get cart from session
       const sessionId = orderData.sessionId || 'guest'; // Frontend should provide session ID
+      console.log("🆔 Session ID:", sessionId);
       
       // For now, let's get cart data from the request or use mock data
       // Frontend should pass the current cart data in the checkout request
@@ -486,8 +477,10 @@ export class OrderService extends BaseService {
         estimatedShipping: 0,
         estimatedTotal: 0
       };
+      console.log("🛒 CART DATA:", JSON.stringify(cartData, null, 2));
 
       if (!cartData.items || cartData.items.length === 0) {
+        console.error("❌ Cart is empty!");
         throw new AppError(
           "Cart is empty. Please add items before checkout.",
           HTTP_STATUS.BAD_REQUEST,
@@ -495,25 +488,128 @@ export class OrderService extends BaseService {
         );
       }
 
+      console.log("🔄 Step 2: Generating order number...");
       // Generate unique order number
       const orderNumber = await this.generateOrderNumber();
+      console.log("📋 Generated order number:", orderNumber);
 
-      // Calculate shipping if address is provided
-      let shippingAmount = cartData.estimatedShipping || 0;
-      if (orderData.shippingAddress) {
-        // Here you could integrate with shipping calculator
-        // For Lagos, free shipping; other states might have different rates
-        if (orderData.shippingAddress.state !== "Lagos") {
-          shippingAmount = 200000; // ₦2,000 shipping for other states
+      console.log("🔄 Step 3: Calculating totals...");
+      // Recalculate totals based on cart data and shipping address
+      // All calculations should be in naira, then convert to kobo for Paystack
+      // Tax is included in product prices, so no separate tax calculation
+      const subtotal = Number(cartData.subtotal) || 0;
+      const shippingAmount = this.calculateShippingAmount(subtotal, orderData.shippingAddress?.state);
+      const finalTotal = subtotal + shippingAmount;
+      console.log("💰 Subtotal (Naira):", subtotal);
+      console.log("🚚 Shipping (Naira):", shippingAmount);
+      console.log("💰 Final Total (Naira):", finalTotal);
+
+      // Convert to kobo for Paystack (multiply by 100)
+      const amountInKobo = Math.round(finalTotal * 100);
+      console.log("💰 Amount in Kobo for Paystack:", amountInKobo);
+
+      console.log("🔄 Step 4: Setting up guest order user reference...");
+      // For guest orders, we need a userId for the schema constraint
+      // Let's use a special guest user or create one if it doesn't exist
+      let guestUserId: string;
+      try {
+        // Try to find the special guest user
+        const guestUser = await this.userRepository.findByEmail?.("guest@bareloft.com");
+        if (guestUser) {
+          guestUserId = guestUser.id;
+          console.log("✅ Using existing guest user ID:", guestUserId);
+        } else {
+          // Create a special guest user for all guest orders
+          console.log("🆕 Creating special guest user for orders...");
+          const specialGuestUser = await this.userRepository.createUser?.({
+            email: "guest@bareloft.com",
+            firstName: "Guest",
+            lastName: "User",
+            phoneNumber: undefined,
+            role: "CUSTOMER" as const
+          });
+          guestUserId = specialGuestUser?.id || '';
+          console.log("✅ Created special guest user ID:", guestUserId);
         }
+
+        if (!guestUserId) {
+          throw new Error("Failed to get guest user ID");
+        }
+        
+        console.log("👤 Actual guest info (stored in order notes):", {
+          email: orderData.guestInfo.email,
+          firstName: orderData.guestInfo.firstName,
+          lastName: orderData.guestInfo.lastName,
+          phone: orderData.guestInfo.phone
+        });
+      } catch (error) {
+        console.error("❌ Failed to set up guest user reference:", error);
+        throw new AppError(
+          "Failed to process guest order",
+          HTTP_STATUS.INTERNAL_SERVER_ERROR,
+          ERROR_CODES.INTERNAL_ERROR
+        );
       }
+      console.log("✅ Step 4 Complete: Guest user reference set up");
 
-      // Recalculate totals with final shipping
-      const subtotal = cartData.subtotal;
-      const tax = cartData.estimatedTax;
-      const finalTotal = subtotal + tax + shippingAmount;
+      console.log("🔄 Step 5: Converting cart items to order items...");
+      // Convert cart items to order items format for createOrderWithItems
+      const orderItems = cartData.items.map((item: any, index: number) => {
+        console.log(`📦 Item ${index + 1}:`, {
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          productPrice: item.product?.price,
+          totalPrice: item.totalPrice
+        });
+        
+        return {
+          productId: item.productId,
+          quantity: item.quantity,
+          price: item.unitPrice || item.product?.price || 0,
+          total: item.totalPrice || (item.quantity * (item.unitPrice || item.product?.price || 0)),
+        };
+      });
+      console.log("✅ Step 5 Complete: Order items converted:", JSON.stringify(orderItems, null, 2));
 
-      // Prepare order data for frontend
+      console.log("🔄 Step 6: Preparing database order data...");
+      // Create actual order in database with items
+      // Store guest info in notes as JSON for reference
+      const guestInfoJson = JSON.stringify({
+        isGuestOrder: true,
+        guestEmail: orderData.guestInfo.email,
+        guestFirstName: orderData.guestInfo.firstName,
+        guestLastName: orderData.guestInfo.lastName,
+        guestPhone: orderData.guestInfo.phone,
+        shippingAddress: orderData.shippingAddress,
+        billingAddress: orderData.billingAddress
+      });
+
+      const dbOrderData = {
+        orderNumber,
+        userId: guestUserId, // Special guest user ID for schema constraint
+        status: "PENDING" as any,
+        subtotal,
+        shippingCost: shippingAmount,
+        discount: 0,
+        total: finalTotal,
+        currency: "NGN",
+        paymentStatus: "PENDING" as any,
+        paymentMethod: "CARD",
+        notes: guestInfoJson, // Store actual guest info here
+      };
+      console.log("✅ Step 6 Complete: DB order data prepared:", JSON.stringify(dbOrderData, null, 2));
+
+      console.log("🔄 Step 7: Preparing order data (NOT saving to database yet - will save after payment)");
+      // We will NOT save the order to database here - only after payment is confirmed
+      // This prevents orphaned orders from failed payments
+      console.log(`📦 Order data prepared for post-payment creation:`);
+      console.log(`   - DB ORDER DATA:`, JSON.stringify(dbOrderData, null, 2));
+      console.log(`   - ORDER ITEMS:`, JSON.stringify(orderItems, null, 2));
+      
+      console.log("✅ Step 7 Complete: Order data prepared but NOT saved (will save after payment)");
+
+      // Prepare order data for frontend response
       const orderSummary = {
         orderNumber,
         items: cartData.items.map((item: any) => ({
@@ -526,7 +622,6 @@ export class OrderService extends BaseService {
         })),
         pricing: {
           subtotal: subtotal,
-          tax: tax,
           shipping: shippingAmount,
           total: finalTotal,
           currency: "NGN"
@@ -544,26 +639,61 @@ export class OrderService extends BaseService {
         status: "PENDING"
       };
 
-      // Generate Paystack payment URL
-      const paymentUrl = `https://checkout.paystack.com/pay/${orderNumber}`;
+      // Store pending order data in Redis for webhook retrieval
+      console.log("💾 Storing pending order data in Redis for webhook retrieval...");
+      const pendingOrderKey = `pending_order:${orderNumber}`;
+      const pendingOrderData = {
+        orderData: dbOrderData,
+        orderItems: orderItems
+      };
+      
+      try {
+        await redisClient.set(pendingOrderKey, pendingOrderData, 24 * 60 * 60); // Store for 24 hours
+        console.log(`✅ Pending order data stored in Redis with key: ${pendingOrderKey}`);
+      } catch (error) {
+        console.error("❌ Failed to store pending order data in Redis:", error);
+        // Continue without failing - webhook will need to handle missing data
+      }
+
+      // Initialize payment with Paystack
+      console.log(`💳 BACKEND: Initializing Paystack payment for ${orderNumber}, amount: ${amountInKobo} kobo`);
+      const paystackResponse = await this.paystackService.initializePayment({
+        email: orderData.guestInfo.email,
+        amount: amountInKobo,
+        reference: orderNumber,
+        currency: "NGN",
+        callback_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/orders/track?orderNumber=${orderNumber}&email=${orderData.guestInfo.email}`,
+        metadata: {
+          orderNumber,
+          customerName: `${orderData.guestInfo.firstName} ${orderData.guestInfo.lastName}`,
+          items: cartData.items.length,
+          // Include basic order info for webhook fallback
+          _orderRef: orderNumber
+        }
+      });
+      console.log(`✅ BACKEND: Paystack response:`, paystackResponse);
 
       return {
         success: true,
-        message: "Order created successfully. Redirecting to payment...",
+        message: "Payment initialized successfully. Order will be created after payment confirmation.",
         order: orderSummary,
         payment: {
-          paymentUrl,
-          reference: orderNumber,
-          amount: finalTotal,
+          paymentUrl: paystackResponse.data.authorization_url,
+          reference: paystackResponse.data.reference,
+          amount: amountInKobo, // Amount in kobo for Paystack
           currency: "NGN"
         },
         // Include cart data for frontend reference
         cartSummary: {
           itemCount: cartData.items.length,
           subtotal: subtotal,
-          tax: tax,
           shipping: shippingAmount,
           total: finalTotal
+        },
+        // Store the order data for post-payment creation
+        _pendingOrderData: {
+          orderData: dbOrderData,
+          orderItems: orderItems
         }
       };
     } catch (error) {
@@ -578,6 +708,96 @@ export class OrderService extends BaseService {
     }
   }
 
+
+  /**
+   * Create order in database after payment confirmation
+   */
+  async createOrderAfterPayment(orderData: any, orderItems: any[], paymentReference: string): Promise<any> {
+    console.log("🎉 ===== CREATING ORDER AFTER SUCCESSFUL PAYMENT =====");
+    console.log("📦 Order data:", JSON.stringify(orderData, null, 2));
+    console.log("📋 Order items:", JSON.stringify(orderItems, null, 2));
+    console.log("💳 Payment reference:", paymentReference);
+
+    try {
+      // Validate that all products exist before creating order
+      console.log("🔍 Step 1: Validating products exist...");
+      for (const item of orderItems) {
+        console.log(`   - Checking product: ${item.productId}`);
+        
+        if (this.productRepository && this.productRepository.findById) {
+          const product = await this.productRepository.findById(item.productId);
+          if (!product) {
+            console.error(`❌ Product not found: ${item.productId}`);
+            throw new AppError(
+              `Product with ID ${item.productId} not found`,
+              HTTP_STATUS.BAD_REQUEST,
+              ERROR_CODES.RESOURCE_NOT_FOUND
+            );
+          }
+          
+          // Also check if product is active and in stock
+          if (!product.isActive) {
+            console.error(`❌ Product is inactive: ${item.productId}`);
+            throw new AppError(
+              `Product ${product.name} is no longer available`,
+              HTTP_STATUS.BAD_REQUEST,
+              ERROR_CODES.INVALID_INPUT
+            );
+          }
+          
+          // Check stock availability
+          if (product.stock < item.quantity) {
+            console.error(`❌ Insufficient stock for product: ${item.productId}. Available: ${product.stock}, Requested: ${item.quantity}`);
+            throw new AppError(
+              `Insufficient stock for ${product.name}. Only ${product.stock} available, but ${item.quantity} requested`,
+              HTTP_STATUS.BAD_REQUEST,
+              ERROR_CODES.INVALID_INPUT
+            );
+          }
+          
+          console.log(`   ✅ Product validated: ${product.name} (Stock: ${product.stock})`);
+        } else {
+          console.warn(`⚠️ ProductRepository not available - skipping product validation for ${item.productId}`);
+        }
+      }
+      console.log("✅ Step 1 Complete: All products validated successfully");
+
+      // Update payment reference in order data
+      orderData.paymentReference = paymentReference;
+      orderData.paymentStatus = "COMPLETED";
+      orderData.status = "CONFIRMED";
+
+      console.log("🔄 Step 2: Creating order in database...");
+      const savedOrder = await this.orderRepository.createOrderWithItems(orderData, orderItems);
+      console.log(`✅ Step 2 Complete: Order saved with ID: ${savedOrder?.id}`);
+
+      console.log("🔄 Step 3: Sending confirmation email...");
+      try {
+        const orderEmailData = this.mapOrderToEmailData(savedOrder, paymentReference);
+        await this.orderEmailService.sendOrderConfirmationEmail(orderEmailData);
+        console.log("✅ Step 3 Complete: Confirmation email sent");
+      } catch (emailError) {
+        console.error('❌ Failed to send confirmation email:', emailError);
+        // Don't fail the order creation if email fails
+      }
+
+      console.log("🎉 ===== ORDER CREATION AFTER PAYMENT SUCCESSFUL =====");
+      return {
+        success: true,
+        message: "Order created successfully after payment confirmation",
+        order: savedOrder
+      };
+
+    } catch (error) {
+      console.error("❌ ===== ORDER CREATION AFTER PAYMENT FAILED =====");
+      console.error("❌ Error:", error);
+      throw new AppError(
+        "Failed to create order after payment confirmation",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.INTERNAL_ERROR
+      );
+    }
+  }
 
   /**
    * Confirm payment and send confirmation email
@@ -682,9 +902,8 @@ export class OrderService extends BaseService {
           throw new AppError("Order not found", HTTP_STATUS.NOT_FOUND, ERROR_CODES.RESOURCE_NOT_FOUND);
         }
       } catch (error) {
-        // If order is not found in database, create mock tracking data
-        // This maintains the existing functionality for basic tracking
-        console.log(`Order ${orderNumber} not found in database, using mock data`);
+        // If order is not found in database, it means payment hasn't been completed yet
+        console.log(`Order ${orderNumber} not found in database - payment may not be completed yet`);
       }
 
       if (order) {
@@ -697,7 +916,6 @@ export class OrderService extends BaseService {
           message: this.getStatusDescription(order.status as any),
           total: order.total,
           subtotal: order.subtotal,
-          tax: order.tax,
           shipping: order.shippingCost,
           currency: order.currency || 'NGN',
           items: order.items?.map((item: any) => ({
@@ -744,40 +962,12 @@ export class OrderService extends BaseService {
           console.error('Failed to send comprehensive tracking email:', emailError);
         }
       } else {
-        // Fallback to basic tracking data
-        trackingData = {
-          orderNumber,
-          status: 'PROCESSING',
-          estimatedDelivery: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-          trackingNumber: `TRK-${orderNumber}`,
-          message: 'Your order is being processed',
-          total: null,
-          items: [],
-          shippingAddress: null,
-          paymentMethod: null,
-          paymentReference: null
-        };
-
-        // Send basic tracking email
-        try {
-          const orderEmailData: OrderData = {
-            orderNumber,
-            status: trackingData.status,
-            estimatedDelivery: trackingData.estimatedDelivery,
-            trackingNumber: trackingData.trackingNumber,
-            message: trackingData.message,
-            guestInfo: {
-              email: email,
-              firstName: 'Valued Customer',
-              lastName: '',
-              phone: ''
-            }
-          };
-          
-          await this.orderEmailService.sendOrderTrackingEmail(orderEmailData, email);
-        } catch (emailError) {
-          console.error('Failed to send basic tracking email:', emailError);
-        }
+        // Order not found - payment may not be completed yet
+        throw new AppError(
+          `Order ${orderNumber} is not yet available. This typically means payment is still being processed or has not been completed. Please wait a few minutes and try again, or contact customer support if payment was completed.`,
+          HTTP_STATUS.NOT_FOUND,
+          ERROR_CODES.RESOURCE_NOT_FOUND
+        );
       }
 
       return {
@@ -810,7 +1000,6 @@ export class OrderService extends BaseService {
       message: this.getStatusDescription(order.status as OrderStatus),
       total: order.total || 0,
       subtotal: order.subtotal || 0,
-      tax: order.tax || 0,
       shipping: order.shippingCost || 0,
       currency: order.currency || 'NGN',
       orderDate: order.createdAt?.toLocaleDateString('en-NG') || new Date().toLocaleDateString('en-NG'),
