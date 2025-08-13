@@ -101,9 +101,22 @@ export interface Order {
 export interface CreateOrderRequest {
   shippingAddress: OrderAddress;
   billingAddress?: OrderAddress; // Optional, defaults to shipping
-  paymentMethod: PaymentMethod;
+  paymentMethod?: PaymentMethod; // Made optional since it can be set during payment
   customerNotes?: string;
   couponCode?: string;
+  cartData?: {
+    items: Array<{
+      productId: string;
+      quantity: number;
+      unitPrice: number;
+      product?: {
+        name: string;
+        sku: string;
+        price: number;
+      };
+    }>;
+    subtotal: number;
+  };
 }
 
 export interface UpdateOrderStatusRequest {
@@ -208,6 +221,36 @@ export interface CreateOrderResponse {
   order: Order;
   paymentUrl?: string; // For Paystack payment
   qrCode?: string; // For USSD/Bank transfer
+}
+
+export interface PaymentOrderResponse {
+  success: boolean;
+  message: string;
+  order: {
+    orderNumber: string;
+    items: Array<{
+      productId: string;
+      productName: string;
+      productSku: string;
+      quantity: number;
+      unitPrice: number;
+      totalPrice: number;
+    }>;
+    pricing: {
+      subtotal: number;
+      shipping: number;
+      discount?: number;
+      total: number;
+      currency: string;
+    };
+    status: string;
+  };
+  payment: {
+    reference: string;
+    amount: number;
+    currency: string;
+    email: string;
+  };
 }
 
 // Analytics Types

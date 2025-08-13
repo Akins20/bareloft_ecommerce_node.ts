@@ -8,6 +8,7 @@ import {
   Order,
   OrderStatus,
   CreateOrderRequest,
+  PaymentOrderResponse,
   UpdateOrderStatusRequest,
   OrderListQuery,
   AppError,
@@ -64,19 +65,39 @@ export class OrderService extends BaseService {
   async createOrder(
     userId: string,
     request: CreateOrderRequest
-  ): Promise<OrderResponse> {
+  ): Promise<PaymentOrderResponse> {
     try {
-      // Get cart items from cart service
-      const cartSummary = await this.cartService.getCart?.(userId) || {
-        items: [],
-        subtotal: 0,
-        total: 0,
-        itemCount: 0
-      };
+      console.log("\n🎯 ===== AUTHENTICATED ORDER CREATION STARTED =====");
+      console.log("📥 INCOMING ORDER DATA:", JSON.stringify(request, null, 2));
+      
+      // Priority: Use cart data from request body if provided (frontend cart sync)
+      // Fallback: Get cart items from backend cart service if no cartData provided
+      let cartSummary;
+      
+      if (request.cartData && request.cartData.items && request.cartData.items.length > 0) {
+        console.log("🛒 Using cart data from request body (frontend cart sync)");
+        cartSummary = {
+          items: request.cartData.items,
+          subtotal: request.cartData.subtotal || 0,
+          total: request.cartData.subtotal || 0,
+          itemCount: request.cartData.items.length
+        };
+      } else {
+        console.log("🛒 Fallback: Fetching cart data from backend cart service");
+        cartSummary = await this.cartService.getCart?.(userId) || {
+          items: [],
+          subtotal: 0,
+          total: 0,
+          itemCount: 0
+        };
+      }
 
-      if (cartSummary.items.length === 0) {
+      console.log("🛒 CART SUMMARY:", JSON.stringify(cartSummary, null, 2));
+
+      if (!cartSummary.items || cartSummary.items.length === 0) {
+        console.error("❌ Cart is empty!");
         throw new AppError(
-          "Cart is empty",
+          "Cart is empty. Please add items before checkout.",
           HTTP_STATUS.BAD_REQUEST,
           ERROR_CODES.VALIDATION_ERROR
         );
@@ -84,14 +105,23 @@ export class OrderService extends BaseService {
 
       // Generate order number
       const orderNumber = await this.generateOrderNumber();
+      console.log("📋 Generated order number:", orderNumber);
 
-      // Calculate totals (tax is included in product prices)
+      // Calculate totals (tax is included in product prices)  
       const subtotal = cartSummary.subtotal;
       const shippingAmount = this.calculateShippingAmount(subtotal, request.shippingAddress?.state);
       const discountAmount = request.couponCode ? await this.calculateDiscount(request.couponCode, subtotal) : 0;
       const totalAmount = subtotal + shippingAmount - discountAmount;
+      
+      console.log("💰 Subtotal (Naira):", subtotal);
+      console.log("🚚 Shipping (Naira):", shippingAmount);
+      console.log("💰 Final Total (Naira):", totalAmount);
 
-      // Create order data
+      // Convert to kobo for Paystack (multiply by 100)
+      const amountInKobo = Math.round(totalAmount * 100);
+      console.log("💰 Amount in Kobo for Paystack:", amountInKobo);
+
+      // Prepare order data (NOT saving to database yet - will save after payment)
       const orderData = {
         orderNumber,
         userId,
@@ -103,42 +133,79 @@ export class OrderService extends BaseService {
         currency: "NGN",
         paymentStatus: "PENDING" as any,
         paymentMethod: request.paymentMethod || "CARD",
-        notes: request.customerNotes,
-        // shippingAddressId: request.shippingAddress?.id,
-        // billingAddressId: request.billingAddress?.id,
+        notes: request.customerNotes || JSON.stringify({
+          isAuthenticatedOrder: true,
+          shippingAddress: request.shippingAddress,
+          billingAddress: request.billingAddress
+        }),
       };
 
       // Convert cart items to order items format
       const orderItems = cartSummary.items.map((item: any) => ({
         productId: item.productId,
-        productName: item.product?.name || 'Product',
-        productSku: item.product?.sku || '',
-        productImage: item.product?.images?.[0] || '',
         quantity: item.quantity,
-        unitPrice: item.unitPrice || item.price || 0,
-        totalPrice: item.totalPrice || (item.quantity * (item.price || 0)),
+        price: item.unitPrice || item.product?.price || 0,
+        total: item.totalPrice || (item.quantity * (item.unitPrice || item.product?.price || 0)),
       }));
 
-      // Create order using repository
-      const order = await this.orderRepository.create?.(orderData) || {} as Order;
+      console.log("✅ Order data prepared but NOT saved (will save after payment)");
+      console.log("📦 Order items:", JSON.stringify(orderItems, null, 2));
 
-      // Clear cart after successful order creation
-      if (order.id) {
-        await this.cartService.clearCart?.(userId);
+      // Store pending order data in Redis for webhook retrieval
+      console.log("💾 Storing pending order data in Redis for webhook retrieval...");
+      const pendingOrderKey = `pending_order:${orderNumber}`;
+      const pendingOrderData = {
+        orderData: orderData,
+        orderItems: orderItems
+      };
+      
+      try {
+        const { redisClient } = require('../../config/redis');
+        if (redisClient) {
+          await redisClient.setEx(pendingOrderKey, 30 * 60, JSON.stringify(pendingOrderData)); // 30 minute expiry
+          console.log("✅ Pending order data stored in Redis");
+        } else {
+          console.warn("⚠️ Redis not available, order will need manual verification");
+        }
+      } catch (redisError) {
+        console.error("❌ Failed to store in Redis:", redisError);
+        console.warn("⚠️ Continuing without Redis storage");
       }
 
-      // Create initial timeline event
-      await this.createTimelineEvent(
-        order.id || '',
-        "ORDER_CREATED",
-        "Order created and pending payment",
-        userId
-      );
+      // Prepare order summary for frontend
+      const orderSummary = {
+        orderNumber,
+        items: cartSummary.items.map((item: any) => ({
+          productId: item.productId,
+          productName: item.product?.name || "Unknown Product",
+          productSku: item.product?.sku || "UNKNOWN",
+          quantity: item.quantity,
+          unitPrice: item.unitPrice || item.product?.price || 0,
+          totalPrice: item.totalPrice || (item.quantity * (item.unitPrice || item.product?.price || 0)),
+        })),
+        pricing: {
+          subtotal: subtotal,
+          shipping: shippingAmount,
+          discount: discountAmount,
+          total: totalAmount,
+          currency: "NGN"
+        },
+        status: "PENDING"
+      };
 
+      // Return payment data for Paystack integration (same format as guest orders)
+      console.log("✅ Returning payment data for Paystack integration");
+      
       return {
         success: true,
-        message: "Order created successfully",
-        order,
+        message: "Order prepared successfully. Redirecting to payment...",
+        order: orderSummary,
+        payment: {
+          reference: orderNumber, // Use order number as payment reference
+          amount: amountInKobo,
+          currency: "NGN",
+          email: (request.shippingAddress as any)?.email || "customer@bareloft.com"
+        }
       };
     } catch (error) {
       this.handleError("Error creating order", error);
