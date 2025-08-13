@@ -253,6 +253,12 @@ export interface PaymentOrderResponse {
   };
 }
 
+export interface OrderResponse {
+  success: boolean;
+  message: string;
+  order: Order;
+}
+
 // Analytics Types
 export interface OrderAnalytics {
   totalOrders: number;

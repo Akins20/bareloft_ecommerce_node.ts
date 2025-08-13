@@ -9,6 +9,7 @@ import {
   OrderStatus,
   CreateOrderRequest,
   PaymentOrderResponse,
+  OrderResponse,
   UpdateOrderStatusRequest,
   OrderListQuery,
   AppError,
@@ -121,7 +122,7 @@ export class OrderService extends BaseService {
       const amountInKobo = Math.round(totalAmount * 100);
       console.log("💰 Amount in Kobo for Paystack:", amountInKobo);
 
-      // Prepare order data (NOT saving to database yet - will save after payment)
+      // Create order data for immediate database save
       const orderData = {
         orderNumber,
         userId,
@@ -140,7 +141,7 @@ export class OrderService extends BaseService {
         }),
       };
 
-      // Convert cart items to order items format
+      // Convert cart items to order items format for database
       const orderItems = cartSummary.items.map((item: any) => ({
         productId: item.productId,
         quantity: item.quantity,
@@ -148,33 +149,46 @@ export class OrderService extends BaseService {
         total: item.totalPrice || (item.quantity * (item.unitPrice || item.product?.price || 0)),
       }));
 
-      console.log("✅ Order data prepared but NOT saved (will save after payment)");
+      console.log("💾 Step 4: Saving order to database with PENDING status...");
+      console.log("📦 Order data:", JSON.stringify(orderData, null, 2));
       console.log("📦 Order items:", JSON.stringify(orderItems, null, 2));
 
-      // Store pending order data in Redis for webhook retrieval
-      console.log("💾 Storing pending order data in Redis for webhook retrieval...");
-      const pendingOrderKey = `pending_order:${orderNumber}`;
-      const pendingOrderData = {
-        orderData: orderData,
-        orderItems: orderItems
-      };
+      // Create order in database with items
+      const order = await this.orderRepository.createOrderWithItems?.(orderData, orderItems);
       
-      try {
-        const { redisClient } = require('../../config/redis');
-        if (redisClient) {
-          await redisClient.setEx(pendingOrderKey, 30 * 60, JSON.stringify(pendingOrderData)); // 30 minute expiry
-          console.log("✅ Pending order data stored in Redis");
-        } else {
-          console.warn("⚠️ Redis not available, order will need manual verification");
-        }
-      } catch (redisError) {
-        console.error("❌ Failed to store in Redis:", redisError);
-        console.warn("⚠️ Continuing without Redis storage");
+      if (!order || !order.id) {
+        throw new AppError(
+          "Failed to create order in database",
+          HTTP_STATUS.INTERNAL_SERVER_ERROR,
+          ERROR_CODES.INTERNAL_ERROR
+        );
       }
 
-      // Prepare order summary for frontend
+      console.log("✅ Order saved to database with ID:", order.id);
+
+      // Create initial timeline event
+      await this.createTimelineEvent(
+        order.id,
+        "ORDER_CREATED",
+        "Order created and pending payment",
+        userId
+      );
+
+      console.log("✅ Order timeline event created");
+
+      // Clear cart after successful order creation (user committed to purchase)
+      try {
+        await this.cartService.clearCart?.(userId);
+        console.log("✅ User cart cleared after order creation");
+      } catch (cartError) {
+        console.warn("⚠️ Failed to clear cart:", cartError);
+        // Don't fail the order creation if cart clear fails
+      }
+
+      // Prepare order summary for frontend using actual database order
       const orderSummary = {
-        orderNumber,
+        id: order.id,
+        orderNumber: order.orderNumber,
         items: cartSummary.items.map((item: any) => ({
           productId: item.productId,
           productName: item.product?.name || "Unknown Product",
@@ -184,24 +198,26 @@ export class OrderService extends BaseService {
           totalPrice: item.totalPrice || (item.quantity * (item.unitPrice || item.product?.price || 0)),
         })),
         pricing: {
-          subtotal: subtotal,
-          shipping: shippingAmount,
-          discount: discountAmount,
-          total: totalAmount,
-          currency: "NGN"
+          subtotal: order.subtotal,
+          shipping: order.shippingCost,
+          discount: order.discount || 0,
+          total: order.total,
+          currency: order.currency
         },
-        status: "PENDING"
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        createdAt: order.createdAt
       };
 
-      // Return payment data for Paystack integration (same format as guest orders)
-      console.log("✅ Returning payment data for Paystack integration");
+      // Return payment data for Paystack integration
+      console.log("✅ Order created in database, returning payment data for Paystack integration");
       
       return {
         success: true,
-        message: "Order prepared successfully. Redirecting to payment...",
+        message: "Order created successfully. Redirecting to payment...",
         order: orderSummary,
         payment: {
-          reference: orderNumber, // Use order number as payment reference
+          reference: order.orderNumber, // Use order number as payment reference
           amount: amountInKobo,
           currency: "NGN",
           email: (request.shippingAddress as any)?.email || "customer@bareloft.com"
@@ -667,18 +683,38 @@ export class OrderService extends BaseService {
       };
       console.log("✅ Step 6 Complete: DB order data prepared:", JSON.stringify(dbOrderData, null, 2));
 
-      console.log("🔄 Step 7: Preparing order data (NOT saving to database yet - will save after payment)");
-      // We will NOT save the order to database here - only after payment is confirmed
-      // This prevents orphaned orders from failed payments
-      console.log(`📦 Order data prepared for post-payment creation:`);
-      console.log(`   - DB ORDER DATA:`, JSON.stringify(dbOrderData, null, 2));
-      console.log(`   - ORDER ITEMS:`, JSON.stringify(orderItems, null, 2));
+      console.log("💾 Step 7: Saving guest order to database with PENDING status...");
+      console.log(`📦 DB ORDER DATA:`, JSON.stringify(dbOrderData, null, 2));
+      console.log(`📦 ORDER ITEMS:`, JSON.stringify(orderItems, null, 2));
       
-      console.log("✅ Step 7 Complete: Order data prepared but NOT saved (will save after payment)");
+      // Create guest order in database with items
+      const order = await this.orderRepository.createOrderWithItems?.(dbOrderData, orderItems);
+      
+      if (!order || !order.id) {
+        throw new AppError(
+          "Failed to create guest order in database",
+          HTTP_STATUS.INTERNAL_SERVER_ERROR,
+          ERROR_CODES.INTERNAL_ERROR
+        );
+      }
 
-      // Prepare order data for frontend response
+      console.log("✅ Guest order saved to database with ID:", order.id);
+
+      // Create initial timeline event
+      await this.createTimelineEvent(
+        order.id,
+        "ORDER_CREATED",
+        "Guest order created and pending payment",
+        guestUserId // Use guest user ID for timeline event
+      );
+
+      console.log("✅ Guest order timeline event created");
+      console.log("✅ Step 7 Complete: Guest order saved to database");
+
+      // Prepare order data for frontend response using actual database order
       const orderSummary = {
-        orderNumber,
+        id: order.id,
+        orderNumber: order.orderNumber,
         items: cartData.items.map((item: any) => ({
           productId: item.productId,
           productName: item.product?.name || "Unknown Product",
@@ -688,10 +724,11 @@ export class OrderService extends BaseService {
           totalPrice: item.totalPrice,
         })),
         pricing: {
-          subtotal: subtotal,
-          shipping: shippingAmount,
-          total: finalTotal,
-          currency: "NGN"
+          subtotal: order.subtotal,
+          shipping: order.shippingCost,
+          discount: order.discount || 0,
+          total: order.total,
+          currency: order.currency
         },
         customer: {
           email: orderData.guestInfo.email,
@@ -703,7 +740,9 @@ export class OrderService extends BaseService {
           shipping: orderData.shippingAddress,
           billing: orderData.billingAddress || orderData.shippingAddress,
         },
-        status: "PENDING"
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        createdAt: order.createdAt
       };
 
       // Store pending order data in Redis for webhook retrieval
@@ -742,25 +781,13 @@ export class OrderService extends BaseService {
 
       return {
         success: true,
-        message: "Payment initialized successfully. Order will be created after payment confirmation.",
+        message: "Guest order created successfully. Redirecting to payment...",
         order: orderSummary,
         payment: {
-          paymentUrl: paystackResponse.data.authorization_url,
-          reference: paystackResponse.data.reference,
-          amount: amountInKobo, // Amount in kobo for Paystack
-          currency: "NGN"
-        },
-        // Include cart data for frontend reference
-        cartSummary: {
-          itemCount: cartData.items.length,
-          subtotal: subtotal,
-          shipping: shippingAmount,
-          total: finalTotal
-        },
-        // Store the order data for post-payment creation
-        _pendingOrderData: {
-          orderData: dbOrderData,
-          orderItems: orderItems
+          reference: order.orderNumber, // Use order number as payment reference
+          amount: amountInKobo,
+          currency: "NGN",
+          email: orderData.guestInfo.email
         }
       };
     } catch (error) {
