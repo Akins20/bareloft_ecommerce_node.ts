@@ -71,6 +71,66 @@ export class OrderRepository extends BaseRepository<
   /**
    * Find order by order number
    */
+  /**
+   * Override base findById to include all relations needed for order display
+   */
+  async findById(id: string): Promise<OrderWithDetails | null> {
+    try {
+      const order = await this.findFirst(
+        { id },
+        {
+          items: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true,
+                  sku: true,
+                  price: true,
+                  images: {
+                    orderBy: { position: "asc" },
+                    take: 1,
+                    select: { url: true },
+                  },
+                },
+              },
+            },
+          },
+          user: true,
+          timelineEvents: {
+            orderBy: { createdAt: "desc" },
+          },
+          paymentTransactions: true,
+          shippingAddress: true,
+          billingAddress: true,
+        }
+      );
+
+      if (!order) return null;
+
+      // Get customer statistics
+      const customerStats = await this.getCustomerOrderStats(order.userId);
+
+      return {
+        ...order,
+        timeline: order.timelineEvents || [],
+        customer: {
+          id: order.user.id,
+          firstName: order.user.firstName,
+          lastName: order.user.lastName,
+          email: order.user.email,
+          phoneNumber: order.user.phoneNumber,
+          totalOrders: customerStats.totalOrders,
+          totalSpent: customerStats.totalSpent,
+        },
+      };
+    } catch (error) {
+      console.error("Error finding order by ID:", error);
+      throw error;
+    }
+  }
+
   async findByOrderNumber(
     orderNumber: string
   ): Promise<OrderWithDetails | null> {
@@ -147,36 +207,39 @@ export class OrderRepository extends BaseRepository<
     console.log("📋 ITEMS DATA RECEIVED:", JSON.stringify(items, null, 2));
 
     try {
-      console.log("🔄 REPO Step 1: Starting database transaction...");
-      return await this.transaction(async (prisma) => {
-        console.log("🔄 REPO Step 2: Inside transaction - creating order...");
-        
-        // Create the order (tax included in product prices, set to 0)
-        console.log("📝 Creating order with data:", JSON.stringify({
-          orderNumber: orderData.orderNumber,
-          userId: orderData.userId,
-          status: orderData.status || "PENDING",
-          subtotal: orderData.subtotal,
-          tax: 0,
-          shippingCost: orderData.shippingCost || 0,
-          discount: orderData.discount || 0,
-          total: orderData.total,
-          currency: orderData.currency || "NGN",
-          paymentStatus: orderData.paymentStatus || "PENDING",
-          paymentMethod: orderData.paymentMethod,
-          paymentReference: orderData.paymentReference,
-          notes: orderData.notes,
-          shippingAddressId: orderData.shippingAddressId,
-          billingAddressId: orderData.billingAddressId,
-        }, null, 2));
+      console.log("🔄 REPO Step 1: Simple order creation (industry standard two-phase approach)");
+      
+      // Phase 1: Simple, fast order creation - no complex transactions
+      console.log("🔄 REPO Step 2: Validating products exist...");
+      const productIds = items.map(item => item.productId);
+      const existingProducts = await this.prisma.product.findMany({
+        where: { id: { in: productIds } },
+        select: { id: true, name: true }
+      });
+      
+      const existingProductIds = existingProducts.map(p => p.id);
+      const missingProductIds = productIds.filter(id => !existingProductIds.includes(id));
+      
+      if (missingProductIds.length > 0) {
+        console.error("❌ Missing product IDs:", missingProductIds);
+        throw new AppError(
+          `Products not found: ${missingProductIds.join(", ")}`,
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_CODES.VALIDATION_ERROR
+        );
+      }
+      console.log("✅ All products validated successfully");
 
+      console.log("🔄 REPO Step 3: Creating order and items in single transaction...");
+      const result = await this.transaction(async (prisma) => {
+        // Create order
         const order = await prisma.order.create({
           data: {
             orderNumber: orderData.orderNumber,
             userId: orderData.userId,
             status: orderData.status || PrismaOrderStatus.PENDING,
             subtotal: orderData.subtotal,
-            tax: 0, // Tax is included in product prices
+            tax: 0,
             shippingCost: orderData.shippingCost || 0,
             discount: orderData.discount || 0,
             total: orderData.total,
@@ -188,14 +251,10 @@ export class OrderRepository extends BaseRepository<
             shippingAddressId: orderData.shippingAddressId,
             billingAddressId: orderData.billingAddressId,
           },
-          include: {
-            user: true,
-          },
+          include: { user: true },
         });
 
-        console.log("✅ REPO Step 2 Complete: Order created with ID:", order.id);
-
-        console.log("🔄 REPO Step 3: Creating order items...");
+        // Create order items
         const orderItemsData = items.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
@@ -203,36 +262,42 @@ export class OrderRepository extends BaseRepository<
           total: item.total,
           orderId: order.id,
         }));
-        console.log("📋 Order items to create:", JSON.stringify(orderItemsData, null, 2));
 
         await prisma.orderItem.createMany({
           data: orderItemsData,
         });
-        console.log("✅ REPO Step 3 Complete: Order items created");
 
-        console.log("🔄 REPO Step 4: Creating timeline event...");
+        // Create timeline event
         await prisma.orderTimelineEvent.create({
           data: {
             orderId: order.id,
             type: "ORDER_CREATED",
-            message: "Order created",
+            message: "Order created and pending payment",
           },
         });
-        console.log("✅ REPO Step 4 Complete: Timeline event created");
 
-        console.log("🔄 REPO Step 5: Retrieving complete order...");
-        // Get the complete order with all relations
-        const completeOrder = await this.findByOrderNumber(order.orderNumber);
-
-        if (!completeOrder) {
-          console.error("❌ Failed to retrieve created order");
-          throw new Error("Failed to retrieve created order");
-        }
-
-        console.log("✅ REPO Step 5 Complete: Complete order retrieved");
-        console.log("🎉 ===== REPOSITORY: createOrderWithItems SUCCESS =====");
-        return completeOrder;
+        return order;
       });
+
+      console.log("✅ REPO Step 3 Complete: Order created with ID:", result.id);
+      console.log("🎉 ===== REPOSITORY: createOrderWithItems SUCCESS =====");
+
+      // Return simple order data - full details will be fetched when needed
+      return {
+        ...result,
+        items: [],
+        timeline: [],
+        customer: {
+          id: result.user.id,
+          firstName: result.user.firstName,
+          lastName: result.user.lastName,
+          email: result.user.email,
+          phoneNumber: result.user.phoneNumber,
+          totalOrders: 0,
+          totalSpent: 0,
+        },
+      } as unknown as OrderWithDetails;
+      
     } catch (error) {
       console.error("❌ ===== REPOSITORY: createOrderWithItems FAILED =====");
       console.error("❌ REPO Error:", error);

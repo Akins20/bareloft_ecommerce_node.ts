@@ -3,6 +3,7 @@ import { CartModel, OrderModel, InventoryModel } from "../../models";
 import {
   CreateOrderRequest,
   Order,
+  PaymentOrderResponse,
   AppError,
   HTTP_STATUS,
   ERROR_CODES,
@@ -172,7 +173,7 @@ export class CheckoutService extends BaseService {
     userId: string,
     checkoutData: CreateOrderRequest
   ): Promise<{
-    order: Order;
+    order: PaymentOrderResponse['order'];
     paymentUrl?: string;
     requiresPayment: boolean;
   }> {
@@ -390,22 +391,22 @@ export class CheckoutService extends BaseService {
     });
   }
 
-  private async initializePayment(order: Order): Promise<string> {
+  private async initializePayment(order: PaymentOrderResponse['order']): Promise<string> {
     // Generate actual Paystack payment initialization
     // This would use proper Paystack SDK in production
     const reference = `BL_${order.orderNumber}_${Date.now()}`;
     
     const paymentData = {
       reference,
-      amount: Number(order.total) * 100, // Convert to kobo
-      email: order.user?.email || 'customer@bareloft.com',
+      amount: Number(order.pricing.total) * 100, // Convert to kobo
+      email: 'customer@bareloft.com', // Would get from user context
       currency: 'NGN',
       channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money', 'bank_transfer'],
       metadata: {
         orderNumber: order.orderNumber,
         orderId: order.id,
-        customerName: `${order.user?.firstName || ''} ${order.user?.lastName || ''}`,
-        phoneNumber: order.user?.phoneNumber
+        customerName: 'Valued Customer', // Would get from user context
+        phoneNumber: undefined // Would get from user context
       }
     };
 

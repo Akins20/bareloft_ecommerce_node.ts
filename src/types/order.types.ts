@@ -227,6 +227,7 @@ export interface PaymentOrderResponse {
   success: boolean;
   message: string;
   order: {
+    id: string;
     orderNumber: string;
     items: Array<{
       productId: string;
@@ -243,7 +244,9 @@ export interface PaymentOrderResponse {
       total: number;
       currency: string;
     };
-    status: string;
+    status: OrderStatus;
+    paymentStatus: PaymentStatus;
+    createdAt: Date;
   };
   payment: {
     reference: string;

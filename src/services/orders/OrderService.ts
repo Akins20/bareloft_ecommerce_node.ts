@@ -29,11 +29,6 @@ export interface CartItem {
   totalPrice: number;
 }
 
-export interface OrderResponse {
-  success: boolean;
-  message: string;
-  order: Order;
-}
 
 export interface OrderListResponse {
   success: boolean;
@@ -778,6 +773,15 @@ export class OrderService extends BaseService {
         }
       });
       console.log(`✅ BACKEND: Paystack response:`, paystackResponse);
+      console.log(`🔍 DEBUG: Paystack response structure:`, JSON.stringify(paystackResponse, null, 2));
+      console.log(`🔍 DEBUG: authorization_url:`, paystackResponse.data?.authorization_url);
+      console.log(`🔍 DEBUG: access_code:`, paystackResponse.data?.access_code);
+
+      const authorizationUrl = paystackResponse.data?.authorization_url;
+      const accessCode = paystackResponse.data?.access_code;
+      
+      console.log(`🔍 DEBUG: Final authorization_url:`, authorizationUrl);
+      console.log(`🔍 DEBUG: Final access_code:`, accessCode);
 
       return {
         success: true,
@@ -787,7 +791,9 @@ export class OrderService extends BaseService {
           reference: order.orderNumber, // Use order number as payment reference
           amount: amountInKobo,
           currency: "NGN",
-          email: orderData.guestInfo.email
+          email: orderData.guestInfo.email,
+          authorization_url: authorizationUrl,
+          access_code: accessCode
         }
       };
     } catch (error) {
@@ -1081,6 +1087,31 @@ export class OrderService extends BaseService {
   private mapOrderToEmailData(order: Order, paymentReference?: string): OrderData {
     const estimatedDeliveryDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
     
+    // Extract guest information from order notes if it's a guest order
+    let guestInfo = null;
+    let customerEmail = order.user?.email || '';
+    let customerFirstName = order.user?.firstName || 'Valued Customer';
+    let customerLastName = order.user?.lastName || '';
+    
+    if (order.notes) {
+      try {
+        const notesData = JSON.parse(order.notes);
+        if (notesData.isGuestOrder) {
+          guestInfo = {
+            email: notesData.guestEmail || '',
+            firstName: notesData.guestFirstName || 'Valued Customer',
+            lastName: notesData.guestLastName || '',
+            phone: notesData.guestPhone || ''
+          };
+          customerEmail = notesData.guestEmail || customerEmail;
+          customerFirstName = notesData.guestFirstName || customerFirstName;
+          customerLastName = notesData.guestLastName || customerLastName;
+        }
+      } catch (error) {
+        console.warn('Failed to parse order notes as JSON:', error);
+      }
+    }
+    
     return {
       orderNumber: order.orderNumber,
       status: order.status?.toString() || 'PENDING',
@@ -1103,26 +1134,21 @@ export class OrderService extends BaseService {
         quantity: item.quantity || 1,
         unitPrice: item.price || 0,
         totalPrice: item.total || 0,
-        sku: item.product?.sku
+        sku: item.product?.sku || 'UNKNOWN',
+        image: item.product?.images?.[0]?.url || null
       })) || [],
       shippingAddress: order.shippingAddress ? {
-        firstName: order.shippingAddress.firstName || '',
-        lastName: order.shippingAddress.lastName || '',
-        email: order.user?.email || '', // Get email from user relation instead
-        phoneNumber: order.shippingAddress.phoneNumber || '',
+        firstName: order.shippingAddress.firstName || customerFirstName,
+        lastName: order.shippingAddress.lastName || customerLastName,
+        email: customerEmail,
+        phoneNumber: order.shippingAddress.phoneNumber || guestInfo?.phone || '',
         addressLine1: order.shippingAddress.addressLine1 || '',
         addressLine2: order.shippingAddress.addressLine2,
         city: order.shippingAddress.city || '',
         state: order.shippingAddress.state || '',
         postalCode: order.shippingAddress.postalCode
       } : undefined,
-      // For guest orders, we'll need to get email from user or pass it separately
-      guestInfo: order.user ? undefined : {
-        email: order.user?.email || '',
-        firstName: order.user?.firstName || 'Valued Customer',
-        lastName: order.user?.lastName || '',
-        phone: order.user?.phoneNumber || ''
-      },
+      guestInfo: guestInfo,
       paymentMethod: order.paymentMethod?.toString(),
       paymentReference: paymentReference || order.paymentReference
     };
