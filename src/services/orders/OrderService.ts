@@ -204,18 +204,54 @@ export class OrderService extends BaseService {
         createdAt: order.createdAt
       };
 
-      // Return payment data for Paystack integration
-      console.log("✅ Order created in database, returning payment data for Paystack integration");
+      // Initialize Paystack payment for customer order (same as guest flow)
+      console.log("✅ Order created in database, initializing Paystack payment...");
+      
+      // Get user email for payment
+      let userEmail = "customer@bareloft.com";
+      if (request.shippingAddress?.email) {
+        userEmail = request.shippingAddress.email;
+      }
+      
+      // Initialize Paystack payment
+      console.log("🔄 BACKEND: Initializing Paystack transaction for customer...");
+      const paystackResponse = await this.paystackService.initializeTransaction({
+        amount: amountInKobo,
+        email: userEmail,
+        reference: order.orderNumber,
+        callback_url: `${process.env.FRONTEND_URL}/orders/confirm`,
+        metadata: {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          userId: userId,
+          customerEmail: userEmail,
+          items: cartSummary.items.length,
+          // Include basic order info for webhook fallback
+          _orderRef: order.orderNumber
+        }
+      });
+      console.log(`✅ BACKEND: Paystack response:`, paystackResponse);
+      console.log(`🔍 DEBUG: Paystack response structure:`, JSON.stringify(paystackResponse, null, 2));
+      console.log(`🔍 DEBUG: authorization_url:`, paystackResponse.data?.authorization_url);
+      console.log(`🔍 DEBUG: access_code:`, paystackResponse.data?.access_code);
+
+      const authorizationUrl = paystackResponse.data?.authorization_url;
+      const accessCode = paystackResponse.data?.access_code;
+      
+      console.log(`🔍 DEBUG: Final authorization_url:`, authorizationUrl);
+      console.log(`🔍 DEBUG: Final access_code:`, accessCode);
       
       return {
         success: true,
-        message: "Order created successfully. Redirecting to payment...",
+        message: "Customer order created successfully. Redirecting to payment...",
         order: orderSummary,
         payment: {
           reference: order.orderNumber, // Use order number as payment reference
           amount: amountInKobo,
           currency: "NGN",
-          email: (request.shippingAddress as any)?.email || "customer@bareloft.com"
+          email: userEmail,
+          authorization_url: authorizationUrl,
+          access_code: accessCode
         }
       };
     } catch (error) {
@@ -870,6 +906,15 @@ export class OrderService extends BaseService {
       console.log("🔄 Step 2: Creating order in database...");
       const savedOrder = await this.orderRepository.createOrderWithItems(orderData, orderItems);
       console.log(`✅ Step 2 Complete: Order saved with ID: ${savedOrder?.id}`);
+
+      // Create timeline event for order confirmation
+      await this.createTimelineEvent(
+        savedOrder.id,
+        "PAYMENT_CONFIRMED",
+        "Payment confirmed and order marked as confirmed",
+        "PAYMENT_SYSTEM"
+      );
+      console.log("✅ Step 2.1 Complete: Timeline event created for payment confirmation");
 
       console.log("🔄 Step 3: Sending confirmation email...");
       try {

@@ -176,6 +176,7 @@ export class CheckoutService extends BaseService {
     order: PaymentOrderResponse['order'];
     paymentUrl?: string;
     requiresPayment: boolean;
+    payment?: any;
   }> {
     try {
       // Validate checkout first
@@ -208,7 +209,7 @@ export class CheckoutService extends BaseService {
         );
       }
 
-      // Create order
+      // Create order with Paystack integration
       const orderResult = await this.orderService.createOrder(
         userId,
         checkoutData
@@ -216,13 +217,10 @@ export class CheckoutService extends BaseService {
       const order = orderResult.order;
 
       // Determine if payment is required
-      const requiresPayment = (order as any).total > 0;
-      let paymentUrl: string | undefined;
-
-      if (requiresPayment) {
-        // In a real implementation, this would initialize payment with Paystack
-        paymentUrl = await this.initializePayment(order);
-      }
+      const requiresPayment = (order as any).pricing?.total > 0;
+      
+      // Use the payment URL from OrderService which now includes Paystack integration
+      const paymentUrl = orderResult.payment?.authorization_url;
 
       // Clear cart after successful order creation
       await this.clearUserCart(userId);
@@ -231,6 +229,8 @@ export class CheckoutService extends BaseService {
         order,
         paymentUrl,
         requiresPayment,
+        // Pass through the full payment data
+        payment: orderResult.payment,
       };
     } catch (error) {
       this.handleError("Error processing checkout", error);
