@@ -208,6 +208,9 @@ export class AuthController extends BaseController {
   public requestOTP = async (req: Request, res: Response, next?: unknown): Promise<void> => {
     try {
       const { phoneNumber, email, purpose }: RequestOTPRequest = req.body;
+      
+      // Support both 'purpose' and 'type' field names for backward compatibility
+      const otpPurpose = purpose || (req.body as any).type;
 
       // Validate that either phone number or email is provided
       if (!phoneNumber && !email) {
@@ -243,7 +246,7 @@ export class AuthController extends BaseController {
       }
 
       const validPurposes = ["login", "signup", "password_reset"];
-      if (purpose && !validPurposes.includes(purpose)) {
+      if (otpPurpose && !validPurposes.includes(otpPurpose)) {
         this.sendError(res, "Invalid OTP purpose", 400, "INVALID_PURPOSE");
         return;
       }
@@ -262,7 +265,7 @@ export class AuthController extends BaseController {
       }
 
       // Normalize purpose for internal comparisons
-      const normalizedPurpose = purpose?.toUpperCase() as OTPPurpose;
+      const normalizedPurpose = otpPurpose?.toUpperCase() as OTPPurpose;
 
       // For signup, check if contact method doesn't already exist
       if (normalizedPurpose === "SIGNUP") {
@@ -334,7 +337,7 @@ export class AuthController extends BaseController {
 
       // Log OTP request
       const logData: any = {
-        purpose: purpose || "login",
+        purpose: otpPurpose || "login",
       };
       
       if (phoneNumber) {

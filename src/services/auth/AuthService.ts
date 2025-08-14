@@ -845,4 +845,5 @@ export class AuthService extends BaseService {
     }
     return this.sanitizeUser(user);
   }
+
 }
