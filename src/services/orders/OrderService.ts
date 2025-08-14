@@ -209,13 +209,13 @@ export class OrderService extends BaseService {
       
       // Get user email for payment
       let userEmail = "customer@bareloft.com";
-      if (request.shippingAddress?.email) {
-        userEmail = request.shippingAddress.email;
+      if ((request.shippingAddress as any)?.email) {
+        userEmail = (request.shippingAddress as any).email;
       }
       
       // Initialize Paystack payment
       console.log("🔄 BACKEND: Initializing Paystack transaction for customer...");
-      const paystackResponse = await this.paystackService.initializeTransaction({
+      const paystackResponse = await this.paystackService.initializePayment({
         amount: amountInKobo,
         email: userEmail,
         reference: order.orderNumber,
@@ -907,14 +907,7 @@ export class OrderService extends BaseService {
       const savedOrder = await this.orderRepository.createOrderWithItems(orderData, orderItems);
       console.log(`✅ Step 2 Complete: Order saved with ID: ${savedOrder?.id}`);
 
-      // Create timeline event for order confirmation
-      await this.createTimelineEvent(
-        savedOrder.id,
-        "PAYMENT_CONFIRMED",
-        "Payment confirmed and order marked as confirmed",
-        "PAYMENT_SYSTEM"
-      );
-      console.log("✅ Step 2.1 Complete: Timeline event created for payment confirmation");
+      console.log("✅ Step 2.1 Complete: Order confirmed after payment");
 
       console.log("🔄 Step 3: Sending confirmation email...");
       try {

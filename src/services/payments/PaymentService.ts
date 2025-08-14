@@ -466,21 +466,7 @@ export class PaymentService extends BaseService {
           },
         });
 
-        // Create timeline event for payment confirmation
-        if (this.orderService) {
-          try {
-            await this.orderService.createTimelineEvent(
-              transaction.orderId,
-              "PAYMENT_CONFIRMED",
-              "Payment confirmed via webhook and order marked as confirmed",
-              "PAYMENT_SYSTEM"
-            );
-            console.log("✅ Timeline event created for payment confirmation");
-          } catch (timelineError) {
-            console.error("❌ Failed to create timeline event:", timelineError);
-            // Don't fail payment confirmation if timeline fails
-          }
-        }
+        console.log("✅ Order status updated to CONFIRMED after payment");
       }
 
       // Update transaction status

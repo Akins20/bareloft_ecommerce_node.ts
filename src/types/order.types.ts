@@ -253,6 +253,8 @@ export interface PaymentOrderResponse {
     amount: number;
     currency: string;
     email: string;
+    authorization_url?: string;
+    access_code?: string;
   };
 }
 
