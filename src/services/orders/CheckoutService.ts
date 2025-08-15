@@ -145,8 +145,7 @@ export class CheckoutService extends BaseService {
 
       // Calculate totals
       const shipping = this.calculateShipping(subtotal);
-      const tax = this.calculateTax(subtotal);
-      const total = subtotal + shipping + tax;
+      const total = subtotal + shipping;
 
       return {
         isValid: errors.length === 0,
@@ -156,7 +155,7 @@ export class CheckoutService extends BaseService {
         totals: {
           subtotal,
           shipping,
-          tax,
+          tax: 0,
           total,
         },
       };
@@ -255,8 +254,8 @@ export class CheckoutService extends BaseService {
    * Calculate tax amount
    */
   calculateTax(subtotal: number): number {
-    // 7.5% VAT in Nigeria
-    return Math.round(subtotal * 0.075);
+    // Nigeria does not use VAT for this e-commerce platform
+    return 0;
   }
 
   /**

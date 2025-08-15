@@ -39,9 +39,9 @@ export interface InventoryOverviewAnalytics {
       local: { count: number; value: number; percentage: number };
     };
     vatImpact: {
-      totalVatCollected: number; // in kobo
-      averageVatPerProduct: number;
-      vatableProducts: number;
+      totalVatCollected: number; // Always 0 - VAT not applicable
+      averageVatPerProduct: number; // Always 0 - VAT not applicable
+      vatableProducts: number; // Always 0 - VAT not applicable
     };
     regionalDistribution: {
       state: string;
@@ -239,7 +239,7 @@ export interface CategoryWiseAnalytics {
       local: { count: number; value: number };
       imported: { count: number; value: number };
     };
-    vatImpact: number;
+    vatImpact: number; // Always 0 - VAT not applicable
     seasonalDemand: {
       peak: string[];
       low: string[];
@@ -701,9 +701,9 @@ export class InventoryAnalyticsService extends BaseService {
     const localValue = local.reduce((sum, p) => sum + (p.stock * Number(p.costPrice || 0)), 0);
     const totalValue = importedValue + localValue;
 
-    // VAT calculation (7.5% in Nigeria)
-    const vatRate = 0.075;
-    const totalVatCollected = products.reduce((sum, p) => sum + (Number(p.price) * vatRate), 0);
+    // VAT not applicable for this platform
+    const vatRate = 0; // VAT not applicable
+    const totalVatCollected = 0; // VAT not applicable
 
     // Regional distribution (simplified - would need actual sales data by address)
     const majorStates = ['Lagos', 'Abuja', 'Kano', 'Rivers', 'Oyo', 'Kaduna'];
@@ -728,9 +728,9 @@ export class InventoryAnalyticsService extends BaseService {
         }
       },
       vatImpact: {
-        totalVatCollected: Math.round(totalVatCollected * 100),
-        averageVatPerProduct: products.length > 0 ? Math.round((totalVatCollected / products.length) * 100) : 0,
-        vatableProducts: products.length // Assuming all products are VAT-able
+        totalVatCollected: 0, // VAT not applicable
+        averageVatPerProduct: 0, // VAT not applicable
+        vatableProducts: 0 // VAT not applicable
       },
       regionalDistribution
     };
@@ -1000,7 +1000,7 @@ export class InventoryAnalyticsService extends BaseService {
           local: { count: Math.floor(products.length * 0.3), value: Math.round(totalStockValue * 0.3 * 100) },
           imported: { count: Math.floor(products.length * 0.7), value: Math.round(totalStockValue * 0.7 * 100) }
         },
-        vatImpact: Math.round(totalStockValue * 0.075 * 100),
+        vatImpact: 0, // VAT not applicable
         seasonalDemand: {
           peak: ['December', 'January'],
           low: ['February', 'March'],

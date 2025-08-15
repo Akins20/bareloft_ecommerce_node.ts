@@ -262,7 +262,7 @@ export const inventorySchemas = {
       "any.only": "Format must be one of: csv, excel, pdf",
     }),
 
-    includeVAT: Joi.boolean().optional().default(true),
+    includeVAT: Joi.boolean().optional().default(false), // VAT not applicable
 
     currency: Joi.object({
       format: Joi.string().valid("naira", "kobo").optional().default("naira"),
@@ -610,7 +610,7 @@ export const settingsSchemas = {
       .max(1)
       .precision(4)
       .optional()
-      .default(0.075)
+      .default(0) // VAT not applicable
       .messages({
         "number.min": "Tax rate must be non-negative",
         "number.max": "Tax rate must not exceed 100%",

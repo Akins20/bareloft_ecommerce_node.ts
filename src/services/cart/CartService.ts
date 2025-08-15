@@ -314,7 +314,7 @@ export class CartService extends BaseService {
       // Apply discount to cart
       const discountAmount = couponResult.discount;
       const discountedSubtotal = Math.max(0, currentCart.subtotal - discountAmount);
-      const tax = discountedSubtotal * 0.075; // 7.5% VAT on discounted amount
+      const tax = 0; // VAT not applicable for this platform
       const shippingCost = couponResult.shippingDiscount > 0 ? 0 : 0; // Free shipping if applicable
       const total = discountedSubtotal + tax + shippingCost;
       
@@ -668,8 +668,8 @@ export class CartService extends BaseService {
    */
   private calculateCartSummary(cartItems: CartItem[]): CartSummary {
     const subtotal = cartItems.reduce((sum, item) => sum + ((item as any).price * item.quantity), 0);
-    const tax = subtotal * 0.075; // 7.5% VAT in Nigeria
-    const total = subtotal + tax;
+    const tax = 0; // VAT not applicable for this platform
+    const total = subtotal;
     const itemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
     return {
@@ -784,8 +784,8 @@ export class CartService extends BaseService {
       }
 
       // Calculate tax and total
-      const tax = subtotal * 0.075; // 7.5% VAT in Nigeria
-      const estimatedTotal = subtotal + tax;
+      const tax = 0; // VAT not applicable for this platform
+      const estimatedTotal = subtotal;
 
       return {
         id: `guest_${sessionId}`,

@@ -46,7 +46,7 @@ describe('Admin Order Management System', () => {
     paymentStatus: 'PENDING',
     userId: 'user-123',
     subtotal: 245000,
-    tax: 18375,
+    tax: 0, // VAT not applicable
     shippingCost: 2500,
     discount: 0,
     total: 265875,
@@ -392,10 +392,10 @@ describe('Admin Order Management System', () => {
     });
 
     describe('GET /api/admin/orders/analytics/revenue', () => {
-      it('should format revenue with Nigerian VAT calculations', async () => {
+      it('should format revenue without VAT (not applicable)', async () => {
         const revenueData = {
           totalRevenue: 54200000, // in kobo
-          vatCollected: Math.round(542000 * 0.075), // 7.5% VAT
+          vatCollected: 0, // VAT not applicable
           paymentMethodBreakdown: [
             { method: 'Card', percentage: 45.0 },
             { method: 'Bank Transfer', percentage: 35.0 },

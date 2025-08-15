@@ -1,8 +1,11 @@
 import { Router } from "express";
 import { AddressController } from "../../controllers/users/AddressController";
+import { AddressService } from "../../services/users/AddressService";
+import { AddressRepository } from "../../repositories/AddressRepository";
 import { authenticate } from "../../middleware/auth/authenticate";
 import { validateRequest } from "../../middleware/validation/validateRequest";
 import { rateLimiter } from "../../middleware/security/rateLimiter";
+
 // Note: User schemas not yet created, using placeholder validation
 const createAddressSchema = {}; // TODO: Implement proper validation schema
 const updateAddressSchema = {}; // TODO: Implement proper validation schema  
@@ -10,53 +13,10 @@ const validateAddressSchema = {}; // TODO: Implement proper validation schema
 
 const router = Router();
 
-// Initialize controller with fallback
-let addressController: AddressController | null = null;
-
-export const initializeAddressRoutes = (controller: AddressController) => {
-  addressController = controller;
-  return router;
-};
-
-// Create fallback controller if not initialized
-const getController = () => {
-  if (!addressController) {
-    // Create a mock controller for now
-    return {
-      getUserAddresses: async (req: any, res: any) => {
-        res.status(501).json({ success: false, message: "Address controller not initialized" });
-      },
-      getDefaultAddresses: async (req: any, res: any) => {
-        res.status(501).json({ success: false, message: "Address controller not initialized" });
-      },
-      createAddress: async (req: any, res: any) => {
-        res.status(501).json({ success: false, message: "Address controller not initialized" });
-      },
-      getAddressById: async (req: any, res: any) => {
-        res.status(501).json({ success: false, message: "Address controller not initialized" });
-      },
-      updateAddress: async (req: any, res: any) => {
-        res.status(501).json({ success: false, message: "Address controller not initialized" });
-      },
-      deleteAddress: async (req: any, res: any) => {
-        res.status(501).json({ success: false, message: "Address controller not initialized" });
-      },
-      setDefaultAddress: async (req: any, res: any) => {
-        res.status(501).json({ success: false, message: "Address controller not initialized" });
-      },
-      calculateShippingCost: async (req: any, res: any) => {
-        res.status(501).json({ success: false, message: "Address controller not initialized" });
-      },
-      validateAddress: async (req: any, res: any) => {
-        res.status(501).json({ success: false, message: "Address controller not initialized" });
-      },
-      getLocations: async (req: any, res: any) => {
-        res.status(501).json({ success: false, message: "Address controller not initialized" });
-      }
-    } as AddressController;
-  }
-  return addressController;
-};
+// Initialize services and controller properly
+const addressRepository = new AddressRepository();
+const addressService = new AddressService(addressRepository);
+const addressController = new AddressController(addressService);
 
 // Rate limiting for address operations
 const addressActionLimit = rateLimiter.authenticated;
@@ -74,7 +34,7 @@ const addressActionLimit = rateLimiter.authenticated;
  */
 router.get("/", authenticate, async (req, res, next) => {
   try {
-    await getController().getUserAddresses(req as any, res);
+    await addressController.getUserAddresses(req as any, res);
   } catch (error) {
     next(error);
   }
@@ -87,7 +47,7 @@ router.get("/", authenticate, async (req, res, next) => {
  */
 router.get("/default", authenticate, async (req, res, next) => {
   try {
-    await getController().getDefaultAddresses(req as any, res);
+    await addressController.getDefaultAddresses(req as any, res);
   } catch (error) {
     next(error);
   }
@@ -118,7 +78,7 @@ router.post(
   // validateRequest(createAddressSchema), // Skip validation for now due to empty schema
   async (req, res, next) => {
     try {
-      await getController().createAddress(req as any, res);
+      await addressController.createAddress(req as any, res);
     } catch (error) {
       next(error);
     }
@@ -133,7 +93,7 @@ router.post(
  */
 router.get("/:id", authenticate, async (req, res, next) => {
   try {
-    await getController().getAddressById(req as any, res);
+    await addressController.getAddressById(req as any, res);
   } catch (error) {
     next(error);
   }
@@ -153,7 +113,7 @@ router.put(
   // validateRequest(updateAddressSchema), // Skip validation for now due to empty schema
   async (req, res, next) => {
     try {
-      await getController().updateAddress(req as any, res);
+      await addressController.updateAddress(req as any, res);
     } catch (error) {
       next(error);
     }
@@ -172,7 +132,7 @@ router.delete(
   addressActionLimit,
   async (req, res, next) => {
     try {
-      await getController().deleteAddress(req as any, res);
+      await addressController.deleteAddress(req as any, res);
     } catch (error) {
       next(error);
     }
@@ -192,7 +152,7 @@ router.put(
   addressActionLimit,
   async (req, res, next) => {
     try {
-      await getController().setDefaultAddress(req as any, res);
+      await addressController.setDefaultAddress(req as any, res);
     } catch (error) {
       next(error);
     }
@@ -212,7 +172,7 @@ router.put(
  */
 router.post("/:id/shipping-cost", authenticate, async (req, res, next) => {
   try {
-    await getController().calculateShippingCost(req as any, res);
+    await addressController.calculateShippingCost(req as any, res);
   } catch (error) {
     next(error);
   }
@@ -238,7 +198,7 @@ router.post(
   // validateRequest(validateAddressSchema), // Skip validation for now due to empty schema
   async (req, res, next) => {
     try {
-      await getController().validateAddress(req as any, res);
+      await addressController.validateAddress(req as any, res);
     } catch (error) {
       next(error);
     }
@@ -253,7 +213,7 @@ router.post(
  */
 router.get("/locations", async (req, res, next) => {
   try {
-    await getController().getLocations(req as any, res);
+    await addressController.getLocations(req as any, res);
   } catch (error) {
     next(error);
   }

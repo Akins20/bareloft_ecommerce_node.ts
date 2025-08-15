@@ -348,15 +348,15 @@ export class SessionService extends BaseService {
   }
 
   /**
-   * Extend session expiry
+   * Extend session expiry by minutes (legacy method)
    */
-  async extendSession(sessionId: string, additionalMinutes: number = 15): Promise<Session> {
+  async extendSessionByMinutes(sessionId: string, additionalMinutes: number = 15): Promise<Session> {
     try {
       const newExpiryDate = new Date(Date.now() + additionalMinutes * 60 * 1000);
       
       const session = await this.sessionRepository.refreshSession(sessionId, newExpiryDate);
       
-      this.logger.info("Session extended", {
+      this.logger.info("Session extended by minutes", {
         sessionId,
         additionalMinutes,
         newExpiry: newExpiryDate,
@@ -364,7 +364,7 @@ export class SessionService extends BaseService {
       
       return session;
     } catch (error) {
-      this.logger.error("Error extending session", { error, sessionId });
+      this.logger.error("Error extending session by minutes", { error, sessionId });
       this.handleError("Failed to extend session", error);
     }
   }
@@ -439,6 +439,105 @@ export class SessionService extends BaseService {
       return await this.logout(session.sessionId);
     } catch (error) {
       this.logger.error("Error invalidating session by access token", { error });
+      return false;
+    }
+  }
+
+  // ==================== SLIDING SESSION METHODS ====================
+
+  /**
+   * Extend session expiry time (for sliding session implementation)
+   */
+  async extendSession(sessionId: string, newExpiryTime: Date): Promise<boolean> {
+    try {
+      const updated = await this.sessionRepository.extendSession(sessionId, newExpiryTime);
+      
+      if (updated) {
+        this.logger.info("Session extended successfully", {
+          sessionId,
+          newExpiry: newExpiryTime.toISOString(),
+        });
+      }
+      
+      return updated;
+    } catch (error) {
+      this.logger.error("Error extending session", { sessionId, error });
+      return false;
+    }
+  }
+
+  /**
+   * Update last activity timestamp for a session
+   */
+  async updateLastActivity(sessionId: string): Promise<boolean> {
+    try {
+      const updated = await this.sessionRepository.updateLastActivity(sessionId, new Date());
+      return updated;
+    } catch (error) {
+      this.logger.error("Error updating last activity", { sessionId, error });
+      return false;
+    }
+  }
+
+  /**
+   * Cleanup inactive sessions (older than specified date)
+   */
+  async cleanupInactiveSessions(cutoffDate: Date): Promise<number> {
+    try {
+      const deletedCount = await this.sessionRepository.cleanupInactiveSessions(cutoffDate);
+      
+      this.logger.info("Inactive sessions cleaned up", {
+        deletedCount,
+        cutoffDate: cutoffDate.toISOString(),
+      });
+      
+      return deletedCount;
+    } catch (error) {
+      this.logger.error("Error cleaning up inactive sessions", { error });
+      return 0;
+    }
+  }
+
+  /**
+   * Get session statistics (for monitoring)
+   */
+  async getSessionStats(): Promise<{
+    totalActiveSessions: number;
+    sessionsLast24h: number;
+    averageSessionDuration: number;
+    mostActiveUsers: Array<{ userId: string; sessionCount: number }>;
+  }> {
+    try {
+      const stats = await this.sessionRepository.getSessionStats();
+      return stats;
+    } catch (error) {
+      this.logger.error("Error getting session stats", { error });
+      return {
+        totalActiveSessions: 0,
+        sessionsLast24h: 0,
+        averageSessionDuration: 0,
+        mostActiveUsers: [],
+      };
+    }
+  }
+
+  /**
+   * Check if session needs extension (expires within threshold)
+   */
+  async sessionNeedsExtension(sessionId: string, thresholdSeconds: number): Promise<boolean> {
+    try {
+      const session = await this.sessionRepository.findBySessionId(sessionId);
+      if (!session || !session.expiresAt) {
+        return false;
+      }
+
+      const currentTime = new Date();
+      const timeUntilExpiry = session.expiresAt.getTime() - currentTime.getTime();
+      const thresholdMs = thresholdSeconds * 1000;
+
+      return timeUntilExpiry < thresholdMs && timeUntilExpiry > 0;
+    } catch (error) {
+      this.logger.error("Error checking session extension need", { sessionId, error });
       return false;
     }
   }

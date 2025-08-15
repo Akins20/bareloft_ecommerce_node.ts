@@ -54,7 +54,7 @@ export class AdminInventoryReportingController extends BaseController {
         format = 'excel',
         includeCharts = true,
         includeNigerianFormatting = true,
-        includeVATDetails = true,
+        includeVATDetails = false, // VAT not applicable
         includeComplianceNotes = false,
         parameters = {},
         fileName,
@@ -96,7 +96,7 @@ export class AdminInventoryReportingController extends BaseController {
         fileName: fileName || `${template.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.${format}`,
         includeCharts,
         includeNigerianFormatting,
-        includeVATDetails,
+        includeVATDetails: false, // VAT not applicable
         includeComplianceNotes,
         headerInfo: {
           companyName,
@@ -312,7 +312,7 @@ export class AdminInventoryReportingController extends BaseController {
         fileName: `nigerian_compliance_${complianceType}_${start.toISOString().split('T')[0]}_${end.toISOString().split('T')[0]}.${format}`,
         includeCharts: false,
         includeNigerianFormatting: true,
-        includeVATDetails: true,
+        includeVATDetails: false, // VAT not applicable
         includeComplianceNotes: true,
         headerInfo: {
           companyName: 'Bareloft E-commerce',
@@ -523,7 +523,7 @@ export class AdminInventoryReportingController extends BaseController {
           numberFormat: '1,234.56'
         },
         complianceOptions: [
-          'Nigerian VAT Compliance',
+          'Nigerian Business Compliance', // VAT removed
           'Import Duty Documentation',
           'Tax Authority Reporting',
           'Audit Trail Requirements'

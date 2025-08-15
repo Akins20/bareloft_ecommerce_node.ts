@@ -61,7 +61,7 @@ export interface CurrencyExportOptions {
  */
 export interface DataExportConfig {
   format: 'csv' | 'excel' | 'pdf';
-  includeVAT: boolean;
+  includeVAT: boolean; // Always false - VAT not applicable
   currency: CurrencyExportOptions;
   timezone: 'Africa/Lagos' | 'UTC';
   includeNigerianFields: boolean;
@@ -453,19 +453,14 @@ export abstract class BaseAdminController extends BaseController {
       if (config.includeNigerianFields) {
         (formatted as any).exportedAt = nigerianTime;
         (formatted as any).timezone = config.timezone;
-        if (config.includeVAT && this.isCurrencyField('amount', formatted)) {
-          const formattedWithAmount = formatted as any;
-          if (formattedWithAmount.amount && typeof formattedWithAmount.amount === 'number') {
-            formattedWithAmount.vatAmount = NigerianUtils.Ecommerce.calculateVAT(formattedWithAmount.amount);
-          }
-        }
+        // VAT functionality removed - not applicable for this platform
       }
 
       return formatted;
     });
 
     const compliance: string[] = ['NIGERIAN_ECOMMERCE'];
-    if (config.includeVAT) compliance.push('VAT_COMPLIANT');
+    // VAT compliance removed - not applicable
     if (config.complianceLevel === 'nafdac') compliance.push('NAFDAC_READY');
     if (config.timezone === 'Africa/Lagos') compliance.push('NIGERIAN_TIMEZONE');
 
@@ -539,7 +534,7 @@ export abstract class BaseAdminController extends BaseController {
     const revenueGrowth = firstHalf === 0 ? 0 : ((secondHalf - firstHalf) / firstHalf) * 100;
 
     // Nigerian specific calculations
-    const vatTotal = NigerianUtils.Ecommerce.calculateVAT(totalRevenue);
+    const vatTotal = 0; // VAT not applicable
     const averageOrderValue = totalOrders === 0 ? 0 : totalRevenue / totalOrders;
     
     // Business days calculation based on period

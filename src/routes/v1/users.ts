@@ -1,9 +1,15 @@
 import { Router } from "express";
 import { UserController } from "../../controllers/users/UserController";
+import { AddressController } from "../../controllers/users/AddressController";
 import { authenticate } from "../../middleware/auth/authenticate";
 import { authorize } from "../../middleware/auth/authorize";
 import { validateRequest } from "../../middleware/validation/validateRequest";
 import { rateLimiter } from "../../middleware/security/rateLimiter";
+
+// Service imports
+import { UserService } from "../../services/users/UserService";
+import { AddressService } from "../../services/users/AddressService";
+
 // Note: User schemas not yet created, using placeholder validation
 const updateProfileSchema = {};
 const changePasswordSchema = {};
@@ -11,15 +17,23 @@ const verifyPhoneSchema = {};
 const confirmPhoneSchema = {};
 const updatePreferencesSchema = {};
 
+// Import service container
+import { getServiceContainer } from "../../config/serviceContainer";
+
+// Get service container instance
+const serviceContainer = getServiceContainer();
+
+// Get services from container
+const userService = serviceContainer.getService<UserService>('userService');
+const addressService = serviceContainer.getService<AddressService>('addressService');
+
 const router = Router();
 
-// Initialize controller
-let userController: UserController;
+// Initialize controller with service from container
+const userController = new UserController(userService);
 
-export const initializeUserRoutes = (controller: UserController) => {
-  userController = controller;
-  return router;
-};
+// Initialize address controller with service
+const addressController = new AddressController(addressService);
 
 // Rate limiting for sensitive operations
 const profileUpdateLimit = rateLimiter.authenticated;
@@ -210,6 +224,61 @@ router.get("/preferences", authenticate, async (req, res, next) => {
   }
 });
 
+// ==================== USER NOTIFICATIONS ENDPOINTS ====================
+
+/**
+ * @route   GET /api/v1/users/:userId/notifications
+ * @desc    Get user notifications
+ * @access  Private (Customer - own notifications only)
+ * @query   { filter?: string, page?: number, limit?: number }
+ */
+router.get("/:userId/notifications", authenticate, async (req, res, next) => {
+  try {
+    await userController.getNotifications(req as any, res);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   PUT /api/v1/users/:userId/notifications/:notificationId/read
+ * @desc    Mark notification as read
+ * @access  Private (Customer - own notifications only)
+ */
+router.put("/:userId/notifications/:notificationId/read", authenticate, async (req, res, next) => {
+  try {
+    await userController.markNotificationAsRead(req as any, res);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   PUT /api/v1/users/:userId/notifications/read-all
+ * @desc    Mark all notifications as read
+ * @access  Private (Customer - own notifications only)
+ */
+router.put("/:userId/notifications/read-all", authenticate, async (req, res, next) => {
+  try {
+    await userController.markAllNotificationsAsRead(req as any, res);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   DELETE /api/v1/users/:userId/notifications/:notificationId
+ * @desc    Delete notification
+ * @access  Private (Customer - own notifications only)
+ */
+router.delete("/:userId/notifications/:notificationId", authenticate, async (req, res, next) => {
+  try {
+    await userController.deleteNotification(req as any, res);
+  } catch (error) {
+    next(error);
+  }
+});
+
 /**
  * @route   PUT /api/v1/users/preferences
  * @desc    Update user preferences
@@ -255,6 +324,26 @@ router.put(
 router.put("/email/preferences", authenticate, async (req, res, next) => {
   try {
     await userController.updateEmailPreferences(req as any, res);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ==================== USER ADDRESSES ENDPOINTS ====================
+
+/**
+ * @route   GET /api/v1/users/:userId/addresses
+ * @desc    Get user's addresses by user ID
+ * @access  Private (Customer - own addresses only, or Admin)
+ * @param   userId - User ID
+ * @query   {
+ *   type?: 'shipping' | 'billing' | 'all',
+ *   includeDefault?: boolean
+ * }
+ */
+router.get("/:userId/addresses", authenticate, async (req, res, next) => {
+  try {
+    await addressController.getUserAddresses(req as any, res);
   } catch (error) {
     next(error);
   }

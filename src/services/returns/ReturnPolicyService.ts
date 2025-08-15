@@ -159,7 +159,7 @@ export class ReturnPolicyService extends BaseService {
           partialRefundsAllowed: true,
           restockingFee: 0, // No restocking fee for Nigerian market
           shippingRefundPolicy: 'Original shipping charges non-refundable unless item defective',
-          taxRefundPolicy: 'VAT refunded with item refund'
+          taxRefundPolicy: 'No tax applicable for refunds'
         },
         nigerianSpecifics: {
           consumerProtectionCompliance: true,

@@ -6,6 +6,7 @@ import { JWTService } from "./JWTService";
 import { OTPService } from "./OTPService";
 import { SMSService } from "./SMSService";
 import { EmailHelper } from "../../utils/email/emailHelper";
+import * as bcrypt from "bcrypt";
 import {
   User,
   RequestOTPRequest,
@@ -21,6 +22,8 @@ import { AppError, HTTP_STATUS, ERROR_CODES } from "../../types/api.types";
 import { redisClient } from "../../config/redis";
 import { CONSTANTS } from "../../types/common.types";
 import { OTPPurpose, RefreshTokenResponse } from "../../types/auth.types";
+import { NotificationModel } from "../../models/Notification";
+import { NotificationType, NotificationChannel, NotificationStatus } from "../../types/notification.types";
 
 export class AuthService extends BaseService {
   private userRepository: any;
@@ -343,6 +346,26 @@ export class AuthService extends BaseService {
 
       // Create session
       await this.createSession(user.id, accessToken, refreshToken);
+
+      // Send welcome email if email was provided
+      if (email) {
+        try {
+          await this.sendWelcomeEmail(email, firstName);
+          console.log(`📧 Welcome email sent to ${email}`);
+        } catch (emailError) {
+          // Don't fail signup if welcome email fails, just log it
+          console.error("Failed to send welcome email:", emailError);
+        }
+      }
+
+      // Create welcome notification for the user
+      try {
+        await this.createWelcomeNotification(user.id, firstName);
+        console.log(`🔔 Welcome notification created for user ${user.id}`);
+      } catch (notificationError) {
+        // Don't fail signup if notification fails, just log it
+        console.error("Failed to create welcome notification:", notificationError);
+      }
 
       return {
         success: true,
@@ -710,6 +733,71 @@ export class AuthService extends BaseService {
   }
 
   /**
+   * Create welcome notification for new users
+   */
+  private async createWelcomeNotification(userId: string, firstName: string): Promise<void> {
+    try {
+      await NotificationModel.create({
+        data: {
+          userId,
+          type: "WELCOME_SERIES" as any,
+          channel: "IN_APP" as any,
+          subject: "Welcome to Bareloft! 🎉",
+          message: `Hi ${firstName}! Welcome to Bareloft, Nigeria's premier e-commerce platform. Start exploring amazing products from trusted local sellers. Click here to discover what's new!`,
+          status: "SENT" as any,
+          recipientName: firstName,
+          priority: "normal",
+          metadata: {
+            isWelcomeMessage: true,
+            userJoinDate: new Date().toISOString(),
+            welcomeMessageVersion: "1.0",
+            firstName,
+            platform: "Bareloft",
+            country: "Nigeria"
+          }
+        }
+      } as any);
+    } catch (error) {
+      console.error("Failed to create welcome notification:", error);
+      throw new AppError(
+        "Failed to create welcome notification.",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.INTERNAL_ERROR
+      );
+    }
+  }
+
+  /**
+   * Send welcome email to new users
+   */
+  private async sendWelcomeEmail(email: string, firstName: string): Promise<void> {
+    try {
+      const subject = "🎉 Welcome to Bareloft - Your Nigerian E-commerce Journey Begins!";
+      
+      await EmailHelper.sendTemplateEmail({
+        to: email,
+        template: 'welcome',
+        subject,
+        data: {
+          firstName,
+          email,
+          shopUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/products`,
+          supportEmail: 'support@bareloft.com',
+          privacyUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/privacy`,
+          termsUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/terms`,
+        },
+      });
+    } catch (error) {
+      console.error("Failed to send welcome email:", error);
+      throw new AppError(
+        "Failed to send welcome email. Please try again.",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.INTERNAL_ERROR
+      );
+    }
+  }
+
+  /**
    * Send OTP via email
    */
   private async sendEmailOTP(email: string, otpCode: string, purpose: OTPPurpose): Promise<void> {
@@ -745,6 +833,7 @@ export class AuthService extends BaseService {
     };
     return subjects[purpose] || "🔐 Bareloft - Your Verification Code";
   }
+
 
   /**
    * Get email HTML template for OTP
@@ -844,6 +933,181 @@ export class AuthService extends BaseService {
       );
     }
     return this.sanitizeUser(user);
+  }
+
+  /**
+   * Email/Password Authentication Methods for Admin Users
+   */
+
+  /**
+   * Create admin user with email/password
+   */
+  async createEmailUser(data: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+  }): Promise<any> {
+    try {
+      // Check if email already exists
+      const existingUser = await this.findUserByEmail(data.email);
+      if (existingUser) {
+        return {
+          success: false,
+          message: "Email address is already registered"
+        };
+      }
+
+      // Hash password
+      const saltRounds = 12;
+      const hashedPassword = await bcrypt.hash(data.password, saltRounds);
+
+      // Create user
+      const userData = {
+        email: data.email,
+        password: hashedPassword,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        role: data.role,
+        isVerified: true, // Email admin accounts are pre-verified
+        isActive: true
+      };
+
+      const user = await this.userRepository.create(userData);
+
+      // Generate tokens first
+      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      const tokens = await this.jwtService.generateTokenPair({
+        userId: user.id,
+        phoneNumber: user.phoneNumber,
+        email: user.email,
+        role: user.role,
+        sessionId,
+        type: 'access'
+      });
+      
+      // Create session with all required fields
+      const sessionData = {
+        userId: user.id,
+        sessionId: sessionId,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        deviceInfo: "Email signup",
+        ipAddress: "::1",
+        userAgent: "API",
+        isActive: true
+      };
+      
+      const session = await this.sessionRepository.create(sessionData);
+
+      return {
+        success: true,
+        message: "Admin account created successfully",
+        data: {
+          user: this.sanitizeUser(user),
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresIn: tokens.accessTokenExpiresIn
+        }
+      };
+    } catch (error: any) {
+      console.error('Create email user error:', error);
+      throw new AppError(
+        error.message || "Failed to create admin account",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.INTERNAL_ERROR
+      );
+    }
+  }
+
+  /**
+   * Login admin user with email/password
+   */
+  async loginWithEmail(data: {
+    email: string;
+    password: string;
+  }): Promise<any> {
+    try {
+      // Find user by email
+      const user = await this.findUserByEmail(data.email);
+      if (!user) {
+        return {
+          success: false,
+          message: "Invalid email or password"
+        };
+      }
+
+      // Check if user has a password (email authentication enabled)
+      if (!(user as any).password) {
+        return {
+          success: false,
+          message: "This account uses phone authentication. Please login with OTP."
+        };
+      }
+
+      // Verify password
+      const isValidPassword = await bcrypt.compare(data.password, (user as any).password);
+      if (!isValidPassword) {
+        return {
+          success: false,
+          message: "Invalid email or password"
+        };
+      }
+
+      // Check if user is active
+      if (!user.isActive) {
+        return {
+          success: false,
+          message: "Account has been deactivated. Contact support."
+        };
+      }
+
+      // Generate tokens first
+      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      const tokens = await this.jwtService.generateTokenPair({
+        userId: user.id,
+        phoneNumber: user.phoneNumber,
+        email: user.email,
+        role: user.role,
+        sessionId,
+        type: 'access'
+      });
+      
+      // Create session with all required fields
+      const sessionData = {
+        userId: user.id,
+        sessionId: sessionId,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        deviceInfo: "Email login",
+        ipAddress: "::1",
+        userAgent: "API",
+        isActive: true
+      };
+      
+      const session = await this.sessionRepository.create(sessionData);
+
+      return {
+        success: true,
+        message: "Login successful",
+        data: {
+          user: this.sanitizeUser(user),
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresIn: tokens.accessTokenExpiresIn
+        }
+      };
+    } catch (error: any) {
+      console.error('Email login error:', error);
+      throw new AppError(
+        error.message || "Login failed",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.INTERNAL_ERROR
+      );
+    }
   }
 
 }

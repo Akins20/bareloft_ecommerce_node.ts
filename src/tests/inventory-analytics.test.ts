@@ -466,7 +466,7 @@ describe('Inventory Analytics API Tests', () => {
           format: 'excel',
           includeCharts: true,
           includeNigerianFormatting: true,
-          includeVATDetails: true,
+          includeVATDetails: false, // VAT not applicable
           parameters: {
             period: 'last_30_days'
           }

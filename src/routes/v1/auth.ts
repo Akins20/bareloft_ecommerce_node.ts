@@ -401,6 +401,53 @@ router.get(
 );
 
 /**
+ * @route   POST /api/v1/auth/email-signup
+ * @desc    Register admin user with email/password
+ * @access  Public
+ * @rateLimit 5 requests per minute
+ */
+router.post(
+  "/email-signup",
+  rateLimiter.auth,
+  async (req, res, next) => {
+    try {
+      const { email, password, firstName, lastName, role } = req.body;
+
+      // Only allow admin roles for email signup
+      if (!role || !['ADMIN', 'SUPER_ADMIN'].includes(role)) {
+        return res.status(400).json({
+          success: false,
+          message: "Email signup is only available for admin accounts",
+          error: { code: "INVALID_ROLE" }
+        });
+      }
+
+      await authController.emailSignup(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   POST /api/v1/auth/email-login
+ * @desc    Login admin user with email/password
+ * @access  Public
+ * @rateLimit 5 requests per minute
+ */
+router.post(
+  "/email-login",
+  rateLimiter.auth,
+  async (req, res, next) => {
+    try {
+      await authController.emailLogin(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * @route   POST /api/v1/auth/test-login
  * @desc    Test login bypass for development - bypasses OTP verification
  * @access  Public (Development Only)

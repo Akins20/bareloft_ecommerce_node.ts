@@ -768,12 +768,11 @@ export class NigerianEcommerceUtils {
   }
 
   /**
-   * Calculate Nigerian VAT (if applicable)
+   * Calculate VAT (not applicable for this platform)
    */
   static calculateVAT(amount: number): number {
-    // Nigeria VAT is 7.5% (as of 2024)
-    const VAT_RATE = 0.075;
-    return amount * VAT_RATE;
+    // VAT not applicable for this e-commerce platform
+    return 0;
   }
 
   /**
@@ -931,8 +930,7 @@ export class NigerianEcommerceUtils {
     };
   } {
     const receiptNumber = `RCP-${orderData.orderNumber}`;
-    const vatRate = 0.075; // 7.5% VAT
-    const isVatRegistered = true; // Assume business is VAT registered
+    // VAT not applicable for this platform
 
     const formattedReceipt = `
 BARELOFT E-COMMERCE
@@ -950,7 +948,6 @@ ${orderData.items
   .join("\n")}
 
 Subtotal: ${NairaCurrencyUtils.format(orderData.subtotal)}
-VAT (7.5%): ${NairaCurrencyUtils.format(orderData.vat)}
 TOTAL: ${NairaCurrencyUtils.format(orderData.total)}
 
 Payment: ${orderData.paymentMethod}
@@ -964,9 +961,9 @@ Support: +234-800-BARELOFT
       receiptNumber,
       formattedReceipt,
       vatCalculation: {
-        vatRate,
-        vatAmount: orderData.vat,
-        isVatRegistered,
+        vatRate: 0,
+        vatAmount: 0,
+        isVatRegistered: false,
       },
     };
   }

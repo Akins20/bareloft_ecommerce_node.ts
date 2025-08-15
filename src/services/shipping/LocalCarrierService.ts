@@ -108,7 +108,7 @@ export class LocalCarrierService extends BaseCarrierService {
         additionalFees: {
           fuelSurcharge: totalCost * 0.08, // 8% fuel surcharge
           insurance: request.declaredValue * 0.01, // 1% insurance
-          vat: totalCost * 0.075, // 7.5% VAT
+          vat: 0, // VAT not applicable
         },
       };
 

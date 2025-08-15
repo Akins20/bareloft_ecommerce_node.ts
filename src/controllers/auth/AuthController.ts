@@ -376,6 +376,9 @@ export class AuthController extends BaseController {
   public verifyOTP = async (req: Request, res: Response, next?: unknown): Promise<void> => {
     try {
       const { phoneNumber, email, code, purpose }: VerifyOTPRequest = req.body;
+      
+      // Support both 'purpose' and 'type' field names for backward compatibility
+      const otpPurpose = purpose || (req.body as any).type;
 
       // Validate that either phone number or email is provided
       if (!phoneNumber && !email) {
@@ -425,12 +428,12 @@ export class AuthController extends BaseController {
         phoneNumber,
         email,
         code,
-        purpose: (purpose || "login").toUpperCase() as OTPPurpose
+        purpose: (otpPurpose || "login").toUpperCase() as OTPPurpose
       });
 
       if (!result.isValid) {
         const verifyLogData: any = {
-          purpose: purpose || "login",
+          purpose: otpPurpose || "login",
           reason: "Invalid OTP code",
         };
         
@@ -449,7 +452,7 @@ export class AuthController extends BaseController {
 
       // Log successful verification
       const verifiedLogData: any = {
-        purpose: purpose || "login",
+        purpose: otpPurpose || "login",
       };
       
       if (phoneNumber) {
@@ -642,6 +645,152 @@ req: Request, res: Response, next?: unknown  ): Promise<void> => {
       res.json(response);
     } catch (error) {
       this.handleError(error, req, res);
+    }
+  };
+
+  /**
+   * Email/Password Authentication for Admin Users
+   */
+
+  /**
+   * Admin signup with email/password
+   * POST /api/v1/auth/email-signup
+   */
+  public emailSignup = async (req: Request, res: Response, next?: any): Promise<void> => {
+    try {
+      const { email, password, firstName, lastName, role } = req.body;
+
+      // Validate required fields
+      if (!email || !password || !firstName || !lastName || !role) {
+        this.sendError(
+          res,
+          "Email, password, firstName, lastName, and role are required",
+          400,
+          "VALIDATION_ERROR"
+        );
+        return;
+      }
+
+      // Validate email format
+      if (!this.isValidEmail(email)) {
+        this.sendError(
+          res,
+          "Invalid email address format",
+          400,
+          "INVALID_EMAIL"
+        );
+        return;
+      }
+
+      // Validate password strength (minimum 8 characters)
+      if (password.length < 8) {
+        this.sendError(
+          res,
+          "Password must be at least 8 characters long",
+          400,
+          "WEAK_PASSWORD"
+        );
+        return;
+      }
+
+      // Only allow admin roles
+      if (!['ADMIN', 'SUPER_ADMIN'].includes(role)) {
+        this.sendError(
+          res,
+          "Invalid role. Only ADMIN and SUPER_ADMIN are allowed",
+          400,
+          "INVALID_ROLE"
+        );
+        return;
+      }
+
+      // Create admin user with email/password
+      const result = await this.authService.createEmailUser({
+        email,
+        password,
+        firstName,
+        lastName,
+        role
+      });
+
+      if (!result.success) {
+        this.sendError(res, result.message, 400, "SIGNUP_FAILED");
+        return;
+      }
+
+      this.logAction("EMAIL_SIGNUP", result.data.user.id, "USER", undefined, {
+        email: this.maskEmail(email),
+        role
+      });
+
+      res.status(201).json({
+        success: true,
+        message: "Admin account created successfully",
+        data: result.data
+      });
+    } catch (error) {
+      if (next) next(error);
+      else throw error;
+    }
+  };
+
+  /**
+   * Admin login with email/password
+   * POST /api/v1/auth/email-login
+   */
+  public emailLogin = async (req: Request, res: Response, next?: any): Promise<void> => {
+    try {
+      const { email, password } = req.body;
+
+      // Validate required fields
+      if (!email || !password) {
+        this.sendError(
+          res,
+          "Email and password are required",
+          400,
+          "VALIDATION_ERROR"
+        );
+        return;
+      }
+
+      // Validate email format
+      if (!this.isValidEmail(email)) {
+        this.sendError(
+          res,
+          "Invalid email address format",
+          400,
+          "INVALID_EMAIL"
+        );
+        return;
+      }
+
+      // Authenticate with email/password
+      const result = await this.authService.loginWithEmail({
+        email,
+        password
+      });
+
+      if (!result.success) {
+        this.sendError(res, result.message, 401, "LOGIN_FAILED");
+        return;
+      }
+
+      // Update last login
+      await this.authService.updateLastLogin(result.data.user.id);
+
+      this.logAction("EMAIL_LOGIN", result.data.user.id, "USER", undefined, {
+        email: this.maskEmail(email),
+        role: result.data.user.role
+      });
+
+      res.json({
+        success: true,
+        message: "Login successful",
+        data: result.data
+      });
+    } catch (error) {
+      if (next) next(error);
+      else throw error;
     }
   };
 

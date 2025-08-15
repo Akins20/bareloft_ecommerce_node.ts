@@ -148,8 +148,8 @@ export class AdminDashboardController extends BaseAdminController {
       const nigerianSalesMetrics = {
         totalRevenue: salesData.totalRevenue,
         totalRevenueFormatted: this.formatAdminCurrency(salesData.totalRevenue),
-        vatCollected: NigerianUtils.Ecommerce.calculateVAT(salesData.totalRevenue),
-        vatCollectedFormatted: this.formatAdminCurrency(NigerianUtils.Ecommerce.calculateVAT(salesData.totalRevenue)),
+        vatCollected: 0, // VAT not applicable
+        vatCollectedFormatted: this.formatAdminCurrency(0),
         averageOrderValue: salesData.averageOrderValue,
         averageOrderValueFormatted: this.formatAdminCurrency(salesData.averageOrderValue),
         conversionRate: salesData.conversionRate,
@@ -480,7 +480,7 @@ export class AdminDashboardController extends BaseAdminController {
       // Export with Nigerian compliance
       const exportConfig = {
         format: format as 'csv' | 'excel' | 'pdf',
-        includeVAT: true,
+        includeVAT: false, // VAT not applicable
         currency: {
           format: 'naira' as const,
           includeSymbol: true,
@@ -669,8 +669,8 @@ export class AdminDashboardController extends BaseAdminController {
         },
         nigerianMetrics: {
           vatCollected: {
-            value: NigerianUtils.Ecommerce.calculateVAT(salesAnalytics.totalRevenue),
-            formatted: this.formatAdminCurrency(NigerianUtils.Ecommerce.calculateVAT(salesAnalytics.totalRevenue))
+            value: 0, // VAT not applicable
+            formatted: this.formatAdminCurrency(0)
           },
           businessHours: NigerianUtils.Business.isBusinessHours(),
           peakTime: this.isPeakShoppingTime(),
@@ -897,8 +897,8 @@ export class AdminDashboardController extends BaseAdminController {
         },
         nigerianSpecific: {
           vatCollected: {
-            value: NigerianUtils.Ecommerce.calculateVAT(revenueStats.total),
-            formatted: this.formatAdminCurrency(NigerianUtils.Ecommerce.calculateVAT(revenueStats.total))
+            value: 0, // VAT not applicable
+            formatted: this.formatAdminCurrency(0)
           },
           businessHours: NigerianUtils.Business.isBusinessHours(),
           peakTime: this.isPeakShoppingTime(),

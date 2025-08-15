@@ -70,14 +70,14 @@ export const rateLimiter = {
   // General API requests (generous for mobile users)
   general: createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5000, // 1000 requests per 15 minutes
+    max: 50000, // 50000 requests per 15 minutes (10x increase)
     message: "Too many requests, please slow down",
   }),
 
   // Authentication endpoints (stricter)
   auth: createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10, // 10 login attempts per 15 minutes
+    max: 100, // 100 login attempts per 15 minutes (10x increase)
     message: "Too many login attempts, please try again later",
     skipSuccessfulRequests: true,
   }),
@@ -85,7 +85,7 @@ export const rateLimiter = {
   // OTP requests (very strict)
   otp: createRateLimiter({
     windowMs: 5 * 60 * 1000, // 5 minutes
-    max: 3, // 3 OTP requests per 5 minutes
+    max: 30, // 30 OTP requests per 5 minutes (10x increase)
     message:
       "Too many OTP requests, please wait before requesting another code",
   }),
@@ -93,35 +93,35 @@ export const rateLimiter = {
   // Authenticated users (more generous)
   authenticated: createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 2000, // 2000 requests per 15 minutes for logged-in users
+    max: 20000, // 20000 requests per 15 minutes for logged-in users (10x increase)
     message: "Request limit reached, please wait",
   }),
 
   // Admin endpoints (moderate)
   admin: createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 500, // 500 admin requests per 15 minutes
+    max: 5000, // 5000 admin requests per 15 minutes (10x increase)
     message: "Admin rate limit exceeded",
   }),
 
   // Payment endpoints (strict)
   payment: createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 50, // 50 payment requests per 15 minutes
+    max: 500, // 500 payment requests per 15 minutes (10x increase)
     message: "Payment request limit exceeded, please contact support if needed",
   }),
 
   // File upload (very strict)
   upload: createRateLimiter({
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 20, // 20 uploads per hour
+    max: 200, // 200 uploads per hour (10x increase)
     message: "Upload limit exceeded, please try again later",
   }),
 
   // Webhook rate limit (high limit for external services)
   webhook: createRateLimiter({
     windowMs: 1 * 60 * 1000, // 1 minute
-    max: 1000, // 1000 requests per minute for webhooks
+    max: 10000, // 10000 requests per minute for webhooks (10x increase)
     message: "Webhook rate limit exceeded",
     keyGenerator: (req: Request) => req.ip || 'webhook', // Use IP for webhooks
   }),

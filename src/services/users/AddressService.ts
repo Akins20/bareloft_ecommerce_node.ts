@@ -8,9 +8,9 @@ import { AppError, HTTP_STATUS, ERROR_CODES } from "../../types/api.types";
 export class AddressService extends BaseService {
   private addressRepository: AddressRepository;
 
-  constructor() {
+  constructor(addressRepository?: AddressRepository) {
     super();
-    this.addressRepository = new AddressRepository();
+    this.addressRepository = addressRepository || new AddressRepository();
   }
 
   /**

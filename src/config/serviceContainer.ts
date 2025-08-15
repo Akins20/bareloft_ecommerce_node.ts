@@ -27,6 +27,7 @@ import { AddressService } from "../services/users/AddressService";
 import { ReviewService } from "../services/products/ReviewService";
 import { WishlistService } from "../services/users/WishlistService";
 import { SearchService } from "../services/products/SearchService";
+import { NotificationService } from "../services/notifications/NotificationService";
 import { PaymentService } from "../services/payments/PaymentService";
 import { PaystackService } from "../services/payments/PaystackService";
 
@@ -96,12 +97,13 @@ export class ServiceContainer {
     // Initialize cart service with proper dependencies
     const cartService = new CartService(cartRepository, productRepository);
 
-    // Initialize order service with proper dependencies including ProductRepository for validation
-    const orderService = new OrderService(orderRepository, userRepository, cartService, undefined, productRepository);
+    // Initialize order service with proper dependencies
+    const notificationService = new NotificationService();
+    const orderService = new OrderService(orderRepository, userRepository, cartService, undefined, notificationService, productRepository);
 
     // Initialize user services
     const userService = new UserService();
-    const addressService = new AddressService();
+    const addressService = new AddressService(addressRepository);
     const wishlistService = new WishlistService();
 
     // Initialize payment services

@@ -11,6 +11,7 @@ import { SessionRepository } from "../../repositories/SessionRepository";
 import { config } from "../../config/environment";
 import { logger } from "../../utils/logger/winston";
 import { UserRole } from "../../types/user.types";
+import { AuthenticatedRequest } from "../../types/auth.types";
 import { getServiceContainer } from "../../config/serviceContainer";
 
 // Extend Express Request type to include user
@@ -188,6 +189,9 @@ export const authenticate = async (
 
     // Update session last activity
     await sessionRepo.updateLastUsed(session.id);
+
+    // Add token to request for sliding session middleware
+    (req as AuthenticatedRequest).token = token;
 
     logger.debug("User authenticated successfully", {
       userId: user.id,

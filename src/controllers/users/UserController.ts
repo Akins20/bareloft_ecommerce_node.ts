@@ -711,4 +711,188 @@ export class UserController extends BaseController {
     return errors;
   }
 
+  // ==================== NOTIFICATION METHODS ====================
+
+  /**
+   * Get user notifications
+   * GET /api/v1/users/:userId/notifications
+   */
+  public getNotifications = async (
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const currentUserId = req.user?.id;
+      const requestedUserId = req.params.userId;
+
+      if (!currentUserId) {
+        res.status(401).json({
+          success: false,
+          message: "User authentication required",
+        });
+        return;
+      }
+
+      // Users can only access their own notifications
+      if (currentUserId !== requestedUserId) {
+        res.status(403).json({
+          success: false,
+          message: "Access denied. You can only view your own notifications.",
+        });
+        return;
+      }
+
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+      const filter = req.query.filter as string || 'all';
+
+      const notifications = await this.userService.getUserNotifications(currentUserId, {
+        page,
+        limit,
+        filter,
+      });
+
+      const response: ApiResponse<any> = {
+        success: true,
+        message: "Notifications retrieved successfully",
+        data: notifications,
+      };
+
+      res.json(response);
+    } catch (error) {
+      this.handleError(error, req, res);
+    }
+  };
+
+  /**
+   * Mark notification as read
+   * PUT /api/v1/users/:userId/notifications/:notificationId/read
+   */
+  public markNotificationAsRead = async (
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const currentUserId = req.user?.id;
+      const requestedUserId = req.params.userId;
+      const notificationId = req.params.notificationId;
+
+      if (!currentUserId) {
+        res.status(401).json({
+          success: false,
+          message: "User authentication required",
+        });
+        return;
+      }
+
+      // Users can only access their own notifications
+      if (currentUserId !== requestedUserId) {
+        res.status(403).json({
+          success: false,
+          message: "Access denied. You can only modify your own notifications.",
+        });
+        return;
+      }
+
+      const result = await this.userService.markNotificationAsRead(currentUserId, notificationId);
+
+      const response: ApiResponse<any> = {
+        success: true,
+        message: "Notification marked as read",
+        data: result,
+      };
+
+      res.json(response);
+    } catch (error) {
+      this.handleError(error, req, res);
+    }
+  };
+
+  /**
+   * Mark all notifications as read
+   * PUT /api/v1/users/:userId/notifications/read-all
+   */
+  public markAllNotificationsAsRead = async (
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const currentUserId = req.user?.id;
+      const requestedUserId = req.params.userId;
+
+      if (!currentUserId) {
+        res.status(401).json({
+          success: false,
+          message: "User authentication required",
+        });
+        return;
+      }
+
+      // Users can only access their own notifications
+      if (currentUserId !== requestedUserId) {
+        res.status(403).json({
+          success: false,
+          message: "Access denied. You can only modify your own notifications.",
+        });
+        return;
+      }
+
+      const result = await this.userService.markAllNotificationsAsRead(currentUserId);
+
+      const response: ApiResponse<any> = {
+        success: true,
+        message: "All notifications marked as read",
+        data: result,
+      };
+
+      res.json(response);
+    } catch (error) {
+      this.handleError(error, req, res);
+    }
+  };
+
+  /**
+   * Delete notification
+   * DELETE /api/v1/users/:userId/notifications/:notificationId
+   */
+  public deleteNotification = async (
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const currentUserId = req.user?.id;
+      const requestedUserId = req.params.userId;
+      const notificationId = req.params.notificationId;
+
+      if (!currentUserId) {
+        res.status(401).json({
+          success: false,
+          message: "User authentication required",
+        });
+        return;
+      }
+
+      // Users can only access their own notifications
+      if (currentUserId !== requestedUserId) {
+        res.status(403).json({
+          success: false,
+          message: "Access denied. You can only delete your own notifications.",
+        });
+        return;
+      }
+
+      const result = await this.userService.deleteNotification(currentUserId, notificationId);
+
+      const response: ApiResponse<any> = {
+        success: true,
+        message: "Notification deleted successfully",
+        data: result,
+      };
+
+      res.json(response);
+    } catch (error) {
+      this.handleError(error, req, res);
+    }
+  };
+
 }

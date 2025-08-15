@@ -24,6 +24,7 @@ import { errorHandler } from "./middleware/error/errorHandler";
 import { requestLogger } from "./middleware/logging/requestLogger";
 import { rateLimiter } from "./middleware/security/rateLimiter";
 import { authenticate } from "./middleware/auth/authenticate";
+import { slidingSessionMiddleware } from "./middleware/auth/slidingSession";
 
 // Route imports - API v1
 import authRoutes from "./routes/v1/auth";
@@ -38,6 +39,8 @@ import wishlistRoutes from "./routes/v1/wishlist";
 import searchRoutes from "./routes/v1/search";
 import uploadRoutes from "./routes/v1/upload";
 import paymentRoutes from "./routes/v1/payments";
+import notificationRoutes from "./routes/v1/notifications";
+import returnsRoutes from "./routes/v1/returns";
 
 // Admin routes
 import adminRoutes from "./routes/admin";
@@ -230,12 +233,14 @@ class App {
     // Payment routes (mixed public and protected endpoints)
     this.app.use(`${apiV1}/payments`, paymentRoutes);
 
-    // Protected routes (authentication required)
-    this.app.use(`${apiV1}/users`, authenticate, userRoutes);
-    this.app.use(`${apiV1}/addresses`, authenticate, addressRoutes);
-    this.app.use(`${apiV1}/reviews`, authenticate, reviewRoutes);
-    this.app.use(`${apiV1}/wishlist`, authenticate, wishlistRoutes);
-    this.app.use(`${apiV1}/upload`, authenticate, uploadRoutes);
+    // Protected routes (authentication + sliding session)
+    this.app.use(`${apiV1}/users`, authenticate, slidingSessionMiddleware, userRoutes);
+    this.app.use(`${apiV1}/addresses`, authenticate, slidingSessionMiddleware, addressRoutes);
+    this.app.use(`${apiV1}/reviews`, authenticate, slidingSessionMiddleware, reviewRoutes);
+    this.app.use(`${apiV1}/wishlist`, authenticate, slidingSessionMiddleware, wishlistRoutes);
+    this.app.use(`${apiV1}/upload`, authenticate, slidingSessionMiddleware, uploadRoutes);
+    this.app.use(`${apiV1}/notifications`, authenticate, slidingSessionMiddleware, notificationRoutes);
+    this.app.use(`${apiV1}/returns`, authenticate, slidingSessionMiddleware, returnsRoutes);
 
     // Admin routes (admin authentication required)
     this.app.use("/api/admin", adminRoutes);
@@ -489,6 +494,24 @@ class App {
       await EmailHelper.initialize();
       console.log("✅ Email service initialized successfully");
 
+      // Initialize job service (background job processing)
+      const { JobService } = await import('./services/jobs');
+      const jobService = new JobService();
+      await jobService.initialize();
+      console.log("✅ Job service initialized successfully");
+      
+      // Store job service reference for graceful shutdown
+      (this as any).jobService = jobService;
+
+      // Initialize payment reconciliation scheduler
+      const { PaymentReconciliationScheduler } = await import('./services/scheduler/PaymentReconciliationScheduler');
+      const reconciliationScheduler = new PaymentReconciliationScheduler(jobService);
+      reconciliationScheduler.start();
+      console.log("✅ Payment reconciliation scheduler started successfully");
+      
+      // Store scheduler reference for graceful shutdown
+      (this as any).reconciliationScheduler = reconciliationScheduler;
+
       // Run database migrations if needed
       // await this.runMigrations();
 
@@ -566,6 +589,18 @@ class App {
       // Close Redis connection
       await this.redis.disconnect();
       console.log("✅ Redis connection closed");
+
+      // Stop payment reconciliation scheduler
+      if ((this as any).reconciliationScheduler) {
+        (this as any).reconciliationScheduler.stop();
+        console.log("✅ Payment reconciliation scheduler stopped");
+      }
+
+      // Shutdown job service
+      if ((this as any).jobService) {
+        await (this as any).jobService.shutdown();
+        console.log("✅ Job service shutdown completed");
+      }
 
       console.log("✅ Graceful shutdown completed");
       process.exit(0);

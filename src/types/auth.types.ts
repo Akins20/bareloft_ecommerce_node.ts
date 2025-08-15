@@ -135,6 +135,7 @@ export interface AuthenticatedRequest extends Request {
   user?: PublicUser;
   userId?: string;
   sessionId?: string;
+  token?: string; // For sliding session middleware
 }
 
 // Token pair interface

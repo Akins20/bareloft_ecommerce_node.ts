@@ -32,6 +32,7 @@ import searchRoutes from "./search";
 import uploadRoutes from "./upload";
 import returnsRoutes from "./returns";
 import paymentRoutes from "./payments";
+import notificationRoutes from "./notifications";
 
 const router = Router();
 
@@ -106,6 +107,9 @@ router.use("/returns", returnsRoutes);
 
 // Payment routes
 router.use("/payments", paymentRoutes);
+
+// Notification routes  
+router.use("/notifications", notificationRoutes);
 
 export default router;
 

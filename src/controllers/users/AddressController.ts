@@ -19,16 +19,17 @@ export class AddressController extends BaseController {
 
   /**
    * Get all user addresses
-   * GET /api/v1/addresses
+   * GET /api/v1/addresses or /api/v1/users/:userId/addresses
    */
   public getUserAddresses = async (
     req: AuthenticatedRequest,
     res: Response
   ): Promise<void> => {
     try {
-      const userId = req.user?.id;
+      const authenticatedUserId = req.user?.id;
+      const requestedUserId = req.params.userId || authenticatedUserId;
 
-      if (!userId) {
+      if (!authenticatedUserId) {
         res.status(401).json({
           success: false,
           message: "User authentication required",
@@ -36,6 +37,21 @@ export class AddressController extends BaseController {
         return;
       }
 
+      // If requesting another user's addresses, check if the user is authorized
+      if (requestedUserId && requestedUserId !== authenticatedUserId) {
+        // For now, only allow users to access their own addresses
+        // In the future, we can add admin role check here
+        const userRole = req.user?.role;
+        if (!userRole || !['ADMIN', 'SUPER_ADMIN'].includes(userRole)) {
+          res.status(403).json({
+            success: false,
+            message: "Access denied: You can only view your own addresses",
+          });
+          return;
+        }
+      }
+
+      const userId = requestedUserId || authenticatedUserId;
       const addresses = await this.addressService.getUserAddresses(userId);
 
       const response: ApiResponse<AddressResponse[]> = {

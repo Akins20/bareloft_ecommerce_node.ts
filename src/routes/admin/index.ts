@@ -14,6 +14,7 @@ import settingsRoutes from "./settings";
 import { shippingRoutes } from "./shipping";
 import returnsRoutes from "./returns";
 import supportRoutes from "./support";
+import jobsRoutes from "./jobs";
 
 const router = Router();
 
@@ -221,6 +222,21 @@ router.get("/", (req, res) => {
           "GET /analytics/tickets - Ticket analytics and trends",
           "GET /analytics/satisfaction - Customer satisfaction scores"
         ]
+      },
+      jobs: {
+        base: "/api/admin/jobs",
+        description: "Background job monitoring and management",
+        endpoints: [
+          "GET /stats - Get comprehensive job queue statistics",
+          "GET /queues - Get detailed information about all queues",
+          "POST /queues/:queueName/pause - Pause a specific queue",
+          "POST /queues/:queueName/resume - Resume a paused queue",
+          "POST /queues/clean - Clean completed and failed jobs",
+          "GET /:jobId - Get detailed job information",
+          "POST /email/test - Create test email job",
+          "POST /notification/test - Create test notification job",
+          "GET /health - Get job system health status"
+        ]
       }
     },
     capabilities: [
@@ -256,7 +272,11 @@ router.get("/", (req, res) => {
       "Multi-channel support (Email, SMS, WhatsApp, Phone)",
       "Support agent performance tracking and scheduling",
       "Knowledge base management with Nigerian context",
-      "Support analytics and customer satisfaction tracking"
+      "Support analytics and customer satisfaction tracking",
+      "Background job monitoring and queue management",
+      "Email and notification job processing",
+      "Analytics and maintenance job automation",
+      "Real-time job performance monitoring"
     ],
     security: {
       authentication: "JWT with session validation",
@@ -312,7 +332,9 @@ router.get("/health", (req, res) => {
       returnsManagement: "active",
       refundsManagement: "active",
       supportTicketSystem: "active",
-      knowledgeBase: "active"
+      knowledgeBase: "active",
+      jobQueueManagement: "active",
+      backgroundJobProcessing: "active"
     },
     lastChecked: new Date().toISOString()
   };
@@ -335,5 +357,6 @@ router.use("/settings", settingsRoutes);
 router.use("/shipping", shippingRoutes);
 router.use("/", returnsRoutes); // Returns and refunds routes
 router.use("/support", supportRoutes);
+router.use("/jobs", jobsRoutes);
 
 export default router;

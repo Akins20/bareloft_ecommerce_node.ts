@@ -1,8 +1,12 @@
 import { Router } from "express";
 import { WishlistController } from "../../controllers/users/WishlistController";
+import { WishlistService } from "../../services/users/WishlistService";
+import { UserRepository } from "../../repositories/UserRepository";
+import { ProductRepository } from "../../repositories/ProductRepository";
 import { authenticate } from "../../middleware/auth/authenticate";
 import { validateRequest } from "../../middleware/validation/validateRequest";
 import { rateLimiter } from "../../middleware/security/rateLimiter";
+import { prisma } from "../../database/connection";
 // Note: Wishlist schemas not yet created, using placeholder validation
 const addToWishlistSchema = {};
 const moveToCartSchema = {};
@@ -10,13 +14,11 @@ const shareWishlistSchema = {};
 
 const router = Router();
 
-// Initialize controller
-let wishlistController: WishlistController;
-
-export const initializeWishlistRoutes = (controller: WishlistController) => {
-  wishlistController = controller;
-  return router;
-};
+// Initialize services and controller properly
+const userRepository = new UserRepository(prisma);
+const productRepository = new ProductRepository(prisma);
+const wishlistService = new WishlistService(userRepository, productRepository);
+const wishlistController = new WishlistController(wishlistService);
 
 // Rate limiting for wishlist operations
 const wishlistActionLimit = rateLimiter.authenticated;

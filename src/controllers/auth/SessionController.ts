@@ -264,7 +264,7 @@ export class SessionController extends BaseController {
         );
       }
 
-      const session = await this.sessionService.extendSession(sessionId, additionalMinutes);
+      const session = await this.sessionService.extendSessionByMinutes(sessionId, additionalMinutes);
 
       const response: ApiResponse = {
         success: true,

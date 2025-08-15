@@ -78,7 +78,7 @@ export class SearchController extends BaseController {
 
       const response: ApiResponse<SearchResponse> = {
         success: true,
-        message: `Found ${result.pagination.total} product(s) for "${query}"`,
+        message: `Found ${result.products.length} product(s) for "${query}"`,
         data: result,
       };
 

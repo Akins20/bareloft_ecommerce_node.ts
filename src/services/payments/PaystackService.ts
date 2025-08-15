@@ -195,6 +195,102 @@ export class PaystackService extends BaseService {
   }
 
   /**
+   * Find transaction by order number in metadata
+   */
+  async findTransactionByOrderNumber(orderNumber: string): Promise<PaystackVerifyResponse | null> {
+    try {
+      if (!orderNumber) {
+        throw new AppError(
+          "Order number is required",
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_CODES.VALIDATION_ERROR
+        );
+      }
+
+      console.log(`\n🔍 [PAYSTACK API] Searching transactions for orderNumber: ${orderNumber}`);
+      
+      // List transactions to find by orderNumber in metadata
+      const response = await this.client.get('/transaction', {
+        params: {
+          perPage: 100, // Search through recent transactions
+          page: 1
+        }
+      });
+
+      console.log(`📊 [PAYSTACK API] Response Status:`, response.data.status);
+      console.log(`📊 [PAYSTACK API] Response Data Length:`, response.data.data?.length || 0);
+      
+      if (!response.data.status) {
+        console.log(`❌ [PAYSTACK API] Failed to fetch transactions:`, response.data.message);
+        throw new AppError(
+          "Failed to fetch transactions",
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_CODES.EXTERNAL_SERVICE_ERROR
+        );
+      }
+
+      // Find transaction with matching orderNumber in metadata
+      const transactions = response.data.data || [];
+      
+      console.log(`\n🔍 [PAYSTACK API] Searching through ${transactions.length} transactions...`);
+      
+      // Log first few transactions for debugging
+      if (transactions.length > 0) {
+        console.log(`\n📋 [PAYSTACK API] Sample transactions (first 3):`, 
+          JSON.stringify(transactions.slice(0, 3).map(t => ({
+            reference: t.reference,
+            status: t.status,
+            amount: t.amount,
+            metadata: t.metadata,
+            customer_email: t.customer?.email,
+            created_at: t.created_at
+          })), null, 2)
+        );
+      }
+      
+      const matchingTransaction = transactions.find((transaction: any) => {
+        const hasOrderNumber = transaction.metadata && transaction.metadata.orderNumber === orderNumber;
+        const hasOrderReference = transaction.metadata && transaction.metadata.order_reference === orderNumber;
+        const hasCustomField = transaction.metadata && transaction.metadata.custom_fields && 
+           transaction.metadata.custom_fields.some((field: any) => 
+             field.variable_name === 'order_reference' && field.value === orderNumber
+           );
+        
+        const match = hasOrderNumber || hasOrderReference || hasCustomField;
+        
+        if (match) {
+          console.log(`✅ [PAYSTACK API] Found matching transaction!`, {
+            reference: transaction.reference,
+            status: transaction.status,
+            amount: transaction.amount,
+            metadata: transaction.metadata,
+            matchType: hasOrderNumber ? 'orderNumber' : hasOrderReference ? 'order_reference' : 'custom_fields'
+          });
+        }
+        
+        return match;
+      });
+
+      if (matchingTransaction) {
+        console.log(`✅ [PAYSTACK API] Transaction found for orderNumber: ${orderNumber}`);
+        console.log(`📊 [PAYSTACK API] Full Transaction Data:`, JSON.stringify(matchingTransaction, null, 2));
+        
+        return {
+          status: true,
+          message: "Transaction found",
+          data: matchingTransaction
+        };
+      }
+
+      console.log(`❌ [PAYSTACK API] No transaction found for orderNumber: ${orderNumber}`);
+      return null; // No transaction found for this order number
+    } catch (error) {
+      this.handleError("Error searching Paystack transactions", error);
+      return null; // Return null instead of throwing to allow fallback logic
+    }
+  }
+
+  /**
    * List supported banks for bank transfer
    */
   async getBanks(country: string = "nigeria"): Promise<

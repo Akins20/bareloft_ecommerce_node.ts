@@ -8,6 +8,7 @@ import {
   ERROR_CODES,
 } from "../../types";
 import { Express } from 'express-serve-static-core';
+import { NotificationModel } from "../../models/Notification";
 
 export class UserService extends BaseService {
   private userRepository: UserRepository;
@@ -320,6 +321,213 @@ export class UserService extends BaseService {
 
     const completedFields = fields.filter(field => field && field.trim() !== '').length;
     return Math.round((completedFields / fields.length) * 100);
+  }
+
+  // ==================== NOTIFICATION METHODS ====================
+
+  /**
+   * Get user notifications with filtering and pagination
+   */
+  async getUserNotifications(userId: string, options: {
+    page: number;
+    limit: number;
+    filter: string;
+  }): Promise<any> {
+    try {
+      const { page, limit, filter } = options;
+      const skip = (page - 1) * limit;
+
+      // Build filter conditions
+      let whereConditions: any = {
+        userId: userId,
+      };
+
+      // Apply status filter
+      if (filter === 'unread') {
+        whereConditions.isRead = false;
+      } else if (filter === 'read') {
+        whereConditions.isRead = true;
+      }
+      // 'all' filter doesn't add any conditions
+
+      // Fetch notifications with pagination
+      const [notifications, total] = await Promise.all([
+        NotificationModel.findMany({
+          where: whereConditions,
+          skip,
+          take: limit,
+          orderBy: {
+            createdAt: 'desc',
+          },
+          select: {
+            id: true,
+            userId: true,
+            type: true,
+            title: true,
+            message: true,
+            data: true,
+            isRead: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        } as any),
+        NotificationModel.count({ where: whereConditions } as any),
+      ]);
+
+      // Transform notifications to match frontend expected format
+      const transformedNotifications = notifications.map((notification: any) => ({
+        id: notification.id,
+        userId: notification.userId,
+        type: notification.type,
+        category: this.mapTypeToCategory(notification.type, notification.data),
+        title: notification.title,
+        message: notification.message,
+        isRead: notification.isRead,
+        createdAt: notification.createdAt.toISOString(),
+        metadata: notification.data || {}
+      }));
+
+      return {
+        notifications: transformedNotifications,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+        unreadCount: filter !== 'read' ? await NotificationModel.count({
+          where: {
+            userId,
+            isRead: false,
+          },
+        } as any) : 0,
+        hasMore: (page * limit) < total,
+      };
+    } catch (error) {
+      this.handleError("Error getting user notifications", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Map notification type to category for frontend compatibility
+   */
+  private mapTypeToCategory(type: string, data: any): string {
+    // Map database enum types to frontend category types
+    switch (type) {
+      case 'ORDER_STATUS':
+        // Check metadata for specific order category
+        if (data?.paymentReference) return 'payment';
+        if (data?.trackingNumber) return 'order_shipped';
+        if (data?.deliveryStatus === 'delivered') return 'order_delivered';
+        return 'order_confirmation';
+      case 'PAYMENT_STATUS':
+        return 'payment';
+      case 'PROMOTION':
+        return 'promotion';
+      case 'PRODUCT_ALERT':
+        return 'system';
+      case 'SYSTEM_ALERT':
+        return 'system';
+      default:
+        return 'system';
+    }
+  }
+
+  /**
+   * Mark notification as read
+   */
+  async markNotificationAsRead(userId: string, notificationId: string): Promise<any> {
+    try {
+      // First verify the notification belongs to this user
+      const notification = await NotificationModel.findFirst({
+        where: {
+          id: notificationId,
+          userId: userId,
+        },
+      } as any);
+
+      if (!notification) {
+        throw new AppError(
+          "Notification not found or access denied",
+          HTTP_STATUS.NOT_FOUND,
+          ERROR_CODES.RESOURCE_NOT_FOUND
+        );
+      }
+
+      // Mark as read if not already read
+      const updatedNotification = await NotificationModel.update({
+        where: { id: notificationId },
+        data: {
+          isRead: true,
+        },
+      } as any);
+
+      return updatedNotification;
+    } catch (error) {
+      this.handleError("Error marking notification as read", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark all notifications as read for a user
+   */
+  async markAllNotificationsAsRead(userId: string): Promise<any> {
+    try {
+      const result = await NotificationModel.updateMany({
+        where: {
+          userId: userId,
+          isRead: false, // Only update unread notifications
+        },
+        data: {
+          isRead: true,
+        },
+      } as any);
+
+      return {
+        updatedCount: result.count,
+        message: `Marked ${result.count} notifications as read`,
+      };
+    } catch (error) {
+      this.handleError("Error marking all notifications as read", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a notification
+   */
+  async deleteNotification(userId: string, notificationId: string): Promise<any> {
+    try {
+      // First verify the notification belongs to this user
+      const notification = await NotificationModel.findFirst({
+        where: {
+          id: notificationId,
+          userId: userId,
+        },
+      } as any);
+
+      if (!notification) {
+        throw new AppError(
+          "Notification not found or access denied",
+          HTTP_STATUS.NOT_FOUND,
+          ERROR_CODES.RESOURCE_NOT_FOUND
+        );
+      }
+
+      await NotificationModel.delete({
+        where: { id: notificationId },
+      } as any);
+
+      return {
+        success: true,
+        message: "Notification deleted successfully",
+      };
+    } catch (error) {
+      this.handleError("Error deleting notification", error);
+      throw error;
+    }
   }
 
   /**

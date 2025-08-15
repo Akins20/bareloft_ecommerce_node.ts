@@ -27,19 +27,21 @@ interface PaymentSummary {
 }
 
 export class PaymentService extends BaseService {
-  private paystackService: any;
+  private paystackService: PaystackService;
   private notificationService: any;
   private orderService: OrderService | null = null;
 
   constructor(
-    paystackService?: any,
+    paystackService?: PaystackService,
     notificationService?: any,
     orderService?: OrderService
   ) {
     super();
-    this.paystackService = paystackService || {};
+    this.paystackService = paystackService || new PaystackService();
     this.notificationService = notificationService || {};
     this.orderService = orderService || null;
+    
+    console.log(`🔧 [PAYMENT SERVICE] Initialized with PaystackService:`, !!this.paystackService);
   }
 
   /**
@@ -148,74 +150,47 @@ export class PaymentService extends BaseService {
   }
 
   /**
-   * Verify payment transaction
+   * Verify payment transaction - Simple approach like Shopify/WooCommerce
    */
   async verifyPayment(
     request: VerifyPaymentRequest
   ): Promise<VerifyPaymentResponse> {
     try {
-      // Find transaction by reference
-      const transaction = await PaymentTransactionModel.findFirst({
-        where: {
-          reference: request.reference,
-        },
-        include: {
-          order: {
-            include: {
-              user: true,
-            },
-          },
-        },
-      });
-
-      if (!transaction) {
-        throw new AppError(
-          "Transaction not found",
-          HTTP_STATUS.NOT_FOUND,
-          ERROR_CODES.RESOURCE_NOT_FOUND
-        );
+      console.log(`🔍 [PAYMENT SERVICE] Verifying payment with reference: ${request.reference}`);
+      
+      // Direct Paystack verification (primary approach)
+      if (this.paystackService && this.paystackService.verifyPayment) {
+        try {
+          console.log(`📞 [PAYMENT SERVICE] Calling Paystack API for verification...`);
+          const paystackVerification = await this.paystackService.verifyPayment(request.reference);
+          
+          const isSuccessful = paystackVerification.status && paystackVerification.data?.status === "success";
+          
+          console.log(`✅ [PAYMENT SERVICE] Paystack verification result: ${isSuccessful ? 'SUCCESS' : 'FAILED'}`);
+          
+          return {
+            success: isSuccessful,
+            message: isSuccessful
+              ? "Payment verified successfully with Paystack"
+              : "Payment verification failed on Paystack",
+            data: paystackVerification.data as any, // Cast to any since Paystack data structure differs
+          };
+        } catch (paystackError) {
+          console.error(`❌ [PAYMENT SERVICE] Paystack verification failed:`, paystackError.message);
+          return {
+            success: false,
+            message: `Payment verification failed: ${paystackError.message}`,
+            data: null,
+          };
+        }
       }
 
-      // Verify with Paystack (simplified since providerReference field doesn't exist)
-      const paystackVerification = await this.paystackService.verifyPayment(
-        transaction.reference
-      );
-
-      const paystackData = paystackVerification.data;
-      const isSuccessful = paystackData.status === "success";
-
-      // Update transaction
-      const updatedTransaction = await PaymentTransactionModel.update({
-        where: { id: transaction.id },
-        data: {
-          status: isSuccessful ? "COMPLETED" as any : "FAILED" as any,
-          amount: paystackData.amount || transaction.amount,
-          gateway: paystackData.gateway_response || 'gateway_response',
-          updatedAt: new Date(),
-        },
-      });
-
-      // Update order payment status
-      if (isSuccessful) {
-        await OrderModel.update({
-          where: { id: transaction.orderId },
-          data: {
-            paymentStatus: "COMPLETED" as any,
-            paymentReference: transaction.reference,
-            updatedAt: new Date(),
-          },
-        });
-
-        // Send payment confirmation notification
-        await this.sendPaymentConfirmation(transaction);
-      }
-
+      // Fallback - return failure if no Paystack service available
+      console.warn(`⚠️ [PAYMENT SERVICE] PaystackService not available`);
       return {
-        success: isSuccessful,
-        message: isSuccessful
-          ? "Payment verified successfully"
-          : "Payment verification failed",
-        data: this.transformTransaction(updatedTransaction),
+        success: false,
+        message: "Payment verification service not available",
+        data: null,
       };
     } catch (error) {
       this.handleError("Error verifying payment", error);
@@ -328,6 +303,21 @@ export class PaymentService extends BaseService {
     } catch (error) {
       this.handleError("Error fetching user payments", error);
       throw error;
+    }
+  }
+
+  /**
+   * Find transaction by order number in Paystack metadata (used by reconciliation system)
+   */
+  async findTransactionByOrderNumber(orderNumber: string): Promise<any> {
+    try {
+      if (this.paystackService && this.paystackService.findTransactionByOrderNumber) {
+        return await this.paystackService.findTransactionByOrderNumber(orderNumber);
+      }
+      return null;
+    } catch (error) {
+      this.handleError("Error finding transaction by order number", error);
+      return null; // Return null to allow fallback logic in reconciliation
     }
   }
 
@@ -555,6 +545,21 @@ export class PaymentService extends BaseService {
       paidAt: null, // Default since paidAt field doesn't exist
       createdAt: transaction.createdAt,
       updatedAt: transaction.updatedAt,
+    };
+  }
+
+  private transformTransactionWithOrder(transaction: any, order: any): PaymentTransaction & { order?: any } {
+    return {
+      ...this.transformTransaction(transaction),
+      order: order ? {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        total: order.total,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+      } : null,
     };
   }
 }

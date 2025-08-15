@@ -33,6 +33,51 @@ export class NotificationService extends BaseService {
   }
 
   /**
+   * Map detailed TypeScript NotificationType to database enum values
+   */
+  private mapNotificationTypeToDatabase(type: NotificationType): string {
+    // Map specific notification types to database enum values
+    const typeMapping: Record<string, string> = {
+      // Order-related notifications → ORDER_STATUS
+      [NotificationType.ORDER_CONFIRMATION]: 'ORDER_STATUS',
+      [NotificationType.ORDER_SHIPPED]: 'ORDER_STATUS',
+      [NotificationType.ORDER_DELIVERED]: 'ORDER_STATUS',
+      [NotificationType.ORDER_CANCELLED]: 'ORDER_STATUS',
+      [NotificationType.ORDER_REFUNDED]: 'ORDER_STATUS',
+      
+      // Payment-related notifications → PAYMENT_STATUS
+      [NotificationType.PAYMENT_SUCCESSFUL]: 'PAYMENT_STATUS',
+      [NotificationType.PAYMENT_FAILED]: 'PAYMENT_STATUS',
+      [NotificationType.PAYMENT_PENDING]: 'PAYMENT_STATUS',
+      [NotificationType.REFUND_PROCESSED]: 'PAYMENT_STATUS',
+      
+      // Marketing notifications → PROMOTION
+      [NotificationType.WELCOME_SERIES]: 'PROMOTION',
+      [NotificationType.ABANDONED_CART]: 'PROMOTION',
+      [NotificationType.NEWSLETTER]: 'PROMOTION',
+      [NotificationType.PROMOTIONAL]: 'PROMOTION',
+      
+      // Product and inventory notifications → PRODUCT_ALERT
+      [NotificationType.PRODUCT_BACK_IN_STOCK]: 'PRODUCT_ALERT',
+      [NotificationType.LOW_STOCK_ALERT]: 'PRODUCT_ALERT',
+      [NotificationType.OUT_OF_STOCK_ALERT]: 'PRODUCT_ALERT',
+      [NotificationType.CRITICAL_STOCK_ALERT]: 'PRODUCT_ALERT',
+      [NotificationType.RESTOCK_NEEDED]: 'PRODUCT_ALERT',
+      
+      // System notifications → SYSTEM_ALERT
+      [NotificationType.SYSTEM_MAINTENANCE]: 'SYSTEM_ALERT',
+      [NotificationType.SECURITY_ALERT]: 'SYSTEM_ALERT',
+      [NotificationType.FEATURE_ANNOUNCEMENT]: 'SYSTEM_ALERT',
+      [NotificationType.ACCOUNT_CREATED]: 'SYSTEM_ALERT',
+      [NotificationType.ACCOUNT_VERIFIED]: 'SYSTEM_ALERT',
+      [NotificationType.PASSWORD_RESET]: 'SYSTEM_ALERT',
+      [NotificationType.LOGIN_ALERT]: 'SYSTEM_ALERT',
+    };
+
+    return typeMapping[type] || 'SYSTEM_ALERT';
+  }
+
+  /**
    * Send a single notification
    */
   async sendNotification(
@@ -43,7 +88,7 @@ export class NotificationService extends BaseService {
       const notification = await NotificationModel.create({
         data: {
           userId: request.userId,
-          type: request.type as any, // Cast to avoid enum mismatch
+          type: this.mapNotificationTypeToDatabase(request.type) as any,
           title: this.generateSubject(request.type, request.variables), // Use title instead of subject
           message: this.generateMessage(request.type, request.variables),
           data: {
@@ -151,7 +196,7 @@ export class NotificationService extends BaseService {
         let providerMessageId: string | undefined;
 
         const notificationData = notification.data as any;
-        const channel = notificationData?.channel || NotificationChannel.EMAIL;
+        const channel = (notificationData?.channel || NotificationChannel.EMAIL).toString().toUpperCase();
         
         switch (channel) {
           case "EMAIL":
@@ -191,12 +236,24 @@ export class NotificationService extends BaseService {
             }
             break;
 
+          case "IN_APP":
+            // In-app notifications are stored in database and retrieved via API
+            console.log(`🔔 IN_APP notification created for user ${notification.userId}: ${notification.message}`);
+            break;
+
           default:
-            throw new AppError(
-              `Unsupported notification channel: ${channel}`,
-              HTTP_STATUS.BAD_REQUEST,
-              ERROR_CODES.VALIDATION_ERROR
-            );
+            // Default to EMAIL if unsupported channel
+            console.warn(`⚠️ Unsupported notification channel '${channel}', defaulting to EMAIL`);
+            if (notificationData?.recipientEmail) {
+              if (this.emailService.sendEmail) {
+                providerMessageId = await this.emailService.sendEmail({
+                  to: notificationData.recipientEmail,
+                  subject: notification.title,
+                  message: notification.message,
+                });
+              }
+            }
+            break;
         }
 
         // Update as sent

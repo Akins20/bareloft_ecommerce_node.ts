@@ -230,54 +230,63 @@ export class OrderRepository extends BaseRepository<
       }
       console.log("✅ All products validated successfully");
 
-      console.log("🔄 REPO Step 3: Creating order and items in single transaction...");
-      const result = await this.transaction(async (prisma) => {
-        // Create order
-        const order = await prisma.order.create({
-          data: {
-            orderNumber: orderData.orderNumber,
-            userId: orderData.userId,
-            status: orderData.status || PrismaOrderStatus.PENDING,
-            subtotal: orderData.subtotal,
-            tax: 0,
-            shippingCost: orderData.shippingCost || 0,
-            discount: orderData.discount || 0,
-            total: orderData.total,
-            currency: orderData.currency || "NGN",
-            paymentStatus: orderData.paymentStatus || PrismaPaymentStatus.PENDING,
-            paymentMethod: orderData.paymentMethod,
-            paymentReference: orderData.paymentReference,
-            notes: orderData.notes,
-            shippingAddressId: orderData.shippingAddressId,
-            billingAddressId: orderData.billingAddressId,
-          },
-          include: { user: true },
-        });
+      console.log("🔄 REPO Step 3: Creating order (simple approach like Shopify)...");
+      
+      // Step 1: Create the order first
+      const order = await this.prisma.order.create({
+        data: {
+          orderNumber: orderData.orderNumber,
+          userId: orderData.userId,
+          status: orderData.status || PrismaOrderStatus.PENDING,
+          subtotal: orderData.subtotal,
+          tax: 0,
+          shippingCost: orderData.shippingCost || 0,
+          discount: orderData.discount || 0,
+          total: orderData.total,
+          currency: orderData.currency || "NGN",
+          paymentStatus: orderData.paymentStatus || PrismaPaymentStatus.PENDING,
+          paymentMethod: orderData.paymentMethod,
+          paymentReference: orderData.paymentReference,
+          notes: orderData.notes,
+          shippingAddressId: orderData.shippingAddressId,
+          billingAddressId: orderData.billingAddressId,
+        },
+        include: { user: true },
+      });
 
-        // Create order items
-        const orderItemsData = items.map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          price: item.price,
-          total: item.total,
-          orderId: order.id,
-        }));
+      console.log("✅ Order created with ID:", order.id);
 
-        await prisma.orderItem.createMany({
-          data: orderItemsData,
-        });
+      // Step 2: Create order items (separate operation)
+      const orderItemsData = items.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total,
+        orderId: order.id,
+      }));
 
-        // Create timeline event
-        await prisma.orderTimelineEvent.create({
+      await this.prisma.orderItem.createMany({
+        data: orderItemsData,
+      });
+
+      console.log("✅ Order items created");
+
+      // Step 3: Create timeline event (separate operation - if it fails, order still exists)
+      try {
+        await this.prisma.orderTimelineEvent.create({
           data: {
             orderId: order.id,
             type: "ORDER_CREATED",
             message: "Order created and pending payment",
           },
         });
+        console.log("✅ Timeline event created");
+      } catch (timelineError) {
+        console.warn("⚠️ Timeline event failed but order was created:", timelineError.message);
+        // Don't throw error - order creation succeeded
+      }
 
-        return order;
-      });
+      const result = order;
 
       console.log("✅ REPO Step 3 Complete: Order created with ID:", result.id);
       console.log("🎉 ===== REPOSITORY: createOrderWithItems SUCCESS =====");
@@ -318,40 +327,39 @@ export class OrderRepository extends BaseRepository<
     }
   ): Promise<OrderWithDetails> {
     try {
-      return await this.transaction(async (prisma) => {
-        // Get current order
-        const currentOrder = await prisma.order.findUnique({
-          where: { id: orderId },
-        });
+      // Step 1: Get current order
+      const currentOrder = await this.prisma.order.findUnique({
+        where: { id: orderId },
+      });
 
-        if (!currentOrder) {
-          throw new AppError(
-            "Order not found",
-            HTTP_STATUS.NOT_FOUND,
-            ERROR_CODES.RESOURCE_NOT_FOUND
-          );
-        }
+      if (!currentOrder) {
+        throw new AppError(
+          "Order not found",
+          HTTP_STATUS.NOT_FOUND,
+          ERROR_CODES.RESOURCE_NOT_FOUND
+        );
+      }
 
-        // Prepare update data
-        const updateData: UpdateOrderData = {
-          status: statusData.status,
-          notes: statusData.adminNotes,
-        };
+      // Step 2: Update the order (simple operation)
+      const updateData: UpdateOrderData = {
+        status: statusData.status,
+        notes: statusData.adminNotes,
+      };
 
-        // Update the order
-        await prisma.order.update({
-          where: { id: orderId },
-          data: {
-            status: updateData.status,
-            paymentStatus: updateData.paymentStatus,
-            paymentMethod: updateData.paymentMethod,
-            paymentReference: updateData.paymentReference,
-            notes: updateData.notes,
-          },
-        });
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: {
+          status: updateData.status,
+          paymentStatus: updateData.paymentStatus,
+          paymentMethod: updateData.paymentMethod,
+          paymentReference: updateData.paymentReference,
+          notes: updateData.notes,
+        },
+      });
 
-        // Create timeline event
-        await prisma.orderTimelineEvent.create({
+      // Step 3: Create timeline event (separate operation - if it fails, order update still succeeded)
+      try {
+        await this.prisma.orderTimelineEvent.create({
           data: {
             orderId,
             type: "STATUS_CHANGE",
@@ -364,11 +372,14 @@ export class OrderRepository extends BaseRepository<
             },
           },
         });
+      } catch (timelineError) {
+        console.warn("⚠️ Timeline event failed but order status was updated:", timelineError.message);
+        // Don't throw error - order update succeeded
+      }
 
-        // Return updated order
-        const updatedOrder = await this.findById(orderId);
-        return await this.findByOrderNumber(updatedOrder!.orderNumber);
-      });
+      // Step 4: Return updated order
+      const updatedOrder = await this.findById(orderId);
+      return await this.findByOrderNumber(updatedOrder!.orderNumber);
     } catch (error) {
       this.handleError("Error updating order status", error);
       throw error;
@@ -384,7 +395,7 @@ export class OrderRepository extends BaseRepository<
     try {
       const {
         page = 1,
-        limit = 20,
+        limit = 5,
         status,
         paymentStatus,
         startDate,
@@ -716,44 +727,44 @@ export class OrderRepository extends BaseRepository<
     cancelledBy?: string
   ): Promise<OrderWithDetails> {
     try {
-      return await this.transaction(async (prisma) => {
-        // Check if order can be cancelled
-        const order = await prisma.order.findUnique({
-          where: { id: orderId },
-        });
+      // Step 1: Check if order can be cancelled
+      const order = await this.prisma.order.findUnique({
+        where: { id: orderId },
+      });
 
-        if (!order) {
-          throw new AppError(
-            "Order not found",
-            HTTP_STATUS.NOT_FOUND,
-            ERROR_CODES.RESOURCE_NOT_FOUND
-          );
-        }
+      if (!order) {
+        throw new AppError(
+          "Order not found",
+          HTTP_STATUS.NOT_FOUND,
+          ERROR_CODES.RESOURCE_NOT_FOUND
+        );
+      }
 
-        const nonCancellableStatuses: PrismaOrderStatus[] = [
-          PrismaOrderStatus.DELIVERED, 
-          PrismaOrderStatus.CANCELLED, 
-          PrismaOrderStatus.REFUNDED
-        ];
-        if (nonCancellableStatuses.includes(order.status)) {
-          throw new AppError(
-            "Order cannot be cancelled",
-            HTTP_STATUS.BAD_REQUEST,
-            ERROR_CODES.VALIDATION_ERROR
-          );
-        }
+      const nonCancellableStatuses: PrismaOrderStatus[] = [
+        PrismaOrderStatus.DELIVERED, 
+        PrismaOrderStatus.CANCELLED, 
+        PrismaOrderStatus.REFUNDED
+      ];
+      if (nonCancellableStatuses.includes(order.status)) {
+        throw new AppError(
+          "Order cannot be cancelled",
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_CODES.VALIDATION_ERROR
+        );
+      }
 
-        // Update order status
-        await prisma.order.update({
-          where: { id: orderId },
-          data: {
-            status: PrismaOrderStatus.CANCELLED,
-            notes: reason,
-          },
-        });
+      // Step 2: Update order status (simple operation)
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: {
+          status: PrismaOrderStatus.CANCELLED,
+          notes: reason,
+        },
+      });
 
-        // Create timeline event
-        await prisma.orderTimelineEvent.create({
+      // Step 3: Create timeline event (separate operation - if it fails, cancellation still succeeded)
+      try {
+        await this.prisma.orderTimelineEvent.create({
           data: {
             orderId,
             type: "ORDER_CANCELLED",
@@ -764,11 +775,14 @@ export class OrderRepository extends BaseRepository<
             },
           },
         });
+      } catch (timelineError) {
+        console.warn("⚠️ Timeline event failed but order was cancelled:", timelineError.message);
+        // Don't throw error - order cancellation succeeded
+      }
 
-        // Return updated order
-        const updatedOrder = await this.findById(orderId);
-        return await this.findByOrderNumber(updatedOrder!.orderNumber);
-      });
+      // Step 4: Return updated order
+      const updatedOrder = await this.findById(orderId);
+      return await this.findByOrderNumber(updatedOrder!.orderNumber);
     } catch (error) {
       this.handleError("Error cancelling order", error);
       throw error;

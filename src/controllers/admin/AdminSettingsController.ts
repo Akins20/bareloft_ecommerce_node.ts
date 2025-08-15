@@ -40,7 +40,7 @@ export class AdminSettingsController extends BaseController {
           enabledMethods: ['card', 'bank_transfer', 'ussd'],
           freeShippingThreshold: 50000, // in kobo
           defaultShippingFee: 2500, // in kobo
-          taxRate: 0.075, // 7.5%
+          taxRate: 0, // VAT not applicable
           lastUpdated: new Date().toISOString()
         },
         notifications: {
@@ -345,7 +345,7 @@ export class AdminSettingsController extends BaseController {
             enabledMethods: ['card', 'bank_transfer', 'ussd'],
             freeShippingThreshold: 50000,
             defaultShippingFee: 2500,
-            taxRate: 0.075,
+            taxRate: 0,
             // Exclude secrets unless explicitly requested by super admin
             ...(includeSecrets === 'true' && { 
               paystackPublicKey: 'pk_test_xxxxx',

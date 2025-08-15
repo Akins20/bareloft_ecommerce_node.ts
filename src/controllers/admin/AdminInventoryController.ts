@@ -137,18 +137,31 @@ export class AdminInventoryController extends BaseAdminController {
       // Create mock inventory data structure
       const inventoryData = {
         inventories: paginatedItems.map(item => {
-          const product = productMap.get((item as any).productId);
+          const productId = (item as any).productId || item.id; // Try both productId and id
+          const product = productMap.get(productId);
           const quantity = (item as any).quantity || 0;
           const unitCost = (item as any).unitCost || 0;
+          
+          // Enhanced product name lookup - try multiple approaches
+          let productName = product?.name;
+          let altProduct = null;
+          if (!productName) {
+            // Try to find product by matching ID patterns
+            altProduct = products.find(p => p.id === productId || p.id === item.id);
+            productName = altProduct?.name;
+          }
+          
           return {
             id: item.id,
-            productId: (item as any).productId,
-            productName: product?.name || 'Unknown Product',
-            sku: product?.sku || 'N/A',
+            productId: productId,
+            productName: productName || `Product ${productId?.substring(0, 8) || 'Unknown'}`,
+            sku: product?.sku || altProduct?.sku || 'N/A',
             quantity,
-            totalValue: quantity * unitCost,
+            totalValue: `₦${(quantity * unitCost / 100).toFixed(2)} (₦${quantity * unitCost} kobo)`,
             costPrice: unitCost,
-            lastMovementAt: (item as any).updatedAt || item.createdAt
+            lastMovementAt: (item as any).updatedAt || item.createdAt,
+            lastMovementNigerianTime: new Date((item as any).updatedAt || item.createdAt).toLocaleDateString('en-NG'),
+            businessHoursStatus: "normal"
           };
         }),
         pagination: {
@@ -179,11 +192,7 @@ export class AdminInventoryController extends BaseAdminController {
       const transformedInventories = inventoryData.inventories.map(item => ({
         ...item,
         // Format currency values for admin display
-        totalValue: this.formatAdminCurrency(item.totalValue || 0, {
-          format: 'display',
-          showKobo: true,
-          precision: 2
-        }),
+        totalValue: item.totalValue,
         costPrice: item.costPrice ? this.formatAdminCurrency(item.costPrice, {
           format: 'display'
         }) : null,

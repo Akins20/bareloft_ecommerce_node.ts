@@ -32,7 +32,7 @@ interface ShippingCostResult {
     distanceCost: number;
     serviceFee: number;
     insuranceFee: number;
-    taxes: number;
+    taxes: number; // Always 0 - no VAT
   };
 }
 
@@ -177,11 +177,11 @@ export async function calculateDetailedShippingCost(
     // Insurance (for high-value items)
     const insuranceFee = calculateInsuranceFee(input.value || 0);
     
-    // VAT (7.5% on shipping in Nigeria)
+    // No VAT applied for this platform
     const subtotal = baseRate + weightCost + distanceCost + serviceFee + insuranceFee;
-    const taxes = Math.round(subtotal * 0.075); // 7.5% VAT
+    const taxes = 0; // VAT not applicable
     
-    const totalCost = subtotal + taxes;
+    const totalCost = subtotal;
     
     // Get delivery estimate
     const estimate = DELIVERY_ESTIMATES[zone][service as keyof typeof DELIVERY_ESTIMATES[typeof zone]];

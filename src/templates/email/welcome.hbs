@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Bareloft - {{firstName}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+        }
+        
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #007cba 0%, #005a8b 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 8px;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+        
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px 30px;
+        }
+        
+        .welcome-section {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .welcome-section h2 {
+            color: #1a202c;
+            font-size: 28px;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+        
+        .welcome-section p {
+            color: #4a5568;
+            font-size: 18px;
+            line-height: 1.6;
+        }
+        
+        .features-section {
+            margin: 40px 0;
+        }
+        
+        .features-section h3 {
+            color: #1a202c;
+            font-size: 20px;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+        
+        .feature-item {
+            display: block;
+            margin-bottom: 20px;
+            padding: 16px;
+            background-color: #f7fafc;
+            border-radius: 8px;
+            border-left: 4px solid #007cba;
+        }
+        
+        .feature-item.success {
+            border-left-color: #38a169;
+        }
+        
+        .feature-item.accent {
+            border-left-color: #ed8936;
+        }
+        
+        .feature-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a202c;
+            margin-bottom: 4px;
+        }
+        
+        .feature-description {
+            font-size: 14px;
+            color: #4a5568;
+        }
+        
+        .cta-section {
+            text-align: center;
+            margin: 40px 0;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #007cba 0%, #005a8b 100%);
+            color: white;
+            padding: 16px 32px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            text-align: center;
+            transition: transform 0.2s ease;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .info-box {
+            background-color: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 24px;
+            margin: 32px 0;
+            text-align: center;
+        }
+        
+        .info-box h4 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a202c;
+            margin-bottom: 12px;
+        }
+        
+        .info-list {
+            font-size: 14px;
+            color: #4a5568;
+            line-height: 1.6;
+            text-align: left;
+            display: inline-block;
+        }
+        
+        .support-section {
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 24px;
+            margin-top: 32px;
+        }
+        
+        .support-section p {
+            color: #718096;
+            font-size: 13px;
+            line-height: 1.5;
+            margin: 0;
+        }
+        
+        .support-section a {
+            color: #007cba;
+            text-decoration: none;
+        }
+        
+        .footer {
+            background-color: #f7fafc;
+            padding: 24px;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .footer p {
+            color: #718096;
+            font-size: 12px;
+            margin: 4px 0;
+            line-height: 1.4;
+        }
+        
+        .footer a {
+            color: #007cba;
+            text-decoration: none;
+            margin: 0 8px;
+        }
+        
+        @media (max-width: 600px) {
+            .email-container {
+                margin: 0 10px;
+            }
+            
+            .content {
+                padding: 20px 15px;
+            }
+            
+            .header h1 {
+                font-size: 28px;
+            }
+            
+            .welcome-section h2 {
+                font-size: 24px;
+            }
+            
+            .welcome-section p {
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🇳🇬 Bareloft</h1>
+            <p>Nigeria's Premier E-commerce Platform</p>
+        </div>
+        
+        <!-- Content -->
+        <div class="content">
+            <!-- Welcome Section -->
+            <div class="welcome-section">
+                <h2>Welcome to Bareloft, {{firstName}}! 🎉</h2>
+                <p>Your Nigerian e-commerce journey starts here. Discover amazing products from trusted local sellers!</p>
+            </div>
+            
+            <!-- Features Section -->
+            <div class="features-section">
+                <h3>What You Can Do</h3>
+                
+                <div class="feature-item">
+                    <div class="feature-title">🛍️ Shop Premium Products</div>
+                    <div class="feature-description">Browse thousands of quality products from verified Nigerian sellers</div>
+                </div>
+                
+                <div class="feature-item success">
+                    <div class="feature-title">💳 Secure Payments</div>
+                    <div class="feature-description">Pay safely with cards, bank transfers, or mobile money via Paystack</div>
+                </div>
+                
+                <div class="feature-item accent">
+                    <div class="feature-title">🚚 Fast Delivery</div>
+                    <div class="feature-description">Quick delivery across Nigeria with real-time order tracking</div>
+                </div>
+            </div>
+            
+            <!-- Call to Action -->
+            <div class="cta-section">
+                <a href="{{shopUrl}}" class="cta-button">🛒 Start Shopping Now</a>
+            </div>
+            
+            <!-- Nigerian Market Focus -->
+            <div class="info-box">
+                <h4>🇳🇬 Built for Nigeria</h4>
+                <div class="info-list">
+                    • Pay in Naira (₦) with local payment methods<br>
+                    • Free delivery on orders above ₦50,000<br>
+                    • Customer support in English, Yoruba, Hausa & Igbo<br>
+                    • Nigerian business hours: 8AM - 8PM WAT
+                </div>
+            </div>
+            
+            <!-- Getting Started Tips -->
+            <div style="background-color: #e6fffa; padding: 20px; border-radius: 8px; border-left: 4px solid #38a169; margin: 20px 0;">
+                <h4 style="color: #234e52; margin-bottom: 10px;">Getting Started Tips 💡</h4>
+                <ul style="color: #234e52; padding-left: 20px; font-size: 14px;">
+                    <li>Complete your profile for a personalized shopping experience</li>
+                    <li>Add your delivery addresses for faster checkout</li>
+                    <li>Follow your favorite sellers to get updates on new products</li>
+                    <li>Join our newsletter for exclusive deals and promotions</li>
+                </ul>
+            </div>
+            
+            <!-- Support Section -->
+            <div class="support-section">
+                <p>Need help getting started? Our support team is here for you!<br>
+                📧 <a href="mailto:{{supportEmail}}">{{supportEmail}}</a> | 
+                📱 <a href="tel:+2348000000000">+234 800 000 0000</a></p>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <p>© 2025 Bareloft Nigeria Limited. All rights reserved.</p>
+            <p>🇳🇬 Proudly serving Nigerian e-commerce since 2025</p>
+            <p>
+                <a href="{{privacyUrl}}">Privacy Policy</a> |
+                <a href="{{termsUrl}}">Terms of Service</a> |
+                <a href="mailto:{{supportEmail}}">Contact Us</a>
+            </p>
+            <p style="margin-top: 15px; font-size: 11px; opacity: 0.8;">
+                This email was sent to {{email}}. You received this because you created an account with Bareloft.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

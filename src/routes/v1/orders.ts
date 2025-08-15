@@ -235,17 +235,13 @@ router.post(
  *   guestInfo: { email: string, firstName: string, lastName: string, phone: string }
  * }
  */
-router.post(
-  "/guest/create",
-  rateLimiter.general,
-  async (req, res, next) => {
-    try {
-      await orderController.createGuestOrder(req as any, res);
-    } catch (error) {
-      next(error);
-    }
+router.post("/guest/create", rateLimiter.general, async (req, res, next) => {
+  try {
+    await orderController.createGuestOrder(req as any, res);
+  } catch (error) {
+    next(error);
   }
-);
+});
 
 /**
  * @route   GET /api/v1/orders/guest/track/:orderNumber
@@ -271,8 +267,11 @@ router.get(
       }
 
       // Use the order service to track guest order and send email
-      const result = await orderService.trackGuestOrder(orderNumber, email as string);
-      
+      const result = await orderService.trackGuestOrder(
+        orderNumber,
+        email as string
+      );
+
       res.json(result);
     } catch (error) {
       next(error);
@@ -290,26 +289,31 @@ router.get(
 router.post("/webhook/payment-update", async (req, res, next) => {
   try {
     const { event, data } = req.body;
-    
+
     // Log webhook receipt (in production, verify signature)
-    console.log('Payment webhook received:', { event, data });
-    
-    if (event === 'charge.success' && data?.reference) {
+    console.log("Payment webhook received:", { event, data });
+
+    if (event === "charge.success" && data?.reference) {
       // Confirm payment and send confirmation email
       try {
         const orderNumber = data.reference; // Assuming reference is the order number
         const paymentReference = data.id || data.reference;
-        
-        const result = await orderService.confirmPayment(orderNumber, paymentReference);
-        console.log(`✅ Payment confirmed and email sent for order: ${orderNumber}`);
-        
+
+        const result = await orderService.confirmPayment(
+          orderNumber,
+          paymentReference
+        );
+        console.log(
+          `✅ Payment confirmed and email sent for order: ${orderNumber}`
+        );
+
         res.status(200).json({
           success: true,
           message: "Payment confirmed and customer notified",
-          data: { orderNumber }
+          data: { orderNumber },
         });
       } catch (confirmError) {
-        console.error('Error confirming payment:', confirmError);
+        console.error("Error confirming payment:", confirmError);
         res.status(500).json({
           success: false,
           message: "Payment received but confirmation failed",
@@ -322,7 +326,7 @@ router.post("/webhook/payment-update", async (req, res, next) => {
       });
     }
   } catch (error) {
-    console.error('Payment webhook error:', error);
+    console.error("Payment webhook error:", error);
     next(error);
   }
 });
@@ -335,14 +339,20 @@ router.post("/webhook/payment-update", async (req, res, next) => {
 router.post("/webhook/shipping-update", async (req, res, next) => {
   try {
     const { trackingNumber, status, location } = req.body;
-    
+
     // Log shipping update (in production, authenticate webhook source)
-    console.log('Shipping webhook received:', { trackingNumber, status, location });
-    
+    console.log("Shipping webhook received:", {
+      trackingNumber,
+      status,
+      location,
+    });
+
     if (trackingNumber && status) {
       // Update order shipping status
       // In production, would find order by tracking number and update status
-      console.log(`Shipping update: ${trackingNumber} - ${status} at ${location}`);
+      console.log(
+        `Shipping update: ${trackingNumber} - ${status} at ${location}`
+      );
     }
 
     res.status(200).json({
@@ -366,7 +376,7 @@ router.post("/confirm-payment", orderCreationLimit, async (req, res, next) => {
 
     console.log("💳 Payment confirmation request received:", {
       paymentReference,
-      orderNumber
+      orderNumber,
     });
 
     if (!paymentReference || !orderNumber) {
@@ -379,16 +389,23 @@ router.post("/confirm-payment", orderCreationLimit, async (req, res, next) => {
     // Verify payment with Paystack first
     const paystackService = serviceContainer.getPaystackService();
     console.log("🔍 Verifying payment with Paystack...");
-    
-    try {
-      const paystackVerification = await paystackService.verifyPayment(paymentReference);
-      console.log("📋 Paystack verification result:", paystackVerification);
 
-      if (!paystackVerification.data || paystackVerification.data.status !== 'success') {
+    try {
+      const paystackVerification =
+        await paystackService.verifyPayment(paymentReference);
+      console.log(
+        "📋 Paystack verification result:",
+        JSON.stringify(paystackVerification, null, 2)
+      );
+
+      if (
+        !paystackVerification.data ||
+        paystackVerification.data.status !== "success"
+      ) {
         return res.status(400).json({
           success: false,
           message: "Payment verification failed - payment was not successful",
-          paymentStatus: paystackVerification.data?.status
+          paymentStatus: paystackVerification.data?.status,
         });
       }
 
@@ -403,15 +420,20 @@ router.post("/confirm-payment", orderCreationLimit, async (req, res, next) => {
 
     // Try to retrieve pending order data from Redis
     console.log(`🔍 Looking for pending order data for ${orderNumber}...`);
-    const redisClient = require('../../config/redis').redisClient;
+    const redisClient = require("../../config/redis").redisClient;
     const pendingOrderKey = `pending_order:${orderNumber}`;
     const pendingOrderData = await redisClient.get(pendingOrderKey);
 
-    if (!pendingOrderData || !pendingOrderData.orderData || !pendingOrderData.orderItems) {
+    if (
+      !pendingOrderData ||
+      !pendingOrderData.orderData ||
+      !pendingOrderData.orderItems
+    ) {
       console.error("❌ No pending order data found in Redis");
       return res.status(404).json({
         success: false,
-        message: "Order data not found or has expired. Please try placing the order again.",
+        message:
+          "Order data not found or has expired. Please try placing the order again.",
       });
     }
 
@@ -420,7 +442,11 @@ router.post("/confirm-payment", orderCreationLimit, async (req, res, next) => {
 
     // Create the order using OrderService
     const orderService = serviceContainer.getOrderService();
-    const result = await orderService.createOrderAfterPayment(orderData, orderItems, paymentReference);
+    const result = await orderService.createOrderAfterPayment(
+      orderData,
+      orderItems,
+      paymentReference
+    );
 
     // Clean up pending data from Redis
     await redisClient.delete(pendingOrderKey);

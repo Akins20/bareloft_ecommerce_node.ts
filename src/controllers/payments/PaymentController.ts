@@ -98,7 +98,7 @@ export class PaymentController extends BaseController {
   };
 
   /**
-   * Verify payment transaction
+   * Verify payment transaction by reference
    * POST /api/v1/payments/verify
    */
   public verifyPayment = async (
@@ -119,6 +119,63 @@ export class PaymentController extends BaseController {
       const result = await this.paymentService.verifyPayment({ reference });
 
       res.json(result);
+    } catch (error) {
+      this.handleError(error, req, res);
+    }
+  };
+
+  /**
+   * Verify payment transaction by order number (for frontend)
+   * GET /api/v1/payments/verify?orderNumber=xxx
+   */
+  public verifyPaymentByOrderNumber = async (
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const { orderNumber } = req.query;
+
+      if (!orderNumber || typeof orderNumber !== 'string') {
+        res.status(400).json({
+          success: false,
+          message: "Order number is required",
+        });
+        return;
+      }
+
+      // First try to find the order and its payment reference
+      const order = await this.paymentService.findTransactionByOrderNumber(orderNumber);
+      
+      if (!order) {
+        res.status(404).json({
+          success: false,
+          message: "Order not found",
+        });
+        return;
+      }
+
+      // If we found an order with a payment reference, verify it
+      if (order.data?.reference) {
+        const result = await this.paymentService.verifyPayment({ 
+          reference: order.data.reference 
+        });
+        
+        res.json({
+          success: result.success,
+          message: result.message,
+          data: {
+            paymentStatus: result.success ? 'COMPLETED' : 'FAILED',
+            orderNumber: orderNumber,
+            reference: order.data.reference,
+            ...result.data
+          }
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          message: "Payment reference not found for this order",
+        });
+      }
     } catch (error) {
       this.handleError(error, req, res);
     }

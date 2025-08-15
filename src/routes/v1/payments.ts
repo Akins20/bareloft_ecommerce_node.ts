@@ -109,7 +109,7 @@ router.post(
 
 /**
  * @route   POST /api/v1/payments/verify
- * @desc    Verify payment transaction
+ * @desc    Verify payment transaction by reference
  * @access  Private (Customer)
  * @body    { reference: string }
  */
@@ -120,6 +120,25 @@ router.post(
   async (req, res, next) => {
     try {
       await paymentController.verifyPayment(req as any, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/payments/verify
+ * @desc    Verify payment transaction by order number (for frontend use)
+ * @access  Private (Customer)
+ * @query   { orderNumber: string }
+ */
+router.get(
+  "/verify",
+  authenticate,
+  rateLimiter.authenticated,
+  async (req, res, next) => {
+    try {
+      await paymentController.verifyPaymentByOrderNumber(req as any, res);
     } catch (error) {
       next(error);
     }

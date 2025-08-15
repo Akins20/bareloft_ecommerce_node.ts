@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Confirmed - {{orderNumber}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+        }
+        
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+        
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 30px 20px;
+        }
+        
+        .payment-info {
+            background-color: #e8f5e8;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            border-left: 4px solid #4caf50;
+        }
+        
+        .payment-info h2 {
+            color: #2e7d32;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #666;
+        }
+        
+        .info-value {
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+        }
+        
+        .section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 8px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            background-color: #4caf50;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .amount-highlight {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .amount-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #4caf50;
+            margin-bottom: 5px;
+        }
+        
+        .amount-label {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .address-box {
+            background-color: #f8f9fa;
+            padding: 18px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .address-box p {
+            margin-bottom: 4px;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            text-align: center;
+            transition: transform 0.2s ease;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .cta-section {
+            text-align: center;
+            margin: 30px 0;
+        }
+        
+        .footer {
+            background-color: #333;
+            color: white;
+            padding: 25px 20px;
+            text-align: center;
+        }
+        
+        .footer p {
+            margin-bottom: 8px;
+        }
+        
+        .footer a {
+            color: #4caf50;
+            text-decoration: none;
+        }
+        
+        @media (max-width: 600px) {
+            .email-container {
+                margin: 0 10px;
+            }
+            
+            .content {
+                padding: 20px 15px;
+            }
+            
+            .info-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .amount-value {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <h1>Payment Successful! ✅</h1>
+            <p>Your payment has been confirmed</p>
+        </div>
+        
+        <!-- Content -->
+        <div class="content">
+            <!-- Payment Information -->
+            <div class="payment-info">
+                <h2>Payment Confirmed</h2>
+                <div class="info-row">
+                    <span class="info-label">Order Number:</span>
+                    <span class="info-value">{{orderNumber}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Payment Reference:</span>
+                    <span class="info-value">{{paymentReference}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Payment Status:</span>
+                    <span class="status-badge">CONFIRMED</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Payment Date:</span>
+                    <span class="info-value">{{paymentDate}}</span>
+                </div>
+                {{#if paymentMethod}}
+                <div class="info-row">
+                    <span class="info-label">Payment Method:</span>
+                    <span class="info-value">{{paymentMethod}}</span>
+                </div>
+                {{/if}}
+            </div>
+            
+            <!-- Amount Paid -->
+            <div class="amount-highlight">
+                <div class="amount-value">₦{{amount}}</div>
+                <div class="amount-label">Amount Paid</div>
+            </div>
+            
+            <!-- Order Details -->
+            {{#if items}}
+            <div class="section">
+                <h3>Order Details</h3>
+                {{#each items}}
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee;">
+                    <div>
+                        <h4 style="font-size: 16px; margin-bottom: 4px; color: #333;">{{name}}</h4>
+                        <p style="font-size: 14px; color: #666;">Quantity: {{quantity}}</p>
+                    </div>
+                    <div style="font-weight: 600; color: #4caf50; font-size: 16px;">
+                        ₦{{totalPrice}}
+                    </div>
+                </div>
+                {{/each}}
+            </div>
+            {{/if}}
+            
+            <!-- Shipping Address -->
+            {{#if shippingAddress}}
+            <div class="section">
+                <h3>Shipping Address</h3>
+                <div class="address-box">
+                    <p><strong>{{shippingAddress.firstName}} {{shippingAddress.lastName}}</strong></p>
+                    <p>{{shippingAddress.addressLine1}}</p>
+                    {{#if shippingAddress.addressLine2}}<p>{{shippingAddress.addressLine2}}</p>{{/if}}
+                    <p>{{shippingAddress.city}}, {{shippingAddress.state}} {{shippingAddress.postalCode}}</p>
+                    <p>Phone: {{shippingAddress.phoneNumber}}</p>
+                </div>
+            </div>
+            {{/if}}
+            
+            <!-- Call to Action -->
+            <div class="cta-section">
+                <a href="{{trackingUrl}}" class="cta-button">Track Your Order</a>
+            </div>
+            
+            <!-- What's Next -->
+            <div style="background-color: #e8f5e8; padding: 20px; border-radius: 8px; border-left: 4px solid #4caf50;">
+                <h4 style="color: #2e7d32; margin-bottom: 10px;">What's Next? 📦</h4>
+                <ul style="color: #2e7d32; padding-left: 20px;">
+                    <li>Your order is now being processed for shipment</li>
+                    <li>You'll receive a shipping confirmation email with tracking details</li>
+                    <li>Estimated processing time: 1-2 business days</li>
+                    <li>You can track your order status anytime using the link above</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <p><strong>Questions about your payment or order?</strong></p>
+            <p>Contact our support team at <a href="mailto:{{supportEmail}}">{{supportEmail}}</a></p>
+            <p style="margin-top: 15px; font-size: 12px; opacity: 0.8;">
+                This payment confirmation was sent to {{customerEmail}}. 
+            </p>
+            <p style="font-size: 12px; opacity: 0.8;">
+                © 2024 Bareloft. Lagos, Nigeria.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

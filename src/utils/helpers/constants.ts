@@ -148,7 +148,7 @@ export const BUSINESS_CONSTANTS = {
   PRICING: {
     MIN_PRODUCT_PRICE: 100, // ₦1.00
     MAX_PRODUCT_PRICE: 100000000, // ₦1,000,000
-    TAX_RATE: 0.075, // 7.5% VAT in Nigeria
+    TAX_RATE: 0, // VAT not applicable for this platform
     FREE_SHIPPING_THRESHOLD: 50000, // ₦50,000
     DEFAULT_SHIPPING_FEE: 2500, // ₦25.00
     MAX_DISCOUNT_PERCENTAGE: 90,

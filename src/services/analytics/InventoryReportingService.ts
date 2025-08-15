@@ -15,7 +15,7 @@ export interface InventoryReportTemplate {
   description: string;
   type: 'overview' | 'turnover' | 'valuation' | 'performance' | 'seasonal' | 'compliance';
   nigerianCompliant: boolean;
-  includesVAT: boolean;
+  includesVAT: boolean; // Always false - VAT not applicable
   supportedFormats: ('excel' | 'pdf' | 'csv')[];
   estimatedGenerationTime: number; // in seconds
   requiredPermissions: string[];
@@ -736,7 +736,7 @@ export class InventoryReportingService extends BaseService {
       doc.fontSize(14).text('VAT Summary', { underline: true });
       doc.fontSize(12);
       doc.text(`Total VAT Collected: ${formatNairaAmount(data.businessMetrics.vatImpact.totalVatCollected)}`);
-      doc.text(`VAT Rate: 7.5% (Nigerian Standard)`);
+      // VAT rate line removed - not applicable
       doc.moveDown();
     }
   }
@@ -857,7 +857,7 @@ export class InventoryReportingService extends BaseService {
   }
 
   private calculateVATSummary(overview: any, valuation: any): any {
-    const vatRate = 0.075; // 7.5% Nigerian VAT
+    const vatRate = 0; // VAT not applicable
     const totalValue = valuation.totalValuation.totalValue;
     
     return {

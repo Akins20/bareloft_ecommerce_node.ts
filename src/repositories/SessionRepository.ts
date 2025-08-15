@@ -640,4 +640,165 @@ export class SessionRepository extends BaseRepository<
       );
     }
   }
+
+  // ==================== SLIDING SESSION METHODS ====================
+
+  /**
+   * Extend session expiry time (for sliding session implementation)
+   */
+  async extendSession(sessionId: string, newExpiryTime: Date): Promise<boolean> {
+    try {
+      const updated = await this.prisma.session.update({
+        where: { sessionId },
+        data: { 
+          expiresAt: newExpiryTime,
+          lastUsedAt: new Date(),
+        },
+      });
+      
+      return !!updated;
+    } catch (error) {
+      if ((error as any).code === 'P2025') {
+        // Session not found
+        return false;
+      }
+      throw new AppError(
+        "Error extending session",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
+    }
+  }
+
+  /**
+   * Update last activity timestamp for a session
+   */
+  async updateLastActivity(sessionId: string, lastActivity: Date): Promise<boolean> {
+    try {
+      const updated = await this.prisma.session.update({
+        where: { sessionId },
+        data: { lastUsedAt: lastActivity },
+      });
+      
+      return !!updated;
+    } catch (error) {
+      if ((error as any).code === 'P2025') {
+        // Session not found
+        return false;
+      }
+      throw new AppError(
+        "Error updating last activity",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
+    }
+  }
+
+  /**
+   * Cleanup inactive sessions (older than specified date)
+   */
+  async cleanupInactiveSessions(cutoffDate: Date): Promise<number> {
+    try {
+      const result = await this.prisma.session.deleteMany({
+        where: {
+          OR: [
+            { expiresAt: { lt: new Date() } }, // Expired sessions
+            { lastUsedAt: { lt: cutoffDate } }, // Inactive sessions
+          ],
+        },
+      });
+      
+      return result.count;
+    } catch (error) {
+      throw new AppError(
+        "Error cleaning up inactive sessions",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
+    }
+  }
+
+  /**
+   * Get session statistics (for monitoring)
+   */
+  async getSessionStats(): Promise<{
+    totalActiveSessions: number;
+    sessionsLast24h: number;
+    averageSessionDuration: number;
+    mostActiveUsers: Array<{ userId: string; sessionCount: number }>;
+  }> {
+    try {
+      const now = new Date();
+      const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+      // Get total active sessions
+      const totalActiveSessions = await this.prisma.session.count({
+        where: {
+          expiresAt: { gt: now },
+          isActive: true,
+        },
+      });
+
+      // Get sessions from last 24 hours
+      const sessionsLast24h = await this.prisma.session.count({
+        where: {
+          createdAt: { gt: last24h },
+        },
+      });
+
+      // Get average session duration (approximate)
+      const sessions = await this.prisma.session.findMany({
+        where: {
+          createdAt: { gt: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) }, // Last 7 days
+          lastUsedAt: { not: null },
+        },
+        select: {
+          createdAt: true,
+          lastUsedAt: true,
+        },
+      });
+
+      const averageSessionDuration = sessions.length > 0 
+        ? sessions.reduce((sum, session) => {
+            const duration = session.lastUsedAt 
+              ? session.lastUsedAt.getTime() - session.createdAt.getTime()
+              : 0;
+            return sum + duration;
+          }, 0) / sessions.length / 1000 // Convert to seconds
+        : 0;
+
+      // Get most active users (by session count)
+      const mostActiveUsers = await this.prisma.session.groupBy({
+        by: ['userId'],
+        where: {
+          createdAt: { gt: last24h },
+        },
+        _count: {
+          userId: true,
+        },
+        orderBy: {
+          _count: {
+            userId: 'desc',
+          },
+        },
+        take: 10,
+      });
+
+      return {
+        totalActiveSessions,
+        sessionsLast24h,
+        averageSessionDuration: Math.round(averageSessionDuration),
+        mostActiveUsers: mostActiveUsers.map(user => ({
+          userId: user.userId,
+          sessionCount: user._count.userId,
+        })),
+      };
+    } catch (error) {
+      throw new AppError(
+        "Error getting session statistics",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_CODES.DATABASE_ERROR
+      );
+    }
+  }
 }
