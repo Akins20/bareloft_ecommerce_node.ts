@@ -13,7 +13,7 @@
  */
 
 import { Router } from 'express';
-import { JobService } from '../../services/jobs';
+import { GlobalJobService } from '../../utils/globalJobService';
 import { JobType, JobPriority } from '../../types/job.types';
 import { logger } from '../../utils/logger/winston';
 import { authenticate } from '../../middleware/auth/authenticate';
@@ -34,8 +34,7 @@ router.use(authorize(['ADMIN', 'SUPER_ADMIN']));
  */
 router.get('/stats', async (req, res) => {
   try {
-    const jobService = new JobService();
-    await jobService.initialize();
+    const jobService = await GlobalJobService.getInstance();
 
     const stats = await jobService.getQueueStats();
     const healthCheck = await jobService.healthCheck();
@@ -64,8 +63,7 @@ router.get('/stats', async (req, res) => {
  */
 router.get('/queues', async (req, res) => {
   try {
-    const jobService = new JobService();
-    await jobService.initialize();
+    const jobService = await GlobalJobService.getInstance();
 
     const stats = await jobService.getQueueStats();
     const serviceStats = jobService.getStats();
@@ -122,8 +120,7 @@ router.post('/queues/:queueName/pause', async (req, res) => {
       );
     }
 
-    const jobService = new JobService();
-    await jobService.initialize();
+    const jobService = await GlobalJobService.getInstance();
 
     await jobService.pauseQueue(queueName as JobType);
 
@@ -165,8 +162,7 @@ router.post('/queues/:queueName/resume', async (req, res) => {
       );
     }
 
-    const jobService = new JobService();
-    await jobService.initialize();
+    const jobService = await GlobalJobService.getInstance();
 
     await jobService.resumeQueue(queueName as JobType);
 
@@ -200,8 +196,7 @@ router.post('/queues/:queueName/resume', async (req, res) => {
  */
 router.post('/queues/clean', async (req, res) => {
   try {
-    const jobService = new JobService();
-    await jobService.initialize();
+    const jobService = await GlobalJobService.getInstance();
 
     await jobService.cleanQueues();
 
@@ -235,8 +230,7 @@ router.get('/:jobId', async (req, res) => {
   try {
     const { jobId } = req.params;
 
-    const jobService = new JobService();
-    await jobService.initialize();
+    const jobService = await GlobalJobService.getInstance();
 
     const job = await jobService.getJob(jobId);
 
@@ -289,8 +283,7 @@ router.post('/email/test', async (req, res) => {
       );
     }
 
-    const jobService = new JobService();
-    await jobService.initialize();
+    const jobService = await GlobalJobService.getInstance();
 
     const job = await jobService.addEmailJob({
       emailType: type,
@@ -344,8 +337,7 @@ router.post('/notification/test', async (req, res) => {
       );
     }
 
-    const jobService = new JobService();
-    await jobService.initialize();
+    const jobService = await GlobalJobService.getInstance();
 
     const job = await jobService.addNotificationJob({
       notificationType: 'in_app' as any,
@@ -401,8 +393,7 @@ router.post('/reconciliation/trigger', async (req, res) => {
       );
     }
 
-    const jobService = new JobService();
-    await jobService.initialize();
+    const jobService = await GlobalJobService.getInstance();
 
     const job = await jobService.addPaymentReconciliationJob({
       reconciliationType: emergency ? 'emergency' : 'manual',
@@ -456,8 +447,7 @@ router.get('/', async (req, res) => {
       search
     } = req.query;
 
-    const jobService = new JobService();
-    await jobService.initialize();
+    const jobService = await GlobalJobService.getInstance();
 
     const jobs = await jobService.getJobs({
       page: parseInt(page as string),
@@ -513,8 +503,7 @@ router.post('/:jobId/retry', async (req, res) => {
   try {
     const { jobId } = req.params;
 
-    const jobService = new JobService();
-    await jobService.initialize();
+    const jobService = await GlobalJobService.getInstance();
 
     const result = await jobService.retryJob(jobId);
 
@@ -556,8 +545,7 @@ router.delete('/:jobId', async (req, res) => {
   try {
     const { jobId } = req.params;
 
-    const jobService = new JobService();
-    await jobService.initialize();
+    const jobService = await GlobalJobService.getInstance();
 
     const result = await jobService.removeJob(jobId);
 
@@ -596,8 +584,7 @@ router.delete('/:jobId', async (req, res) => {
  */
 router.get('/health', async (req, res) => {
   try {
-    const jobService = new JobService();
-    await jobService.initialize();
+    const jobService = await GlobalJobService.getInstance();
 
     const health = await jobService.healthCheck();
     const serviceStats = jobService.getStats();

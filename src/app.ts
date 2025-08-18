@@ -495,9 +495,8 @@ class App {
       console.log("✅ Email service initialized successfully");
 
       // Initialize job service (background job processing)
-      const { JobService } = await import('./services/jobs');
-      const jobService = new JobService();
-      await jobService.initialize();
+      const { GlobalJobService } = await import('./utils/globalJobService');
+      const jobService = await GlobalJobService.getInstance();
       console.log("✅ Job service initialized successfully");
       
       // Store job service reference for graceful shutdown
