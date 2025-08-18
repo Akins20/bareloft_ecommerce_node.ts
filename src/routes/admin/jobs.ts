@@ -443,6 +443,154 @@ router.post('/reconciliation/trigger', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/jobs
+ * Get paginated list of jobs with filtering
+ */
+router.get('/', async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      type,
+      search
+    } = req.query;
+
+    const jobService = new JobService();
+    await jobService.initialize();
+
+    const jobs = await jobService.getJobs({
+      page: parseInt(page as string),
+      limit: parseInt(limit as string),
+      status: status as string,
+      type: type as string,
+      search: search as string
+    });
+
+    res.json(createSuccessResponse({
+      jobs: jobs.data.map(job => ({
+        id: job.id,
+        name: job.name,
+        type: job.data?.type,
+        status: job.finished ? (job.finishedOn && !job.failedReason ? 'completed' : 'failed') : 
+                job.processedOn ? 'active' : 'waiting',
+        progress: job.progress(),
+        createdAt: new Date(job.timestamp),
+        processedAt: job.processedOn ? new Date(job.processedOn) : null,
+        finishedAt: job.finishedOn ? new Date(job.finishedOn) : null,
+        attempts: job.attemptsMade,
+        error: job.failedReason,
+        data: {
+          priority: job.opts?.priority,
+          delay: job.opts?.delay
+        }
+      })),
+      pagination: {
+        page: jobs.page,
+        limit: jobs.limit,
+        total: jobs.total,
+        pages: jobs.pages
+      }
+    }));
+
+  } catch (error) {
+    logger.error('Failed to get jobs list', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      adminId: req.user?.id
+    });
+
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json(
+      createErrorResponse('Failed to get jobs list', 'JOBS_LIST_ERROR')
+    );
+  }
+});
+
+/**
+ * POST /api/admin/jobs/:jobId/retry
+ * Retry a failed job
+ */
+router.post('/:jobId/retry', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+
+    const jobService = new JobService();
+    await jobService.initialize();
+
+    const result = await jobService.retryJob(jobId);
+
+    if (!result) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json(
+        createErrorResponse('Job not found or cannot be retried', 'JOB_NOT_FOUND')
+      );
+    }
+
+    logger.info(`Job ${jobId} retried by admin`, {
+      adminId: req.user?.id,
+      jobId
+    });
+
+    res.json(createSuccessResponse({
+      message: 'Job retried successfully',
+      jobId,
+      newJobId: result.id
+    }));
+
+  } catch (error) {
+    logger.error(`Failed to retry job ${req.params.jobId}`, {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      adminId: req.user?.id,
+      jobId: req.params.jobId
+    });
+
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json(
+      createErrorResponse('Failed to retry job', 'JOB_RETRY_ERROR')
+    );
+  }
+});
+
+/**
+ * DELETE /api/admin/jobs/:jobId
+ * Remove a job from queue
+ */
+router.delete('/:jobId', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+
+    const jobService = new JobService();
+    await jobService.initialize();
+
+    const result = await jobService.removeJob(jobId);
+
+    if (!result) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json(
+        createErrorResponse('Job not found', 'JOB_NOT_FOUND')
+      );
+    }
+
+    logger.info(`Job ${jobId} removed by admin`, {
+      adminId: req.user?.id,
+      jobId
+    });
+
+    res.json(createSuccessResponse({
+      message: 'Job removed successfully',
+      jobId
+    }));
+
+  } catch (error) {
+    logger.error(`Failed to remove job ${req.params.jobId}`, {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      adminId: req.user?.id,
+      jobId: req.params.jobId
+    });
+
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json(
+      createErrorResponse('Failed to remove job', 'JOB_REMOVE_ERROR')
+    );
+  }
+});
+
+/**
  * GET /api/admin/jobs/health
  * Get health status of job system
  */

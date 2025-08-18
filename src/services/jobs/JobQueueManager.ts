@@ -460,6 +460,108 @@ export class JobQueueManager {
   }
 
   /**
+   * Get paginated list of jobs from all queues
+   */
+  async getJobs(options: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    type?: string;
+    search?: string;
+  } = {}) {
+    const { page = 1, limit = 20, status, type, search } = options;
+    const allJobs = [];
+
+    // Get jobs from all queues
+    for (const [jobType, queue] of this.queues.entries()) {
+      if (type && jobType !== type) continue;
+
+      let jobs = [];
+      
+      if (status === 'waiting') {
+        jobs = await queue.getWaiting();
+      } else if (status === 'active') {
+        jobs = await queue.getActive();
+      } else if (status === 'completed') {
+        jobs = await queue.getCompleted();
+      } else if (status === 'failed') {
+        jobs = await queue.getFailed();
+      } else {
+        // Get all job types
+        const [waiting, active, completed, failed] = await Promise.all([
+          queue.getWaiting(),
+          queue.getActive(), 
+          queue.getCompleted(),
+          queue.getFailed()
+        ]);
+        jobs = [...waiting, ...active, ...completed, ...failed];
+      }
+
+      allJobs.push(...jobs);
+    }
+
+    // Filter by search if provided
+    let filteredJobs = allJobs;
+    if (search) {
+      filteredJobs = allJobs.filter(job => 
+        job.id?.toString().includes(search) ||
+        job.name?.toLowerCase().includes(search.toLowerCase()) ||
+        JSON.stringify(job.data).toLowerCase().includes(search.toLowerCase())
+      );
+    }
+
+    // Sort by timestamp (newest first)
+    filteredJobs.sort((a, b) => b.timestamp - a.timestamp);
+
+    // Paginate
+    const total = filteredJobs.length;
+    const pages = Math.ceil(total / limit);
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const data = filteredJobs.slice(startIndex, endIndex);
+
+    return {
+      data,
+      page,
+      limit,
+      total,
+      pages
+    };
+  }
+
+  /**
+   * Retry a failed job
+   */
+  async retryJob(jobId: string): Promise<Job | null> {
+    for (const queue of this.queues.values()) {
+      const job = await queue.getJob(jobId);
+      if (job) {
+        if (job.finishedOn && job.failedReason) {
+          // Job failed, retry it
+          await job.retry();
+          return job;
+        }
+        return job;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Remove a job from queue
+   */
+  async removeJob(jobId: string): Promise<boolean> {
+    for (const queue of this.queues.values()) {
+      const job = await queue.getJob(jobId);
+      if (job) {
+        await job.remove();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Health check for job queue system
    */
   async healthCheck(): Promise<{

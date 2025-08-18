@@ -576,6 +576,36 @@ export class JobService {
   }
 
   /**
+   * Get paginated list of jobs
+   */
+  async getJobs(options: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    type?: string;
+    search?: string;
+  } = {}) {
+    this.ensureInitialized();
+    return await this.queueManager.getJobs(options);
+  }
+
+  /**
+   * Retry a failed job
+   */
+  async retryJob(jobId: string) {
+    this.ensureInitialized();
+    return await this.queueManager.retryJob(jobId);
+  }
+
+  /**
+   * Remove a job from queue
+   */
+  async removeJob(jobId: string) {
+    this.ensureInitialized();
+    return await this.queueManager.removeJob(jobId);
+  }
+
+  /**
    * Get service statistics
    */
   getStats() {
