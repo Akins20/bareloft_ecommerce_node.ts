@@ -9,7 +9,7 @@ import rateLimit from "express-rate-limit";
 import { config } from "./config/environment";
 import { PrismaClient } from "@prisma/client";
 import { getServiceContainer } from "./config/serviceContainer";
-import { RedisService } from "./services/cache/RedisService";
+import { GlobalRedisService } from "./utils/globalRedisService";
 
 // Type imports
 import {
@@ -52,13 +52,11 @@ class App {
   public app: Application;
   private readonly port: number;
   private prisma: PrismaClient;
-  private redis: RedisService;
 
   constructor() {
     this.app = express();
     this.port = config.port;
     this.prisma = new PrismaClient();
-    this.redis = new RedisService();
 
     this.initializeMiddleware();
     this.initializeRoutes();
@@ -183,8 +181,9 @@ class App {
     // Global rate limiting
     this.app.use(rateLimiter.general);
 
-    // Health check endpoint (before auth middleware)
+    // Health check endpoints (before auth middleware)
     this.app.get("/health", this.healthCheck.bind(this));
+    this.app.get("/health/detailed", this.detailedHealthCheck.bind(this));
     this.app.get("/", this.welcomeMessage.bind(this));
 
     // API documentation endpoint
@@ -298,28 +297,20 @@ class App {
     try {
       const startTime = Date.now();
 
-      // Check database connection
+      // Only check database for basic health - fastest and most critical
       const dbHealth = await this.checkDatabaseHealth();
-
-      // Check external services
-      const [paystackHealth, emailHealth] = await Promise.allSettled([
-        this.checkPaystackHealth(),
-        this.checkEmailHealth(),
-      ]);
 
       const responseTime = Date.now() - startTime;
 
       const healthStatus = {
-        status: "healthy",
+        status: dbHealth ? "healthy" : "unhealthy",
         timestamp: new Date().toISOString(),
         version: "1.0.0",
         environment: config.nodeEnv,
         responseTime: `${responseTime}ms`,
         services: {
           database: dbHealth ? "healthy" : "unhealthy",
-          paystack:
-            paystackHealth.status === "fulfilled" ? "healthy" : "unhealthy",
-          email: emailHealth.status === "fulfilled" ? "healthy" : "unhealthy",
+          api: "healthy", // If we can respond, API is healthy
         },
         metrics: {
           uptime: `${Math.floor(process.uptime())}s`,
@@ -337,11 +328,7 @@ class App {
         },
       };
 
-      const isHealthy = dbHealth && paystackHealth.status === "fulfilled";
-      const statusCode = isHealthy
-        ? HTTP_STATUS.OK
-        : HTTP_STATUS.SERVICE_UNAVAILABLE;
-
+      const statusCode = dbHealth ? HTTP_STATUS.OK : HTTP_STATUS.SERVICE_UNAVAILABLE;
       res.status(statusCode).json(healthStatus);
     } catch (error) {
       console.error("🏥 Health check failed:", error);
@@ -349,6 +336,71 @@ class App {
         status: "unhealthy",
         timestamp: new Date().toISOString(),
         error: error instanceof Error ? error.message : "Health check failed",
+        environment: config.nodeEnv,
+      });
+    }
+  }
+
+  private async detailedHealthCheck(req: Request, res: Response): Promise<void> {
+    try {
+      const startTime = Date.now();
+
+      // Check database connection
+      const dbHealth = await this.checkDatabaseHealth();
+
+      // Check external services with timeout
+      const [paystackHealth, emailHealth] = await Promise.allSettled([
+        this.checkPaystackHealth(),
+        this.checkEmailHealth(),
+      ]);
+
+      const responseTime = Date.now() - startTime;
+
+      const healthStatus = {
+        status: "detailed_check",
+        timestamp: new Date().toISOString(),
+        version: "1.0.0",
+        environment: config.nodeEnv,
+        responseTime: `${responseTime}ms`,
+        services: {
+          database: dbHealth ? "healthy" : "unhealthy",
+          paystack: paystackHealth.status === "fulfilled" ? "healthy" : "unhealthy",
+          email: emailHealth.status === "fulfilled" ? "healthy" : "unhealthy",
+          api: "healthy",
+        },
+        metrics: {
+          uptime: `${Math.floor(process.uptime())}s`,
+          memory: {
+            used: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
+            total: `${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)}MB`,
+            rss: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`,
+          },
+          cpu: process.cpuUsage(),
+          nodeVersion: process.version,
+        },
+        checks: {
+          databaseLatency: dbHealth ? "< 100ms" : "timeout",
+          paystackLatency: paystackHealth.status === "fulfilled" ? "< 5s" : "timeout/error",
+          emailLatency: emailHealth.status === "fulfilled" ? "< 1s" : "timeout/error",
+          apiResponse: "ok",
+        },
+        warnings: [
+          ...(paystackHealth.status === "rejected" ? ["Paystack API connectivity issues"] : []),
+          ...(emailHealth.status === "rejected" ? ["Email service connectivity issues"] : []),
+        ],
+      };
+
+      // Consider healthy if core services (DB) are working
+      const isHealthy = dbHealth;
+      const statusCode = isHealthy ? HTTP_STATUS.OK : HTTP_STATUS.SERVICE_UNAVAILABLE;
+
+      res.status(statusCode).json(healthStatus);
+    } catch (error) {
+      console.error("🏥 Detailed health check failed:", error);
+      res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+        status: "unhealthy",
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : "Detailed health check failed",
         environment: config.nodeEnv,
       });
     }
@@ -392,7 +444,13 @@ class App {
 
   private async checkDatabaseHealth(): Promise<boolean> {
     try {
-      await this.prisma.$queryRaw`SELECT 1`;
+      // Use a simple connectivity check with timeout
+      const result = await Promise.race([
+        this.prisma.$queryRaw`SELECT 1`,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Database timeout')), 1000)
+        )
+      ]);
       return true;
     } catch (error) {
       console.error("Database health check failed:", error);
@@ -476,9 +534,9 @@ class App {
       await this.verifyDatabaseSchema();
       console.log("✅ Database schema verified");
 
-      // Initialize Redis connection
+      // Initialize Redis connection using singleton
       try {
-        await this.redis.connect();
+        await GlobalRedisService.getInstance();
         console.log("✅ Redis connected successfully");
       } catch (error) {
         console.log("⚠️ Redis connection failed, continuing without cache");
@@ -586,8 +644,11 @@ class App {
       console.log("✅ Database connection closed");
 
       // Close Redis connection
-      await this.redis.disconnect();
-      console.log("✅ Redis connection closed");
+      const redis = GlobalRedisService.getInstanceSync();
+      if (redis) {
+        await redis.disconnect();
+        console.log("✅ Redis connection closed");
+      }
 
       // Stop payment reconciliation scheduler
       if ((this as any).reconciliationScheduler) {

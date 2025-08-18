@@ -16,6 +16,7 @@
 
 import Bull, { Queue, Job } from 'bull';
 import Redis from 'ioredis';
+import { RedisService } from '../cache/RedisService';
 import { config } from '../../config/environment';
 import { logger } from '../../utils/logger/winston';
 import { 
@@ -154,8 +155,12 @@ export class JobQueueManager {
     }
   };
 
-  constructor() {
-    this.redis = new Redis(config.redis.url);
+  constructor(redisService?: RedisService) {
+    if (redisService && redisService.getClient()) {
+      this.redis = redisService.getClient() as Redis;
+    } else {
+      this.redis = new Redis(config.redis.url);
+    }
   }
 
   /**

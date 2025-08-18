@@ -8,10 +8,12 @@
  */
 
 import { JobService } from '../services/jobs/JobService';
+import { RedisService } from '../services/cache/RedisService';
 import { logger } from './logger/winston';
 
 class GlobalJobService {
   private static instance: JobService | null = null;
+  private static redisService: RedisService | null = null;
   private static isInitialized = false;
 
   /**
@@ -19,7 +21,14 @@ class GlobalJobService {
    */
   static async getInstance(): Promise<JobService> {
     if (!GlobalJobService.instance) {
-      GlobalJobService.instance = new JobService();
+      // Create or reuse Redis service instance
+      if (!GlobalJobService.redisService) {
+        GlobalJobService.redisService = new RedisService();
+        await GlobalJobService.redisService.connect();
+        logger.info('✅ Global Redis service initialized for JobService');
+      }
+      
+      GlobalJobService.instance = new JobService(GlobalJobService.redisService);
       
       // Initialize if not already done
       if (!GlobalJobService.isInitialized) {

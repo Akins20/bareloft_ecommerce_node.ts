@@ -4,7 +4,7 @@
  */
 
 import { Response, NextFunction } from "express";
-import { RedisService } from "../../services/cache/RedisService";
+import { GlobalRedisService } from "../../utils/globalRedisService";
 import { logger } from "../../utils/logger/winston";
 import { config } from "../../config/environment";
 import { AuthenticatedRequest } from "../../types/auth.types";
@@ -94,14 +94,18 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
     conditionalCaching,
   } = options;
 
-  const redis = new RedisService();
-
   return async (
     req: AuthenticatedRequest,
     res: Response,
     next: NextFunction
   ): Promise<void> => {
     try {
+      // Get Redis instance
+      const redis = GlobalRedisService.getInstanceSync();
+      if (!redis) {
+        return next(); // Skip caching if Redis not available
+      }
+
       // Skip caching for certain methods
       if (skipMethods.includes(req.method)) {
         return next();
@@ -351,13 +355,16 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
 export const invalidateCache = (
   patterns: string[] | ((req: AuthenticatedRequest) => string[])
 ) => {
-  const redis = new RedisService();
-
   return async (
     req: AuthenticatedRequest,
     res: Response,
     next: NextFunction
   ): Promise<void> => {
+    // Get Redis instance
+    const redis = GlobalRedisService.getInstanceSync();
+    if (!redis) {
+      return next(); // Skip invalidation if Redis not available
+    }
     // Store original end method
     const originalEnd = res.end;
 

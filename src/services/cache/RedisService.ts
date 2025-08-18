@@ -178,6 +178,13 @@ export class RedisService extends BaseService {
   }
 
   /**
+   * Get the underlying Redis client (for Bull queue integration)
+   */
+  getClient(): Redis | null {
+    return this.client;
+  }
+
+  /**
    * Check if operation should be attempted
    */
   private shouldAttemptOperation(): boolean {

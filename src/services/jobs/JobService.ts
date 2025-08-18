@@ -16,6 +16,7 @@
 
 import { logger } from '../../utils/logger/winston';
 import { JobQueueManager } from './JobQueueManager';
+import { RedisService } from '../cache/RedisService';
 import { 
   EmailJobProcessor, 
   NotificationJobProcessor, 
@@ -42,8 +43,8 @@ export class JobService {
   private queueManager: JobQueueManager;
   private isInitialized = false;
 
-  constructor() {
-    this.queueManager = new JobQueueManager();
+  constructor(redisService?: RedisService) {
+    this.queueManager = new JobQueueManager(redisService);
   }
 
   /**
