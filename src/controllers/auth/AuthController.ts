@@ -182,6 +182,38 @@ export class AuthController extends BaseController {
       
       this.logAction("USER_LOGIN", result.data.user.id, "USER", result.data.user.id, loginLogData);
 
+      // Set HTTP-only cookies for web clients
+      const accessTokenExpiry = 15 * 60 * 1000; // 15 minutes
+      const refreshTokenExpiry = 7 * 24 * 60 * 60 * 1000; // 7 days
+      
+      console.log('🍪 Setting auth cookies for user:', result.data.user.email);
+      
+      res.cookie('accessToken', result.data.accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: accessTokenExpiry,
+        path: '/'
+      });
+      
+      res.cookie('refreshToken', result.data.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: refreshTokenExpiry,
+        path: '/'
+      });
+      
+      res.cookie('user', JSON.stringify(result.data.user), {
+        httpOnly: false, // Allow client-side access to user data
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: refreshTokenExpiry,
+        path: '/'
+      });
+      
+      console.log('✅ Auth cookies set successfully');
+
       const response: ApiResponse<AuthResponse> = {
         success: true,
         message: "Login successful",
@@ -782,6 +814,38 @@ req: Request, res: Response, next?: unknown  ): Promise<void> => {
         email: this.maskEmail(email),
         role: result.data.user.role
       });
+
+      // Set HTTP-only cookies for web clients
+      const accessTokenExpiry = 15 * 60 * 1000; // 15 minutes
+      const refreshTokenExpiry = 7 * 24 * 60 * 60 * 1000; // 7 days
+      
+      console.log('🍪 Setting auth cookies for email login user:', email);
+      
+      res.cookie('accessToken', result.data.accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: accessTokenExpiry,
+        path: '/'
+      });
+      
+      res.cookie('refreshToken', result.data.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: refreshTokenExpiry,
+        path: '/'
+      });
+      
+      res.cookie('user', JSON.stringify(result.data.user), {
+        httpOnly: false, // Allow client-side access to user data
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: refreshTokenExpiry,
+        path: '/'
+      });
+      
+      console.log('✅ Email login auth cookies set successfully');
 
       res.json({
         success: true,

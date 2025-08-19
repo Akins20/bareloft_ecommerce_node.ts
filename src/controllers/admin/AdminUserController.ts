@@ -77,46 +77,20 @@ export class AdminUserController extends BaseAdminController {
         if (dateTo) filters.createdAt.lte = dateTo;
       }
 
-      // Production safety check - prevent mock data in production
-      if (process.env.NODE_ENV === 'production') {
-        this.sendError(res, "User management endpoint not implemented for production. Please contact system administrator.", 501, "NOT_IMPLEMENTED");
-        return;
-      }
-      
-      // Development/testing placeholder data - actual implementation would use repository
-      const users = [
-        {
-          id: 'u1',
-          firstName: 'John',
-          lastName: 'Doe',
-          email: 'john.doe@email.com',
-          phoneNumber: '+2348012345678',
-          role: 'CUSTOMER',
-          isVerified: true,
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          lastLoginAt: new Date().toISOString(),
-          orders: [{ id: 'o1' }, { id: 'o2' }],
-          reviews: [{ id: 'r1' }]
+      // Get users from database with pagination and filters
+      const result = await this.userRepository.findMany(filters, {
+        include: {
+          orders: { select: { id: true } },
+          reviews: { select: { id: true } }
         },
-        {
-          id: 'u2',
-          firstName: 'Jane',
-          lastName: 'Smith',
-          email: 'jane.smith@email.com',
-          phoneNumber: '+2348087654321',
-          role: 'CUSTOMER',
-          isVerified: true,
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          lastLoginAt: new Date().toISOString(),
-          orders: [{ id: 'o3' }],
-          reviews: []
-        }
-      ];
-      const total = users.length;
+        orderBy: { [sortBy]: sortOrder },
+        pagination: { page, limit }
+      });
 
-      // Format users for admin view
+      const users = result.data;
+      const total = result.pagination.totalItems;
+
+      // Format users for admin view with Nigerian context
       const formattedUsers = users.map(user => ({
         id: user.id,
         firstName: user.firstName,
@@ -127,9 +101,15 @@ export class AdminUserController extends BaseAdminController {
         isVerified: user.isVerified,
         isActive: user.isActive,
         createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
         lastLoginAt: user.lastLoginAt,
         orderCount: user.orders?.length || 0,
-        reviewCount: user.reviews?.length || 0
+        reviewCount: user.reviews?.length || 0,
+        avatar: user.avatar,
+        // Nigerian e-commerce specific fields
+        nigerianPhone: user.phoneNumber ? user.phoneNumber.startsWith('+234') : false,
+        verificationStatus: user.isVerified ? 'verified' : 'pending',
+        accountAge: Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24)),
       }));
 
       const totalPages = Math.ceil(total / limit);
@@ -392,47 +372,99 @@ export class AdminUserController extends BaseAdminController {
 
       this.logAction('get_user_statistics', userId, 'admin_user_stats');
 
-      // Production safety check
-      if (process.env.NODE_ENV === 'production') {
-        this.sendError(res, "User statistics endpoint not implemented for production. Please contact system administrator.", 501, "NOT_IMPLEMENTED");
-        return;
-      }
-      
-      // Development/testing placeholder statistics
+      // Get comprehensive user statistics from database
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const startOfWeek = new Date(startOfToday);
+      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+
+      // Parallel database queries for statistics
+      const [
+        totalUsers,
+        verifiedUsers,
+        activeUsers,
+        customerUsers,
+        adminUsers,
+        superAdminUsers,
+        registrationsToday,
+        registrationsThisWeek,
+        registrationsThisMonth,
+        registrationsLastMonth,
+        activeToday,
+        activeThisWeek,
+        activeThisMonth
+      ] = await Promise.all([
+        this.userRepository.count({}),
+        this.userRepository.count({ isVerified: true }),
+        this.userRepository.count({ isActive: true }),
+        this.userRepository.count({ role: 'CUSTOMER' }),
+        this.userRepository.count({ role: 'ADMIN' }),
+        this.userRepository.count({ role: 'SUPER_ADMIN' }),
+        this.userRepository.count({ createdAt: { gte: startOfToday } }),
+        this.userRepository.count({ createdAt: { gte: startOfWeek } }),
+        this.userRepository.count({ createdAt: { gte: startOfMonth } }),
+        this.userRepository.count({ 
+          createdAt: { 
+            gte: startOfLastMonth, 
+            lte: endOfLastMonth 
+          } 
+        }),
+        this.userRepository.count({ 
+          lastLoginAt: { gte: startOfToday },
+          isActive: true 
+        }),
+        this.userRepository.count({ 
+          lastLoginAt: { gte: startOfWeek },
+          isActive: true 
+        }),
+        this.userRepository.count({ 
+          lastLoginAt: { gte: startOfMonth },
+          isActive: true 
+        }),
+      ]);
+
+      // Calculate growth rate
+      const growthRate = registrationsLastMonth > 0 
+        ? ((registrationsThisMonth - registrationsLastMonth) / registrationsLastMonth) * 100 
+        : registrationsThisMonth > 0 ? 100 : 0;
+
       const statistics = {
         total: {
-          users: 1247,
-          verified: 892,
-          active: 1156,
-          customers: 1203,
-          admins: 44
+          users: totalUsers,
+          verified: verifiedUsers,
+          active: activeUsers,
+          customers: customerUsers,
+          admins: adminUsers + superAdminUsers
         },
         growth: {
-          thisMonth: 47,
-          lastMonth: 38,
-          growthRate: 23.7
+          thisMonth: registrationsThisMonth,
+          lastMonth: registrationsLastMonth,
+          growthRate: Math.round(growthRate * 10) / 10 // Round to 1 decimal
         },
         activity: {
-          activeToday: 342,
-          activeThisWeek: 756,
-          activeThisMonth: 1089
+          activeToday: activeToday,
+          activeThisWeek: activeThisWeek,
+          activeThisMonth: activeThisMonth
         },
         registrations: {
-          today: 8,
-          thisWeek: 23,
-          thisMonth: 47
+          today: registrationsToday,
+          thisWeek: registrationsThisWeek,
+          thisMonth: registrationsThisMonth
         },
         demographics: {
           byRole: {
-            customer: 1203,
-            admin: 42,
-            super_admin: 2
+            customer: customerUsers,
+            admin: adminUsers,
+            super_admin: superAdminUsers
           },
           byStatus: {
-            verified: 892,
-            unverified: 355,
-            active: 1156,
-            inactive: 91
+            verified: verifiedUsers,
+            unverified: totalUsers - verifiedUsers,
+            active: activeUsers,
+            inactive: totalUsers - activeUsers
           }
         }
       };

@@ -259,16 +259,22 @@ export class ShippingService extends BaseService {
     carrierIds?: string[]
   ): Promise<ShipmentRateResponse[]> {
     try {
+      console.log('🚚 [SHIPPING SERVICE] Starting calculateShippingRates');
       this.logInfo('Calculating shipping rates', { request, carrierIds });
 
       const availableCarriers = carrierIds 
         ? carrierIds 
         : Array.from(this.carriers.keys());
+      
+      console.log('🚛 [SHIPPING SERVICE] Available carriers:', availableCarriers);
+      console.log('📦 [SHIPPING SERVICE] Carriers map size:', this.carriers.size);
 
       const ratePromises = availableCarriers.map(async (carrierId) => {
         try {
+          console.log(`🔍 [SHIPPING SERVICE] Processing carrier: ${carrierId}`);
           const carrier = this.carriers.get(carrierId);
           if (!carrier) {
+            console.log(`❌ [SHIPPING SERVICE] Carrier ${carrierId} not found`);
             this.logWarn(`Carrier ${carrierId} not found`);
             return null;
           }
@@ -282,7 +288,9 @@ export class ShippingService extends BaseService {
             destinationState: request.destinationAddress.state,
           };
 
+          console.log(`🔄 [SHIPPING SERVICE] Calling ${carrierId}.calculateShippingRate`);
           const response = await carrier.calculateShippingRate(carrierRequest as any);
+          console.log(`✅ [SHIPPING SERVICE] ${carrierId} response:`, response);
           
           // Ensure response has required deliveryTimeframe
           return {
@@ -290,12 +298,25 @@ export class ShippingService extends BaseService {
             deliveryTimeframe: (response as any).deliveryTimeframe || `${(response as any).transitTime || 3} days`,
           };
         } catch (error: any) {
+          console.log(`❌ [SHIPPING SERVICE] Rate calculation failed for ${carrierId}:`, error.message);
           this.logWarn(`Rate calculation failed for ${carrierId}`, error.message);
           return null;
         }
       });
 
-      const results = await Promise.allSettled(ratePromises);
+      console.log('⏳ [SHIPPING SERVICE] Waiting for all rate promises...');
+      
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Rate calculation timeout after 10 seconds')), 10000)
+      );
+      
+      const results = await Promise.race([
+        Promise.allSettled(ratePromises),
+        timeoutPromise
+      ]) as PromiseSettledResult<ShipmentRateResponse | null>[];
+      
+      console.log('✅ [SHIPPING SERVICE] All rate promises settled, results:', results.length);
       const rates: ShipmentRateResponse[] = [];
 
       results.forEach((result, index) => {

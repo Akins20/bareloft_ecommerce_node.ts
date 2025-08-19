@@ -168,6 +168,12 @@ export class OTPService {
    * Verify OTP - simple string comparison
    */
   async verifyOTPCode(storedOTP: string, providedOTP: string): Promise<boolean> {
+    // Development bypass for testing
+    if (process.env.NODE_ENV === 'development' && providedOTP === '000000') {
+      console.log('🔧 Development OTP bypass used');
+      return true;
+    }
+    
     return this.constantTimeCompare(storedOTP, providedOTP);
   }
 

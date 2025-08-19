@@ -56,6 +56,7 @@ export class LocalCarrierService extends BaseCarrierService {
    */
   async calculateShippingRate(request: ShipmentRateRequest): Promise<ShipmentRateResponse> {
     try {
+      console.log('🚛 [LOCAL CARRIER] Starting calculateShippingRate');
       this.logCarrierOperation('calculateShippingRate', request);
 
       // Validate coverage area
@@ -97,7 +98,7 @@ export class LocalCarrierService extends BaseCarrierService {
       const estimatedDelivery = new Date();
       estimatedDelivery.setDate(estimatedDelivery.getDate() + deliveryDays);
 
-      return {
+      const response = {
         carrierId: this.carrierCode.toLowerCase(),
         carrierName: this.carrierName,
         serviceType: request.serviceType || 'standard',
@@ -105,6 +106,8 @@ export class LocalCarrierService extends BaseCarrierService {
         currency: 'NGN',
         estimatedDays: deliveryDays,
         estimatedDelivery: this.adjustForNigerianHolidays(estimatedDelivery),
+        transitTime: deliveryDays,
+        deliveryTimeframe: `${deliveryDays} ${deliveryDays === 1 ? 'day' : 'days'}`,
         additionalFees: {
           fuelSurcharge: totalCost * 0.08, // 8% fuel surcharge
           insurance: request.declaredValue * 0.01, // 1% insurance
@@ -112,7 +115,11 @@ export class LocalCarrierService extends BaseCarrierService {
         },
       };
 
+      console.log('✅ [LOCAL CARRIER] Rate response generated:', response.cost, 'NGN');
+      return response;
+
     } catch (error: any) {
+      console.log('❌ [LOCAL CARRIER] Error in calculateShippingRate:', error);
       this.handleCarrierError(error, 'rate calculation');
     }
   }

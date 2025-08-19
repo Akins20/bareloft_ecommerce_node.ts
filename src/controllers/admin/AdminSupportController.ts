@@ -15,53 +15,21 @@ interface AuthenticatedRequest extends Request {
   };
 }
 
-// Support ticket types
-type SupportTicketStatus = 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | 'closed';
-type SupportTicketPriority = 'low' | 'medium' | 'high' | 'urgent';
-type SupportTicketCategory = 'technical' | 'billing' | 'general' | 'returns' | 'shipping' | 'product';
-type SupportChannelType = 'email' | 'phone' | 'chat' | 'web';
-type SupportLanguage = 'en' | 'yo' | 'ig' | 'ha';
-
 import { BaseAdminController } from '../BaseAdminController';
 import { HTTP_STATUS, createSuccessResponse, createErrorResponse, AppError, ERROR_CODES, PaginationMeta } from '../../types';
-
-// Mock services for now - these would be proper implementations
-class SupportTicketService {
-  async getTickets(filters: any, pagination: any) { return { success: true, tickets: [], pagination: { currentPage: 1, totalPages: 1, totalItems: 0, itemsPerPage: 20 } }; }
-  async getTicket(id: string) { return { success: true, ticket: {} }; }
-  async createTicket(data: any) { return { success: true, ticket: {} }; }
-  async updateTicket(id: string, data: any, adminId: string) { return { success: true, ticket: {} }; }
-  async updateTicketStatus(id: string, status: string, adminId: string, reason?: string) { return { success: true, ticket: {} }; }
-  async assignTicket(assignment: any) { return { success: true, assignment: {} }; }
-  async escalateTicket(escalation: any) { return { success: true, escalation: {} }; }
-  async mergeTickets(parentId: string, childIds: string[], adminId: string, reason?: string) { return { success: true, merged: {} }; }
-}
-
-class SupportAgentService {
-  async getAgents(filters: any, pagination: any) { return { success: true, agents: [], pagination: { currentPage: 1, totalPages: 1, totalItems: 0, itemsPerPage: 20 } }; }
-  async createAgent(data: any) { return { success: true, agent: {} }; }
-  async updateAgent(id: string, data: any) { return { success: true, agent: {} }; }
-  async getAgentPerformance(id: string, periodType: string, periods: number) { return { success: true, performance: {} }; }
-  async scheduleAgent(data: any) { return { success: true, schedule: {} }; }
-}
-
-class SupportMessageService {
-  async sendReply(data: any) { return { success: true, message: {} }; }
-  async getTicketMessages(ticketId: string, includeInternal: boolean, pagination: any) { return { success: true, messages: [], pagination: { currentPage: 1, totalPages: 1, totalItems: 0, itemsPerPage: 20 } }; }
-}
-
-class SupportAnalyticsService {
-  async getSupportOverview(start?: Date, end?: Date) { return { success: true, overview: {} }; }
-  async getAgentPerformance(agents?: string[], period?: string, start?: Date, end?: Date) { return { success: true, performance: {} }; }
-  async getTicketAnalytics(start?: Date, end?: Date) { return { success: true, analytics: {} }; }
-  async getSatisfactionAnalytics(start?: Date, end?: Date) { return { success: true, satisfaction: {} }; }
-}
-
-class SupportKnowledgeBaseService {
-  async getArticles(filters: any, pagination: any) { return { success: true, articles: [], pagination: { currentPage: 1, totalPages: 1, totalItems: 0, itemsPerPage: 20 } }; }
-  async createArticle(data: any) { return { success: true, article: {} }; }
-  async updateArticle(id: string, data: any, adminId: string) { return { success: true, article: {} }; }
-}
+import { 
+  SupportTicketService,
+  SupportAgentService,
+  SupportMessageService,
+  SupportAnalyticsService,
+  SupportKnowledgeBaseService
+} from '../../services/support';
+import { 
+  SupportTicketRepository,
+  SupportAgentRepository,
+  SupportMessageRepository,
+  SupportKnowledgeBaseRepository
+} from '../../repositories';
 
 interface PaginationOptions {
   page: number;
@@ -83,10 +51,22 @@ export class AdminSupportController extends BaseAdminController {
     knowledgeBaseService?: SupportKnowledgeBaseService
   ) {
     super();
+    
+    // Initialize repositories
+    const ticketRepository = new SupportTicketRepository();
+    const agentRepository = new SupportAgentRepository();
+    const messageRepository = new SupportMessageRepository();
+    const knowledgeBaseRepository = new SupportKnowledgeBaseRepository();
+    
+    // Initialize services with proper dependencies
     this.ticketService = ticketService || new SupportTicketService();
     this.agentService = agentService || new SupportAgentService();
     this.messageService = messageService || new SupportMessageService();
-    this.analyticsService = analyticsService || new SupportAnalyticsService();
+    this.analyticsService = analyticsService || new SupportAnalyticsService(
+      ticketRepository,
+      agentRepository,
+      messageRepository
+    );
     this.knowledgeBaseService = knowledgeBaseService || new SupportKnowledgeBaseService();
   }
 
@@ -166,7 +146,19 @@ export class AdminSupportController extends BaseAdminController {
       }
 
       const result = await this.ticketService.getTickets(filters, pagination);
-      this.sendAdminSuccess(res, result, 'Tickets retrieved successfully');
+      
+      // Transform the result to match expected format
+      const responseData = {
+        tickets: result.data.items || [],
+        pagination: {
+          currentPage: result.data.page,
+          totalPages: result.data.pages,
+          totalItems: result.data.total,
+          itemsPerPage: result.data.limit
+        }
+      };
+      
+      this.sendAdminSuccess(res, responseData, 'Tickets retrieved successfully');
     } catch (error) {
       this.handleError(error, req, res);
     }
@@ -180,7 +172,7 @@ export class AdminSupportController extends BaseAdminController {
     try {
       const { ticketId } = req.params;
       const result = await this.ticketService.getTicket(ticketId);
-      this.sendAdminSuccess(res, result, 'Ticket retrieved successfully');
+      this.sendAdminSuccess(res, { ticket: result.data }, 'Ticket retrieved successfully');
     } catch (error) {
       this.handleError(error, req, res);
     }
@@ -196,13 +188,14 @@ export class AdminSupportController extends BaseAdminController {
       const ticketData = {
         ...req.body,
         customerId: req.body.customerId,
-        source: req.body.source || 'web',
-        language: req.body.language || 'en',
-        priority: req.body.priority || 'medium',
+        source: req.body.source || 'WEB',
+        language: req.body.language || 'ENGLISH',
+        priority: req.body.priority || 'MEDIUM',
+        category: req.body.category || 'GENERAL'
       };
 
       const result = await this.ticketService.createTicket(ticketData);
-      this.sendAdminSuccess(res, result, 'Ticket created successfully', 201);
+      this.sendAdminSuccess(res, { ticket: result.data }, 'Ticket created successfully', 201);
     } catch (error) {
       this.handleError(error, req, res);
     }
@@ -221,7 +214,7 @@ export class AdminSupportController extends BaseAdminController {
         req.body,
         req.user!.id
       );
-      this.sendAdminSuccess(res, result, 'Operation completed successfully');
+      this.sendAdminSuccess(res, { ticket: result.data }, 'Ticket updated successfully');
     } catch (error) {
       this.handleError(error, req, res);
     }
@@ -236,8 +229,8 @@ export class AdminSupportController extends BaseAdminController {
       const { ticketId } = req.params;
       const { status, reason } = req.body;
 
-      // Validate status - simplified for now
-      const validStatuses = ['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'];
+      // Validate status using Prisma enums
+      const validStatuses = ['OPEN', 'IN_PROGRESS', 'PENDING_CUSTOMER', 'RESOLVED', 'CLOSED'];
       if (!validStatuses.includes(status)) {
         return this.sendError(res, 'Invalid ticket status', HTTP_STATUS.BAD_REQUEST, 'VALIDATION_ERROR');
       }
@@ -248,7 +241,7 @@ export class AdminSupportController extends BaseAdminController {
         req.user!.id,
         reason
       );
-      this.sendAdminSuccess(res, result, 'Operation completed successfully');
+      this.sendAdminSuccess(res, { ticket: result.data }, 'Ticket status updated successfully');
     } catch (error) {
       this.handleError(error, req, res);
     }
@@ -272,7 +265,7 @@ export class AdminSupportController extends BaseAdminController {
       };
 
       const result = await this.ticketService.assignTicket(assignment);
-      this.sendAdminSuccess(res, result, 'Operation completed successfully');
+      this.sendAdminSuccess(res, { assignment: result.data }, 'Ticket assigned successfully');
     } catch (error) {
       this.handleError(error, req, res);
     }

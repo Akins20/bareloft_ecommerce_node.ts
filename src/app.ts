@@ -4,6 +4,7 @@ import helmet from "helmet";
 import compression from "compression";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
+import cookieParser from "cookie-parser";
 
 // Configuration imports
 import { config } from "./config/environment";
@@ -41,6 +42,7 @@ import uploadRoutes from "./routes/v1/upload";
 import paymentRoutes from "./routes/v1/payments";
 import notificationRoutes from "./routes/v1/notifications";
 import returnsRoutes from "./routes/v1/returns";
+import shippingRoutes from "./routes/v1/shipping";
 
 // Admin routes
 import adminRoutes from "./routes/admin";
@@ -149,6 +151,9 @@ class App {
       })
     );
 
+    // Cookie parser middleware for cookie-based authentication
+    this.app.use(cookieParser());
+
     // Request parsing with larger limits for file uploads
     this.app.use(
       express.json({
@@ -199,6 +204,7 @@ class App {
           cart: "/api/v1/cart",
           orders: "/api/v1/orders",
           payments: "/api/v1/payments",
+          shipping: "/api/v1/shipping",
           addresses: "/api/v1/addresses",
           reviews: "/api/v1/reviews",
           wishlist: "/api/v1/wishlist",
@@ -222,6 +228,7 @@ class App {
     this.app.use(`${apiV1}/products`, productRoutes);
     this.app.use(`${apiV1}/categories`, categoryRoutes);
     this.app.use(`${apiV1}/search`, searchRoutes);
+    this.app.use(`${apiV1}/shipping`, shippingRoutes);
 
     // Cart routes (supports both authenticated and guest users)
     this.app.use(`${apiV1}/cart`, cartRoutes);

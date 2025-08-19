@@ -51,27 +51,24 @@ export const authenticate = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // Extract token from Authorization header
+    // Extract token from Authorization header or cookies
+    let token: string | undefined;
     const authHeader = req.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      // Bearer token from Authorization header
+      token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    } else if (req.cookies && req.cookies.accessToken) {
+      // Cookie-based authentication (for web frontend)
+      token = req.cookies.accessToken;
+    }
+
+    if (!token) {
       res.status(401).json({
         success: false,
         error: "AUTHENTICATION_REQUIRED",
         message: "Please log in to access this resource",
         code: "AUTH_001",
-      });
-      return;
-    }
-
-    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-
-    if (!token) {
-      res.status(401).json({
-        success: false,
-        error: "INVALID_TOKEN",
-        message: "Authentication token is missing",
-        code: "AUTH_002",
       });
       return;
     }
