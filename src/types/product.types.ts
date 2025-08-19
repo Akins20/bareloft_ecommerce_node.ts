@@ -29,6 +29,14 @@ export interface Product extends BaseEntity {
   seoTitle?: string;
   seoDescription?: string;
 
+  // Inventory fields
+  stock?: number;
+  lowStockThreshold?: number;
+  trackQuantity?: boolean;
+  isDigital?: boolean;
+  requiresShipping?: boolean;
+  barcode?: string;
+
   // Relationships
   category: Category;
   images: ProductImage[];

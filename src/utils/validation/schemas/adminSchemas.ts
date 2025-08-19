@@ -5,6 +5,24 @@ import Joi from "joi";
  */
 
 /**
+ * Custom CUID/UUID validation for Prisma IDs
+ */
+const customId = Joi.string().custom((value, helpers) => {
+  // CUID format: c + 24 lowercase alphanumeric
+  const cuidRegex = /^c[0-9a-z]{24}$/;
+  // UUID format: standard UUID with dashes
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  
+  if (cuidRegex.test(value) || uuidRegex.test(value)) {
+    return value;
+  }
+  
+  return helpers.error('string.invalidId');
+}).messages({
+  'string.invalidId': 'ID must be a valid CUID or UUID format'
+});
+
+/**
  * Inventory management schemas
  */
 export const inventorySchemas = {
@@ -12,11 +30,7 @@ export const inventorySchemas = {
    * Update inventory schema
    */
   updateInventory: Joi.object({
-    productId: Joi.string().uuid().required().messages({
-      "string.uuid": "Product ID must be a valid UUID",
-      "any.required": "Product ID is required",
-    }),
-
+    // productId comes from URL params, not request body
     quantity: Joi.number().integer().min(0).optional().messages({
       "number.integer": "Quantity must be a whole number",
       "number.min": "Quantity must be non-negative",
@@ -39,11 +53,19 @@ export const inventorySchemas = {
 
     allowBackorder: Joi.boolean().optional(),
 
+    unitCost: Joi.number().min(0).optional().messages({
+      "number.min": "Unit cost must be non-negative",
+    }),
+
+    location: Joi.string().max(255).optional().allow(null, "").messages({
+      "string.max": "Location must not exceed 255 characters",
+    }),
+
     reason: Joi.string().max(500).optional().allow("").messages({
       "string.max": "Reason must not exceed 500 characters",
     }),
 
-    notes: Joi.string().max(1000).optional().allow("").messages({
+    notes: Joi.string().max(1000).optional().allow(null, "").messages({
       "string.max": "Notes must not exceed 1000 characters",
     }),
   }),
@@ -81,11 +103,7 @@ export const inventorySchemas = {
    * Inventory adjustment schema
    */
   inventoryAdjustment: Joi.object({
-    productId: Joi.string().uuid().required().messages({
-      "string.uuid": "Product ID must be a valid UUID",
-      "any.required": "Product ID is required",
-    }),
-
+    // productId comes from URL params, not request body
     adjustmentType: Joi.string()
       .valid("set", "increase", "decrease")
       .required()

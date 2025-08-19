@@ -237,10 +237,12 @@ export abstract class BaseController {
   /**
    * Validate UUID format
    */
-  protected isValidUUID(uuid: string): boolean {
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(uuid);
+  protected isValidUUID(id: string): boolean {
+    // Support both CUID (Prisma default) and UUID formats
+    const cuidRegex = /^c[0-9a-z]{24}$/; // CUID format: c + 24 lowercase alphanumeric
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    
+    return cuidRegex.test(id) || uuidRegex.test(id);
   }
 
   /**

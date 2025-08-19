@@ -85,6 +85,14 @@ router.get("/movements", inventoryController.getInventoryMovements);
 // ========================
 
 /**
+ * @route   POST /api/admin/inventory
+ * @desc    Create new inventory item for a product
+ * @access  Admin, Super Admin
+ * @body    productId, quantity?, unitCost?, lowStockThreshold?, reorderPoint?, reorderQuantity?, allowBackorder?, location?, notes?
+ */
+router.post("/", inventoryController.createInventoryItem);
+
+/**
  * @route   GET /api/admin/inventory/:productId
  * @desc    Get detailed inventory information for specific product
  * @access  Admin, Super Admin
@@ -100,6 +108,15 @@ router.get("/:productId", inventoryController.getProductInventory);
  * @body    quantity?, lowStockThreshold?, reorderPoint?, reorderQuantity?, allowBackorder?, reason?, notes?
  */
 router.put("/:productId", inventoryController.updateInventory);
+
+/**
+ * @route   DELETE /api/admin/inventory/:productId
+ * @desc    Delete inventory item for a product
+ * @access  Admin, Super Admin
+ * @param   productId - Product ID (UUID)
+ * @body    reason?, notes?
+ */
+router.delete("/:productId", inventoryController.deleteInventoryItem);
 
 /**
  * @route   POST /api/admin/inventory/:productId/adjust

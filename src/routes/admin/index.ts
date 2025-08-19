@@ -6,6 +6,7 @@ import { rateLimiter } from "../../middleware/security/rateLimiter";
 // Import admin route modules
 import dashboardRoutes from "./dashboard";
 import userRoutes from "./users";
+import productRoutes from "./products";
 import orderRoutes from "./orders";
 import bulkOrderRoutes from "./bulkOrders";
 import inventoryRoutes from "./inventory";
@@ -61,6 +62,19 @@ router.get("/", (req, res) => {
           "PUT /:id - Update user",
           "DELETE /:id - Delete/deactivate user",
           "POST /bulk - Bulk user actions"
+        ]
+      },
+      products: {
+        base: "/api/admin/products",
+        description: "Product management and administration",
+        endpoints: [
+          "GET / - List all products with filtering",
+          "GET /statistics - Product statistics",
+          "GET /:id - Get product details",
+          "POST / - Create new product",
+          "PUT /:id - Update product",
+          "DELETE /:id - Delete/deactivate product",
+          "POST /bulk - Bulk product actions"
         ]
       },
       orders: {
@@ -349,6 +363,7 @@ router.get("/health", (req, res) => {
 // Mount admin route modules
 router.use("/dashboard", dashboardRoutes);
 router.use("/users", userRoutes);
+router.use("/products", productRoutes);
 router.use("/orders/bulk", bulkOrderRoutes); // Mount bulk routes before general order routes
 router.use("/orders", orderRoutes);
 router.use("/inventory", inventoryRoutes);

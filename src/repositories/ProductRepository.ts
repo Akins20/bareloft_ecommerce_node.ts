@@ -49,6 +49,10 @@ export interface UpdateProductData {
   isFeatured?: boolean;
   seoTitle?: string;
   seoDescription?: string;
+  // Inventory related fields
+  stock?: number;
+  lowStockThreshold?: number;
+  trackQuantity?: boolean;
 }
 
 export class ProductRepository extends BaseRepository<
