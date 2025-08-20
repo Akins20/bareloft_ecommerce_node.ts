@@ -855,26 +855,56 @@ export class OrderService extends BaseService {
 
     try {
       console.log("🔄 Step 1: Processing cart data...");
-      // Get current cart data using session approach
-      // Since we don't have userId for guest, we'll need to get cart from session
-      const sessionId = orderData.sessionId || "guest"; // Frontend should provide session ID
+      // Get session ID from request - multiple possible sources
+      const sessionId = orderData.sessionId || 
+                       orderData.guestSessionId ||
+                       orderData.headers?.['x-session-id'] ||
+                       "guest-" + Date.now(); // Fallback session ID
       console.log("🆔 Session ID:", sessionId);
 
-      // For now, let's get cart data from the request or use mock data
-      // Frontend should pass the current cart data in the checkout request
-      const cartData = orderData.cartData || {
-        items: [],
-        subtotal: 0,
-        estimatedTax: 0,
-        estimatedShipping: 0,
-        estimatedTotal: 0,
-      };
-      console.log("🛒 CART DATA:", JSON.stringify(cartData, null, 2));
+      // Get guest cart data from cart service if available, otherwise use provided cart data
+      let cartData;
+      try {
+        console.log("🔄 Attempting to retrieve guest cart from session...");
+        // Use the existing cart service if available
+        if (this.cartService && typeof this.cartService.getGuestCart === 'function') {
+          const guestCart = await this.cartService.getGuestCart(sessionId);
+          console.log("✅ Retrieved guest cart from service:", JSON.stringify(guestCart, null, 2));
+          
+          cartData = {
+            items: guestCart.items || [],
+            subtotal: guestCart.subtotal || 0,
+            estimatedTax: guestCart.estimatedTax || 0,
+            estimatedShipping: guestCart.estimatedShipping || 0,
+            estimatedTotal: guestCart.estimatedTotal || guestCart.subtotal || 0,
+          };
+        } else {
+          console.log("⚠️ Cart service not available, using provided cart data");
+          cartData = orderData.cartData || {
+            items: [],
+            subtotal: 0,
+            estimatedTax: 0,
+            estimatedShipping: 0,
+            estimatedTotal: 0,
+          };
+        }
+      } catch (cartError) {
+        console.warn("⚠️ Error retrieving guest cart, falling back to provided cart data:", cartError);
+        cartData = orderData.cartData || {
+          items: [],
+          subtotal: 0,
+          estimatedTax: 0,
+          estimatedShipping: 0,
+          estimatedTotal: 0,
+        };
+      }
+
+      console.log("🛒 FINAL CART DATA:", JSON.stringify(cartData, null, 2));
 
       if (!cartData.items || cartData.items.length === 0) {
         console.error("❌ Cart is empty!");
         throw new AppError(
-          "Cart is empty. Please add items before checkout.",
+          "Cart is empty. Please add items to your cart before checkout.",
           HTTP_STATUS.BAD_REQUEST,
           ERROR_CODES.INVALID_INPUT
         );
@@ -1145,6 +1175,20 @@ export class OrderService extends BaseService {
       } catch (jobError) {
         console.warn("⚠️ Failed to schedule payment verification job for guest order:", jobError);
         // Don't fail the order creation if job scheduling fails
+      }
+
+      // Clear guest cart after successful order creation
+      try {
+        console.log("🔄 Step 8: Clearing guest cart after successful order creation...");
+        if (this.cartService && typeof this.cartService.clearGuestCart === 'function') {
+          await this.cartService.clearGuestCart(sessionId);
+          console.log("✅ Guest cart cleared successfully");
+        } else {
+          console.log("⚠️ Cart service not available for clearing guest cart");
+        }
+      } catch (cartClearError) {
+        console.warn("⚠️ Failed to clear guest cart (non-critical):", cartClearError);
+        // Don't fail the order creation if cart clearing fails
       }
 
       return {

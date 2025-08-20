@@ -3,7 +3,7 @@
   "info": {
     "title": "Bareloft E-commerce API",
     "version": "1.0.0",
-    "description": "Nigerian E-commerce Platform Backend API - Comprehensive documentation for all endpoints",
+    "description": "Nigerian E-commerce Platform Backend API - Comprehensive documentation for all endpoints including authentication, products, cart, orders, payments, and admin functionality.",
     "contact": {
       "name": "Bareloft Development Team",
       "email": "dev@bareloft.com",
@@ -16,8 +16,12 @@
   },
   "servers": [
     {
-      "url": "http://localhost:3000",
-      "description": "Development server"
+      "url": "http://localhost:3007",
+      "description": "Development server (Main API)"
+    },
+    {
+      "url": "http://localhost:3008", 
+      "description": "Development server (Admin API)"
     },
     {
       "url": "https://api.bareloft.com",
@@ -37,190 +41,172 @@
         "in": "header",
         "name": "X-Session-ID",
         "description": "Session ID for guest cart operations"
+      },
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "API key for admin endpoints"
       }
     },
     "schemas": {
-      "LoginRequest": {
+      "ApiResponse": {
         "type": "object",
-        "required": [
-          "phoneNumber",
-          "otp"
-        ],
         "properties": {
-          "phoneNumber": {
-            "type": "string",
-            "example": "+2348012345678"
-          },
-          "otp": {
-            "type": "string",
-            "example": "123456"
+          "success": { "type": "boolean", "example": true },
+          "message": { "type": "string", "example": "Operation successful" },
+          "data": { "type": "object" },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string", "example": "VALIDATION_ERROR" },
+              "details": { "type": "string", "example": "Invalid request data" }
+            }
           }
         }
       },
       "User": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string",
-            "example": "user_123"
-          },
-          "phoneNumber": {
-            "type": "string",
-            "example": "+2348012345678"
-          },
-          "firstName": {
-            "type": "string",
-            "example": "John"
-          },
-          "lastName": {
-            "type": "string",
-            "example": "Doe"
-          },
-          "email": {
-            "type": "string",
-            "example": "john.doe@example.com"
-          },
-          "isVerified": {
-            "type": "boolean",
-            "example": true
-          },
-          "role": {
-            "type": "string",
-            "enum": [
-              "CUSTOMER",
-              "ADMIN",
-              "SUPER_ADMIN"
-            ]
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
-          }
+          "id": { "type": "string", "example": "user_123" },
+          "phoneNumber": { "type": "string", "example": "+2348012345678" },
+          "firstName": { "type": "string", "example": "John" },
+          "lastName": { "type": "string", "example": "Doe" },
+          "email": { "type": "string", "example": "john.doe@example.com" },
+          "isVerified": { "type": "boolean", "example": true },
+          "role": { "type": "string", "enum": ["CUSTOMER", "ADMIN", "SUPER_ADMIN"] },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
         }
       },
       "Product": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string",
-            "example": "prod_123"
-          },
-          "name": {
-            "type": "string",
-            "example": "Nigerian Ankara Dress"
-          },
-          "description": {
-            "type": "string",
-            "example": "Beautiful traditional Nigerian dress"
-          },
-          "price": {
-            "type": "number",
-            "example": 25000
-          },
-          "comparePrice": {
-            "type": "number",
-            "example": 30000
-          },
-          "currency": {
-            "type": "string",
-            "example": "NGN"
-          },
-          "sku": {
-            "type": "string",
-            "example": "ANK-001"
-          },
-          "stock": {
-            "type": "number",
-            "example": 50
-          },
-          "isActive": {
-            "type": "boolean",
-            "example": true
-          },
-          "primaryImage": {
-            "type": "string",
-            "example": "https://cdn.bareloft.com/products/ankara-dress-1.jpg"
-          },
-          "rating": {
-            "type": "number",
-            "example": 4.5
-          },
-          "reviewCount": {
-            "type": "number",
-            "example": 23
-          }
+          "id": { "type": "string", "example": "prod_123" },
+          "name": { "type": "string", "example": "Nigerian Ankara Dress" },
+          "description": { "type": "string", "example": "Beautiful traditional Nigerian dress" },
+          "price": { "type": "number", "example": 25000 },
+          "comparePrice": { "type": "number", "example": 30000 },
+          "currency": { "type": "string", "example": "NGN" },
+          "sku": { "type": "string", "example": "ANK-001" },
+          "stock": { "type": "number", "example": 50 },
+          "isActive": { "type": "boolean", "example": true },
+          "primaryImage": { "type": "string", "example": "https://cdn.bareloft.com/products/ankara-dress-1.jpg" },
+          "rating": { "type": "number", "example": 4.5 },
+          "reviewCount": { "type": "number", "example": 23 }
         }
       },
       "Cart": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string",
-            "example": "cart_user_123"
-          },
-          "items": {
-            "type": "array",
-            "items": {
-              "type": "object"
+          "id": { "type": "string", "example": "cart_user_123" },
+          "items": { "type": "array", "items": { "type": "object" } },
+          "itemCount": { "type": "number", "example": 3 },
+          "subtotal": { "type": "number", "example": 75000 },
+          "estimatedTax": { "type": "number", "example": 5625 },
+          "estimatedShipping": { "type": "number", "example": 2000 },
+          "estimatedTotal": { "type": "number", "example": 82625 },
+          "currency": { "type": "string", "example": "NGN" }
+        }
+      },
+      "NigerianAddress": {
+        "type": "object",
+        "required": ["firstName", "lastName", "addressLine1", "city", "state", "phoneNumber"],
+        "properties": {
+          "firstName": { "type": "string", "example": "Adebayo" },
+          "lastName": { "type": "string", "example": "Ogundimu" },
+          "addressLine1": { "type": "string", "example": "15 Allen Avenue" },
+          "addressLine2": { "type": "string", "example": "Ikeja" },
+          "city": { "type": "string", "example": "Lagos" },
+          "state": { "type": "string", "example": "Lagos State" },
+          "postalCode": { "type": "string", "example": "101001" },
+          "phoneNumber": { "type": "string", "example": "+2348012345678" },
+          "isDefault": { "type": "boolean", "example": true }
+        }
+      },
+      "ShippingOption": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "standard" },
+          "name": { "type": "string", "example": "Standard Delivery" },
+          "description": { "type": "string", "example": "3-5 business days" },
+          "price": { "type": "number", "example": 2500 },
+          "estimatedDays": { "type": "number", "example": 4 },
+          "isAvailable": { "type": "boolean", "example": true },
+          "carrier": { "type": "string", "example": "GIG Logistics" }
+        }
+      },
+      "PaymentMethod": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "paystack" },
+          "name": { "type": "string", "example": "Paystack" },
+          "type": { "type": "string", "enum": ["CARD", "BANK_TRANSFER", "USSD", "CASH_ON_DELIVERY"] },
+          "isAvailable": { "type": "boolean", "example": true },
+          "fees": { "type": "number", "example": 150 },
+          "description": { "type": "string", "example": "Pay with your debit/credit card via Paystack" }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "ord_123" },
+          "orderNumber": { "type": "string", "example": "BL-2025-001234" },
+          "status": { "type": "string", "enum": ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"] },
+          "paymentStatus": { "type": "string", "enum": ["PENDING", "COMPLETED", "FAILED", "REFUNDED"] },
+          "total": { "type": "number", "example": 87500 },
+          "currency": { "type": "string", "example": "NGN" },
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/OrderItem" } },
+          "shippingAddress": { "$ref": "#/components/schemas/NigerianAddress" },
+          "estimatedDelivery": { "type": "string", "format": "date" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "OrderItem": {
+        "type": "object",
+        "properties": {
+          "productId": { "type": "string", "example": "prod_123" },
+          "productName": { "type": "string", "example": "Nigerian Ankara Dress" },
+          "quantity": { "type": "number", "example": 2 },
+          "unitPrice": { "type": "number", "example": 25000 },
+          "totalPrice": { "type": "number", "example": 50000 }
+        }
+      },
+      "PerformanceMetrics": {
+        "type": "object",
+        "properties": {
+          "timeWindow": { "type": "number", "example": 60000 },
+          "totalRequests": { "type": "number", "example": 1250 },
+          "averageResponseTime": { "type": "number", "example": 245.5 },
+          "p95ResponseTime": { "type": "number", "example": 890.2 },
+          "p99ResponseTime": { "type": "number", "example": 1240.8 },
+          "errorRate": { "type": "number", "example": 2.1 },
+          "requestsPerSecond": { "type": "number", "example": 20.8 },
+          "memoryUsage": { 
+            "type": "object",
+            "properties": {
+              "heapUsed": { "type": "number", "example": 45.2 },
+              "heapTotal": { "type": "number", "example": 67.8 },
+              "rss": { "type": "number", "example": 128.4 }
             }
-          },
-          "itemCount": {
-            "type": "number",
-            "example": 3
-          },
-          "subtotal": {
-            "type": "number",
-            "example": 75000
-          },
-          "estimatedTax": {
-            "type": "number",
-            "example": 5625
-          },
-          "estimatedShipping": {
-            "type": "number",
-            "example": 2000
-          },
-          "estimatedTotal": {
-            "type": "number",
-            "example": 82625
-          },
-          "currency": {
-            "type": "string",
-            "example": "NGN"
           }
         }
       },
-      "ApiResponse": {
+      "HealthCheck": {
         "type": "object",
         "properties": {
-          "success": {
-            "type": "boolean",
-            "example": true
-          },
-          "message": {
-            "type": "string",
-            "example": "Operation successful"
-          },
-          "data": {
-            "type": "object"
-          },
-          "error": {
+          "status": { "type": "string", "enum": ["healthy", "degraded", "unhealthy"] },
+          "uptime": { "type": "number", "example": 3600 },
+          "version": { "type": "string", "example": "v18.19.0" },
+          "checks": {
             "type": "object",
             "properties": {
-              "code": {
-                "type": "string",
-                "example": "VALIDATION_ERROR"
-              },
-              "details": {
-                "type": "string",
-                "example": "Invalid request data"
-              }
+              "api": { "type": "object" },
+              "memory": { "type": "object" },
+              "system": { "type": "object" }
             }
-          }
+          },
+          "recommendations": { "type": "array", "items": { "type": "string" } }
         }
       }
     }
@@ -257,6 +243,22 @@
     {
       "name": "Search",
       "description": "Product search and filtering"
+    },
+    {
+      "name": "Shipping",
+      "description": "Nigerian shipping and logistics (GIG, DHL, RedStar)"
+    },
+    {
+      "name": "Metrics",
+      "description": "Performance monitoring and system health"
+    },
+    {
+      "name": "Admin",
+      "description": "Administrative endpoints for system management"
+    },
+    {
+      "name": "Nigerian Features",
+      "description": "Nigeria-specific features (Naira currency, local addresses, phone numbers)"
     }
   ],
   "paths": {}

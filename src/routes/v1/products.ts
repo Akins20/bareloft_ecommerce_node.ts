@@ -49,48 +49,118 @@ const router = Router();
 const productController = new ProductController(productService);
 
 /**
- * @route   GET /api/v1/products
- * @desc    Get products with filtering, search, and pagination
- * @access  Public
- * @cache   5 minutes
- *
- * @query {
- *   page?: number,           // Page number (default: 1)
- *   limit?: number,          // Items per page (default: 20, max: 100)
- *   categoryId?: string,     // Filter by category ID
- *   search?: string,         // Search in name and description
- *   minPrice?: number,       // Minimum price filter
- *   maxPrice?: number,       // Maximum price filter
- *   brand?: string,          // Filter by brand
- *   isActive?: boolean,      // Filter by active status
- *   isFeatured?: boolean,    // Filter by featured status
- *   sortBy?: string,         // Sort field: 'name'|'price'|'createdAt'|'rating'
- *   sortOrder?: string,      // Sort order: 'asc'|'desc'
- *   inStock?: boolean        // Filter by stock availability
- * }
- *
- * @response {
- *   success: true,
- *   message: "Products retrieved successfully",
- *   data: {
- *     products: Product[],
- *     pagination: {
- *       page: number,
- *       limit: number,
- *       total: number,
- *       totalPages: number
- *     },
- *     filters: {
- *       categories: Category[],
- *       brands: string[],
- *       priceRange: { min: number, max: number }
- *     }
- *   }
- * }
+ * @swagger
+ * /api/v1/products:
+ *   get:
+ *     summary: Get product catalog with filtering and search
+ *     description: Retrieve products from the Nigerian e-commerce catalog with advanced filtering, search, pagination, and sorting capabilities. Includes faceted search for categories, brands, and price ranges.
+ *     tags: [Products, Nigerian Features]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *           maximum: 100
+ *         description: Number of items per page
+ *       - in: query
+ *         name: categoryId
+ *         schema:
+ *           type: string
+ *         description: Filter by specific category ID
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search query for product names and descriptions
+ *       - in: query
+ *         name: minPrice
+ *         schema:
+ *           type: number
+ *         description: Minimum price in Nigerian Naira (NGN)
+ *       - in: query
+ *         name: maxPrice
+ *         schema:
+ *           type: number
+ *         description: Maximum price in Nigerian Naira (NGN)
+ *       - in: query
+ *         name: brand
+ *         schema:
+ *           type: string
+ *         description: Filter by brand name
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [name, price, createdAt, rating]
+ *           default: createdAt
+ *         description: Sort field
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: Sort order
+ *     responses:
+ *       200:
+ *         description: Products retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Products retrieved successfully"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     products:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Product'
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         page:
+ *                           type: integer
+ *                         totalPages:
+ *                           type: integer
+ *                         totalItems:
+ *                           type: integer
+ *                     facets:
+ *                       type: object
+ *                       properties:
+ *                         priceRange:
+ *                           type: object
+ *                           properties:
+ *                             min:
+ *                               type: number
+ *                             max:
+ *                               type: number
+ *                         marketRecommendations:
+ *                           type: array
+ *                           items:
+ *                             type: string
+ *                           example: ["Optimize for mobile-first Nigerian customers"]
+ *       400:
+ *         description: Invalid request parameters
+ *       500:
+ *         description: Internal server error
  */
 router.get(
   "/",
-  // cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now // 5 minutes cache
+  cacheMiddleware({ ttl: 300 }), // 5 minutes cache - ENABLED for performance
   productController.getProducts
 );
 
@@ -112,7 +182,7 @@ router.get(
  */
 router.get(
   "/featured",
-  // cacheMiddleware({ ttl: 600 }), // 10 minute cache - disabled for now // 10 minutes cache
+  cacheMiddleware({ ttl: 600 }), // 10 minutes cache - ENABLED for performance
   productController.getFeaturedProducts
 );
 
@@ -204,7 +274,7 @@ router.post(
  */
 router.get(
   "/category/:categoryId",
-  // cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now // 5 minutes cache
+  cacheMiddleware({ ttl: 300 }), // 5 minutes cache - ENABLED for performance
   productController.getProductsByCategory
 );
 
@@ -238,7 +308,7 @@ router.get(
  */
 router.get(
   "/:id",
-  // cacheMiddleware({ ttl: 600 }), // 10 minute cache - disabled for now // 10 minutes cache
+  cacheMiddleware({ ttl: 600 }), // 10 minutes cache - ENABLED for performance
   productController.getProductById
 );
 
@@ -260,7 +330,7 @@ router.get(
  */
 router.get(
   "/slug/:slug",
-  // cacheMiddleware({ ttl: 600 }), // 10 minute cache - disabled for now // 10 minutes cache
+  cacheMiddleware({ ttl: 600 }), // 10 minutes cache - ENABLED for performance
   productController.getProductBySlug
 );
 
@@ -286,7 +356,7 @@ router.get(
  */
 router.get(
   "/:id/related",
-  // cacheMiddleware({ ttl: 900 }), // 15 minute cache - disabled for now // 15 minutes cache
+  cacheMiddleware({ ttl: 900 }), // 15 minutes cache - ENABLED for performance
   productController.getRelatedProducts
 );
 

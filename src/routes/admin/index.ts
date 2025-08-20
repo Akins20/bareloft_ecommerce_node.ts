@@ -2,6 +2,7 @@ import { Router } from "express";
 import { authenticate } from "../../middleware/auth/authenticate";
 import { authorize } from "../../middleware/auth/authorize";
 import { rateLimiter } from "../../middleware/security/rateLimiter";
+import { securityEnhancements } from "../../middleware/security/securityEnhancements";
 
 // Import admin route modules
 import dashboardRoutes from "./dashboard";
@@ -22,6 +23,7 @@ const router = Router();
 // Global admin middleware - applies to all admin routes
 router.use(authenticate);
 router.use(authorize(["ADMIN", "SUPER_ADMIN"]));
+router.use(securityEnhancements.apiKeyAuthentication); // Additional API key security for admin
 router.use(rateLimiter.admin);
 
 /**

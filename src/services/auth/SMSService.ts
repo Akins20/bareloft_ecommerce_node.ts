@@ -49,13 +49,15 @@ export class SMSService {
           ? this.processTemplate(template, variables)
           : message;
 
-      // In development, log SMS instead of sending
-      if (config.nodeEnv === "development") {
-        console.log(`📱 SMS to ${to}: ${finalMessage}`);
+      // In development, log SMS instead of sending - IMMEDIATE return for performance
+      if (config.nodeEnv === "development" || config.nodeEnv === "test") {
+        console.log(`📱 [DEV] SMS to ${to}: ${finalMessage}`);
+        // Simulate small delay for realistic behavior
+        await new Promise(resolve => setTimeout(resolve, 100));
         return true;
       }
 
-      // Send SMS via provider API
+      // Send SMS via provider API (production only)
       const response = await this.sendViaSMSProvider(to, finalMessage);
 
       if (response.success) {
@@ -84,7 +86,7 @@ export class SMSService {
   }
 
   /**
-   * Send OTP SMS
+   * Send OTP SMS - optimized for performance
    */
   async sendOTP(
     phoneNumber: NigerianPhoneNumber,

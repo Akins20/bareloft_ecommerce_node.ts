@@ -5,6 +5,9 @@ import compression from "compression";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import cookieParser from "cookie-parser";
+import swaggerUi from "swagger-ui-express";
+import fs from "fs";
+import path from "path";
 
 // Configuration imports
 import { config } from "./config/environment";
@@ -26,6 +29,12 @@ import { requestLogger } from "./middleware/logging/requestLogger";
 import { rateLimiter } from "./middleware/security/rateLimiter";
 import { authenticate } from "./middleware/auth/authenticate";
 import { slidingSessionMiddleware } from "./middleware/auth/slidingSession";
+import { performanceMiddleware } from "./middleware/monitoring/performanceMiddleware";
+import { sanitizeInput } from "./middleware/validation/sanitizeInput";
+import { xssProtection } from "./middleware/security/xss";
+import { 
+  securityEnhancements 
+} from "./middleware/security/securityEnhancements";
 
 // Route imports - API v1
 import authRoutes from "./routes/v1/auth";
@@ -43,6 +52,7 @@ import paymentRoutes from "./routes/v1/payments";
 import notificationRoutes from "./routes/v1/notifications";
 import returnsRoutes from "./routes/v1/returns";
 import shippingRoutes from "./routes/v1/shipping";
+import metricsRoutes from "./routes/v1/metrics";
 
 // Admin routes
 import adminRoutes from "./routes/admin";
@@ -151,6 +161,34 @@ class App {
       })
     );
 
+    // Performance monitoring middleware - track response times and metrics
+    this.app.use(performanceMiddleware);
+
+    // Enhanced security headers
+    this.app.use(securityEnhancements.enhancedSecurityHeaders);
+
+    // Security audit logging
+    this.app.use(securityEnhancements.securityAuditLogger);
+
+    // Request size limits for DoS protection
+    this.app.use(securityEnhancements.requestSizeLimit(config.security.maxRequestSizeMB));
+
+    // Suspicious activity detection
+    this.app.use(securityEnhancements.suspiciousActivityDetection);
+
+    // SQL and NoSQL injection protection
+    this.app.use(securityEnhancements.sqlInjectionProtection);
+    this.app.use(securityEnhancements.noSqlInjectionProtection);
+
+    // XSS Protection
+    this.app.use(xssProtection);
+
+    // Input sanitization
+    this.app.use(sanitizeInput);
+
+    // Content type validation for POST/PUT requests
+    this.app.use(securityEnhancements.contentTypeValidation(['application/json', 'multipart/form-data']));
+
     // Cookie parser middleware for cookie-based authentication
     this.app.use(cookieParser());
 
@@ -191,32 +229,72 @@ class App {
     this.app.get("/health/detailed", this.detailedHealthCheck.bind(this));
     this.app.get("/", this.welcomeMessage.bind(this));
 
-    // API documentation endpoint
-    this.app.get("/api-docs", (req: Request, res: Response) => {
-      res.json({
-        message: "API Documentation",
-        version: "1.0.0",
-        endpoints: {
-          authentication: "/api/v1/auth",
-          users: "/api/v1/users",
-          products: "/api/v1/products",
-          categories: "/api/v1/categories",
-          cart: "/api/v1/cart",
-          orders: "/api/v1/orders",
-          payments: "/api/v1/payments",
-          shipping: "/api/v1/shipping",
-          addresses: "/api/v1/addresses",
-          reviews: "/api/v1/reviews",
-          wishlist: "/api/v1/wishlist",
-          search: "/api/v1/search",
-          upload: "/api/v1/upload",
-          admin: "/api/v1/admin",
-          webhooks: "/webhooks",
-        },
-        postman: "https://documenter.getpostman.com/bareloft-api",
-        github: "https://github.com/bareloft/api",
+    // Swagger UI documentation
+    try {
+      const swaggerDocument = JSON.parse(
+        fs.readFileSync(path.join(process.cwd(), 'swagger.json'), 'utf8')
+      );
+      
+      this.app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
+        explorer: true,
+        customCss: '.swagger-ui .topbar { display: none }',
+        customSiteTitle: 'Bareloft E-commerce API Documentation',
+        swaggerOptions: {
+          docExpansion: 'none',
+          filter: true,
+          showRequestHeaders: true,
+          showCommonExtensions: true,
+          tryItOutEnabled: true,
+        }
+      }));
+      
+      // Fallback endpoint for API information (available at /api-info)
+      this.app.get("/api-info", (req: Request, res: Response) => {
+        res.json({
+          message: "API Documentation",
+          version: "1.0.0",
+          documentation: "/api-docs",
+          endpoints: {
+            authentication: "/api/v1/auth",
+            users: "/api/v1/users", 
+            products: "/api/v1/products",
+            categories: "/api/v1/categories",
+            cart: "/api/v1/cart",
+            orders: "/api/v1/orders",
+            payments: "/api/v1/payments",
+            shipping: "/api/v1/shipping",
+            addresses: "/api/v1/addresses",
+            reviews: "/api/v1/reviews",
+            wishlist: "/api/v1/wishlist",
+            search: "/api/v1/search",
+            upload: "/api/v1/upload",
+            admin: "/api/v1/admin",
+            webhooks: "/webhooks",
+          },
+          postman: "https://documenter.getpostman.com/bareloft-api",
+          github: "https://github.com/bareloft/api",
+        });
       });
-    });
+    } catch (error) {
+      console.error("Failed to load swagger.json:", error);
+      
+      // Fallback to simple JSON response if swagger.json is not available
+      this.app.get("/api-docs", (req: Request, res: Response) => {
+        res.json({
+          error: "Swagger documentation unavailable",
+          message: "Please run 'npm run docs:generate' to generate API documentation",
+          endpoints: {
+            authentication: "/api/v1/auth",
+            users: "/api/v1/users",
+            products: "/api/v1/products",
+            categories: "/api/v1/categories",
+            cart: "/api/v1/cart",
+            orders: "/api/v1/orders",
+            payments: "/api/v1/payments",
+          }
+        });
+      });
+    }
   }
 
   private initializeRoutes(): void {
@@ -229,6 +307,7 @@ class App {
     this.app.use(`${apiV1}/categories`, categoryRoutes);
     this.app.use(`${apiV1}/search`, searchRoutes);
     this.app.use(`${apiV1}/shipping`, shippingRoutes);
+    this.app.use(`${apiV1}/metrics`, metricsRoutes);
 
     // Cart routes (supports both authenticated and guest users)
     this.app.use(`${apiV1}/cart`, cartRoutes);

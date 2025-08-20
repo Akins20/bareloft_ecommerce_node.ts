@@ -544,6 +544,188 @@ export class CartService extends BaseService {
   }
 
   /**
+   * Validate guest cart items and availability
+   */
+  async validateGuestCart(sessionId: string): Promise<CartValidationResult> {
+    try {
+      const cartKey = `guest_cart:${sessionId}`;
+      const cartData = await redisClient.get(cartKey);
+      
+      if (!cartData) {
+        return {
+          isValid: true,
+          issues: [],
+          cart: {
+            id: `guest_${sessionId}`,
+            sessionId,
+            items: [],
+            subtotal: 0,
+            estimatedTax: 0,
+            estimatedShipping: 0,
+            estimatedTotal: 0,
+            currency: "NGN",
+            itemCount: 0,
+            isValid: true,
+            hasOutOfStockItems: false,
+            hasPriceChanges: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }
+        };
+      }
+
+      const guestCart: GuestCart = cartData as GuestCart;
+      const issues: CartIssue[] = [];
+      let isValid = true;
+      const validatedItems = [];
+      let subtotal = 0;
+
+      for (const item of guestCart.items || []) {
+        try {
+          const product = await this.productRepository.findById?.(item.productId);
+          
+          if (!product) {
+            issues.push({
+              type: "product_unavailable",
+              productId: item.productId,
+              productName: `Product ${item.productId}`,
+              message: "This product is no longer available",
+              severity: "error",
+              action: "remove"
+            });
+            isValid = false;
+            continue;
+          }
+
+          const productData = product as any;
+          const unitPrice = Number(productData.price) || 0;
+          let validQuantity = item.quantity;
+
+          // Check stock availability
+          if (productData.stock < item.quantity) {
+            if (productData.stock === 0) {
+              issues.push({
+                type: "out_of_stock",
+                productId: item.productId,
+                productName: productData.name,
+                message: "This product is currently out of stock",
+                severity: "error",
+                action: "remove"
+              });
+              isValid = false;
+              continue;
+            } else {
+              issues.push({
+                type: "insufficient_stock",
+                productId: item.productId,
+                productName: productData.name,
+                message: `Only ${productData.stock} items available. Quantity adjusted from ${item.quantity} to ${productData.stock}.`,
+                severity: "warning",
+                action: "reduce_quantity"
+              });
+              validQuantity = productData.stock;
+            }
+          }
+
+          // Check if product is active
+          if (!productData.isActive) {
+            issues.push({
+              type: "product_inactive",
+              productId: item.productId,
+              productName: productData.name,
+              message: "This product is no longer available for purchase",
+              severity: "error",
+              action: "remove"
+            });
+            isValid = false;
+            continue;
+          }
+
+          const totalPrice = unitPrice * validQuantity;
+          subtotal += totalPrice;
+
+          validatedItems.push({
+            id: `${sessionId}_${item.productId}`,
+            cartId: `guest_${sessionId}`,
+            productId: item.productId,
+            quantity: validQuantity,
+            unitPrice,
+            totalPrice,
+            product: {
+              id: productData.id,
+              name: productData.name,
+              slug: productData.slug,
+              sku: productData.sku,
+              primaryImage: productData.primaryImage,
+              stock: productData.stock,
+              isActive: productData.isActive
+            },
+            isAvailable: true,
+            hasStockIssue: item.quantity !== validQuantity,
+            priceChanged: false,
+          });
+
+        } catch (error) {
+          console.error(`Error validating guest cart item ${item.productId}:`, error);
+          issues.push({
+            type: "validation_error",
+            productId: item.productId,
+            productName: `Product ${item.productId}`,
+            message: "Unable to validate this item. Please remove and re-add it.",
+            severity: "error",
+            action: "remove"
+          });
+          isValid = false;
+        }
+      }
+
+      // If there are issues that require removing items or reducing quantities, 
+      // update the guest cart in Redis
+      if (issues.some(issue => issue.action === "remove" || issue.action === "reduce_quantity")) {
+        const updatedCart: GuestCart = {
+          ...guestCart,
+          items: validatedItems.map(item => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            addedAt: new Date()
+          })),
+          updatedAt: new Date()
+        };
+
+        await redisClient.set(cartKey, updatedCart, 24 * 60 * 60); // 24 hours TTL
+      }
+
+      const tax = 0; // VAT not applicable for this platform
+      const estimatedTotal = subtotal;
+
+      return {
+        isValid,
+        issues,
+        cart: {
+          id: `guest_${sessionId}`,
+          sessionId,
+          items: validatedItems,
+          subtotal,
+          estimatedTax: tax,
+          estimatedShipping: 0,
+          estimatedTotal,
+          currency: "NGN",
+          itemCount: validatedItems.reduce((sum, item) => sum + item.quantity, 0),
+          isValid,
+          hasOutOfStockItems: issues.some(issue => issue.type === "out_of_stock" || issue.type === "insufficient_stock"),
+          hasPriceChanges: issues.some(issue => issue.type === "price_change"),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+      };
+
+    } catch (error) {
+      this.handleError("Error validating guest cart", error);
+      throw error;
+    }
+  }
+
+  /**
    * Merge guest cart with user cart
    */
   async mergeCart(userId: string, sessionId: string, data: MergeCartRequest): Promise<{ success: boolean; message: string; cart: any }> {

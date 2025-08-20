@@ -41,7 +41,7 @@ const categoryController = new CategoryController(categoryService);
  */
 router.get(
   "/",
-  // cacheMiddleware({ ttl: 300 }), // 5 minute cache - disabled for now
+  cacheMiddleware({ ttl: 300 }), // 5 minutes cache - ENABLED for performance
   async (req, res, next) => {
     try {
       await categoryController.getCategories(req, res);
@@ -62,7 +62,7 @@ router.get(
  */
 router.get(
   "/tree",
-  // cacheMiddleware({ ttl: 600 }), // 10 minute cache - disabled for now
+  cacheMiddleware({ ttl: 600 }), // 10 minutes cache - ENABLED for performance
   async (req, res, next) => {
     try {
       await categoryController.getCategoryTree(req, res);

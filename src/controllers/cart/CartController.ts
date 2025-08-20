@@ -602,29 +602,14 @@ export class CartController extends BaseController {
         return;
       }
 
-      // Handle guest users - return simple validation (no cart validation for guests for now)
+      // Handle guest users - validate guest cart
       if (isGuest && sessionId) {
+        const validation = await this.cartService.validateGuestCart(sessionId);
+
         const response: ApiResponse<any> = {
           success: true,
           message: "Guest cart validation completed",
-          data: {
-            isValid: true,
-            issues: [],
-            cart: {
-              id: `guest_${sessionId}`,
-              sessionId,
-              items: [],
-              subtotal: 0,
-              estimatedTax: 0,
-              estimatedShipping: 0,
-              estimatedTotal: 0,
-              currency: "NGN",
-              itemCount: 0,
-              isValid: true,
-              hasOutOfStockItems: false,
-              hasPriceChanges: false,
-            }
-          },
+          data: validation,
         };
 
         res.json(response);

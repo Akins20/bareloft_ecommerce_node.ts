@@ -46,6 +46,13 @@ export interface Config {
     fromName: string;
     replyTo: string;
   };
+  security: {
+    adminApiKey: string;
+    encryptionKey: string;
+    rateLimitSkipIPs: string[];
+    maxRequestSizeMB: number;
+    sessionSecretKey: string;
+  };
   sms: {
     apiKey: string;
     senderId: string;
@@ -122,6 +129,14 @@ export const config: Config = {
     fromEmail: process.env.FROM_EMAIL || "noreply@bareloft.com",
     fromName: process.env.FROM_NAME || "Bareloft",
     replyTo: process.env.REPLY_TO_EMAIL || process.env.FROM_EMAIL || "noreply@bareloft.com",
+  },
+
+  security: {
+    adminApiKey: process.env.ADMIN_API_KEY || "",
+    encryptionKey: process.env.ENCRYPTION_KEY || "default-encryption-key-change-in-production",
+    rateLimitSkipIPs: process.env.RATE_LIMIT_SKIP_IPS?.split(",") || [],
+    maxRequestSizeMB: parseInt(process.env.MAX_REQUEST_SIZE_MB || "10", 10),
+    sessionSecretKey: process.env.SESSION_SECRET_KEY || "",
   },
 
   sms: {

@@ -119,7 +119,10 @@ export interface CartIssue {
     | "out_of_stock"
     | "price_change"
     | "product_unavailable"
-    | "quantity_limit";
+    | "quantity_limit"
+    | "insufficient_stock"
+    | "product_inactive"
+    | "validation_error";
   productId: string;
   productName: string;
   message: string;

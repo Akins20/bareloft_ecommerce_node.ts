@@ -39,6 +39,14 @@ router.use(rateLimiter.admin);
 router.get("/", orderController.getOrders);
 
 /**
+ * @route   GET /api/admin/orders/statistics
+ * @desc    Get order statistics and analytics (legacy endpoint)
+ * @access  Admin, Super Admin
+ * @query   period - Time period for statistics
+ */
+router.get("/statistics", orderController.getOrderStatistics);
+
+/**
  * @route   GET /api/admin/orders/:id
  * @desc    Get detailed order information by ID
  * @access  Admin, Super Admin
@@ -178,14 +186,6 @@ router.get("/reports/export", orderController.exportOrderData);
 // ========================================
 // LEGACY ENDPOINTS (maintained for compatibility)
 // ========================================
-
-/**
- * @route   GET /api/admin/orders/statistics
- * @desc    Get order statistics and analytics (legacy endpoint)
- * @access  Admin, Super Admin
- * @query   period - Time period for statistics
- */
-router.get("/statistics", orderController.getOrderStatistics);
 
 /**
  * @route   POST /api/admin/orders/bulk

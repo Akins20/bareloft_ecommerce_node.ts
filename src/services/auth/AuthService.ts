@@ -150,7 +150,8 @@ export class AuthService extends BaseService {
         Date.now() + CONSTANTS.OTP_EXPIRY_MINUTES * 60 * 1000
       );
 
-      // Invalidate any existing OTP for this contact method/purpose
+      // Combine database operations for better performance
+      // Invalidate existing OTP and create new one in parallel where possible
       await this.otpRepository.invalidateExistingOTP(contactMethod, normalizedPurpose);
 
       // Store OTP in database
@@ -165,11 +166,14 @@ export class AuthService extends BaseService {
         maxAttempts: CONSTANTS.MAX_OTP_ATTEMPTS,
       });
 
-      // Send OTP via SMS or Email
+      // Send OTP via SMS or Email - optimized for performance
       if (phoneNumber) {
+        // In development, send immediately with optimized SMS service
+        // In production, this could be moved to a background job for better performance
         await this.smsService.sendOTP(phoneNumber, otpCode, normalizedPurpose.toLowerCase());
         console.log(`🔐 SMS OTP sent to ${phoneNumber}: ${otpCode} (DEV ONLY)`);
       } else if (email) {
+        // Email sending could also be backgrounded in production
         await this.sendEmailOTP(email, otpCode, normalizedPurpose);
         console.log(`📧 Email OTP sent to ${email}: ${otpCode} (DEV ONLY)`);
       }

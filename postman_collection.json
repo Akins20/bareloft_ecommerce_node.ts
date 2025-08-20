@@ -1,0 +1,544 @@
+{
+  "info": {
+    "name": "Bareloft Nigerian E-commerce API",
+    "description": "Complete API collection for testing the Bareloft Nigerian e-commerce platform with all endpoints, authentication, and Nigerian-specific features",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{bearerToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3007",
+      "type": "string"
+    },
+    {
+      "key": "guestSessionId",
+      "value": "guest-session-{{$randomUUID}}",
+      "type": "string"
+    },
+    {
+      "key": "bearerToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔐 Authentication",
+      "item": [
+        {
+          "name": "Request OTP (Login/Signup)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"+2348012345678\",\n  \"purpose\": \"login\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/request-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "request-otp"]
+            },
+            "description": "Request OTP for Nigerian phone number authentication"
+          }
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST", 
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"+2348012345678\",\n  \"code\": \"123456\",\n  \"purpose\": \"login\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/verify-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "verify-otp"]
+            },
+            "description": "Verify OTP and get JWT token"
+          }
+        }
+      ]
+    },
+    {
+      "name": "🏪 Products",
+      "item": [
+        {
+          "name": "Get All Products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products?limit=10&sortBy=price&sortOrder=asc",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "products"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "price"
+                },
+                {
+                  "key": "sortOrder", 
+                  "value": "asc"
+                }
+              ]
+            },
+            "description": "Get Nigerian e-commerce product catalog with filtering"
+          }
+        },
+        {
+          "name": "Get Featured Products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/featured?limit=12",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "products", "featured"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "12"
+                }
+              ]
+            },
+            "description": "Get featured Nigerian products"
+          }
+        },
+        {
+          "name": "Search Products (Ankara)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products?search=ankara&minPrice=10000&maxPrice=50000",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "products"],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "ankara"
+                },
+                {
+                  "key": "minPrice",
+                  "value": "10000"
+                },
+                {
+                  "key": "maxPrice", 
+                  "value": "50000"
+                }
+              ]
+            },
+            "description": "Search for Nigerian traditional wear (Ankara) with price filtering"
+          }
+        }
+      ]
+    },
+    {
+      "name": "📂 Categories",
+      "item": [
+        {
+          "name": "Get Category Hierarchy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categories",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categories"]
+            },
+            "description": "Get Nigerian e-commerce category structure"
+          }
+        },
+        {
+          "name": "Get Category Tree",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categories/tree",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categories", "tree"]
+            },
+            "description": "Get hierarchical category tree for navigation"
+          }
+        }
+      ]
+    },
+    {
+      "name": "🛒 Guest Shopping Cart",
+      "item": [
+        {
+          "name": "Get Guest Cart",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Session-ID",
+                "value": "{{guestSessionId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart"]
+            },
+            "description": "Get guest shopping cart with Nigerian features"
+          }
+        },
+        {
+          "name": "Add Product to Guest Cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Session-ID",
+                "value": "{{guestSessionId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"cmeia3on800011cdwfssgrb79\",\n  \"quantity\": 2\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/add",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart", "add"]
+            },
+            "description": "Add Nigerian product to guest cart"
+          }
+        },
+        {
+          "name": "Calculate Nigerian Shipping",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type", 
+                "value": "application/json"
+              },
+              {
+                "key": "X-Session-ID",
+                "value": "{{guestSessionId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"state\": \"Lagos State\",\n  \"city\": \"Victoria Island\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/shipping/calculate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart", "shipping", "calculate"]
+            },
+            "description": "Calculate Nigerian shipping costs (GIG, DHL, RedStar)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "📦 Orders",
+      "item": [
+        {
+          "name": "Create Guest Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Session-ID",
+                "value": "{{guestSessionId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw", 
+              "raw": "{\n  \"guestInfo\": {\n    \"email\": \"customer@example.com\",\n    \"firstName\": \"Adebayo\",\n    \"lastName\": \"Ogundimu\",\n    \"phoneNumber\": \"+2348012345678\"\n  },\n  \"shippingAddress\": {\n    \"firstName\": \"Adebayo\",\n    \"lastName\": \"Ogundimu\",\n    \"addressLine1\": \"15 Allen Avenue\",\n    \"city\": \"Lagos\",\n    \"state\": \"Lagos State\",\n    \"postalCode\": \"101001\", \n    \"phoneNumber\": \"+2348012345678\"\n  },\n  \"paymentMethod\": \"PAYSTACK\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/guest/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "guest", "create"]
+            },
+            "description": "Create guest order with Nigerian address format"
+          }
+        },
+        {
+          "name": "Get User Orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Get authenticated user's order history"
+          },
+          "auth": {
+            "type": "bearer",
+            "bearer": [
+              {
+                "key": "token",
+                "value": "{{bearerToken}}",
+                "type": "string"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Performance Monitoring",
+      "item": [
+        {
+          "name": "System Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/metrics/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "metrics", "health"]
+            },
+            "description": "Comprehensive system health check with Nigerian context"
+          }
+        },
+        {
+          "name": "Performance Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/metrics/performance?window=60000",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "metrics", "performance"],
+              "query": [
+                {
+                  "key": "window",
+                  "value": "60000"
+                }
+              ]
+            },
+            "description": "Get API performance metrics (response times, error rates)"
+          }
+        },
+        {
+          "name": "Real-time Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/metrics/realtime",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "metrics", "realtime"]
+            },
+            "description": "Real-time system metrics with performance trends"
+          }
+        },
+        {
+          "name": "System Resources",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/metrics/system",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "metrics", "system"]  
+            },
+            "description": "System resource utilization (memory, CPU, uptime)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "🇳🇬 Nigerian Features Testing",
+      "item": [
+        {
+          "name": "Test Nigerian Phone Validation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumbers\": [\n    \"+2348012345678\",\n    \"+2347012345678\",\n    \"+2349012345678\",\n    \"08012345678\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/request-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "request-otp"]
+            },
+            "description": "Test Nigerian phone number validation across networks"
+          }
+        },
+        {
+          "name": "Test Naira Price Filtering",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products?minPrice=5000&maxPrice=100000&sortBy=price",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "products"],
+              "query": [
+                {
+                  "key": "minPrice",
+                  "value": "5000"
+                },
+                {
+                  "key": "maxPrice",
+                  "value": "100000"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "price"
+                }
+              ]
+            },
+            "description": "Test Naira currency filtering (₦5,000 - ₦100,000)"
+          }
+        },
+        {
+          "name": "Test Multi-State Shipping",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destinations\": [\n    {\"state\": \"Lagos State\", \"city\": \"Lagos\"},\n    {\"state\": \"Abuja\", \"city\": \"Wuse\"},\n    {\"state\": \"Kano State\", \"city\": \"Kano\"},\n    {\"state\": \"Rivers State\", \"city\": \"Port Harcourt\"}\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/shipping/calculate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart", "shipping", "calculate"]
+            },
+            "description": "Test shipping calculations across Nigerian states"
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Generate unique guest session ID if not set",
+          "if (!pm.collectionVariables.get('guestSessionId')) {",
+          "  pm.collectionVariables.set('guestSessionId', 'guest-session-' + Date.now());",
+          "}",
+          "",
+          "// Auto-set Nigerian context headers",
+          "pm.request.headers.add({",
+          "  key: 'X-Country',",
+          "  value: 'NG'",
+          "});",
+          "",
+          "pm.request.headers.add({",
+          "  key: 'X-Currency', ", 
+          "  value: 'NGN'",
+          "});",
+          "",
+          "pm.request.headers.add({",
+          "  key: 'X-Timezone',",
+          "  value: 'Africa/Lagos'",
+          "});"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Auto-extract bearer token from auth responses",
+          "if (pm.response.code === 200 && pm.request.url.path.includes('verify-otp')) {",
+          "  const responseJson = pm.response.json();",
+          "  if (responseJson.data && responseJson.data.token) {",
+          "    pm.collectionVariables.set('bearerToken', responseJson.data.token);",
+          "    console.log('Bearer token extracted and saved');",
+          "  }",
+          "}",
+          "",
+          "// Validate Nigerian-specific responses",
+          "pm.test('Response contains Nigerian context', function () {",
+          "  const responseJson = pm.response.json();",
+          "  if (responseJson.data) {",
+          "    // Check for Nigerian currency",
+          "    if (responseJson.data.currency) {",
+          "      pm.expect(responseJson.data.currency).to.equal('NGN');",
+          "    }",
+          "    // Check for Nigerian phone format in responses",
+          "    if (responseJson.data.phoneNumber) {",
+          "      pm.expect(responseJson.data.phoneNumber).to.match(/^\\+234[789][01]\\d{8}$/);",
+          "    }",
+          "  }",
+          "});",
+          "",
+          "// Performance monitoring",
+          "pm.test('Response time is acceptable', function () {",
+          "  pm.expect(pm.response.responseTime).to.be.below(3000); // 3 seconds max",
+          "});",
+          "",
+          "pm.test('Response has success indicator', function () {",
+          "  const responseJson = pm.response.json();",
+          "  pm.expect(responseJson).to.have.property('success');",
+          "});"
+        ]
+      }
+    }
+  ]
+}
