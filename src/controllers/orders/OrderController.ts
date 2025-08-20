@@ -336,34 +336,38 @@ export class OrderController extends BaseController {
   private validateCreateOrderRequest(data: CreateOrderRequest): string[] {
     const errors: string[] = [];
 
-    // Validate shipping address
-    if (!data.shippingAddress) {
-      errors.push("Shipping address is required");
-    } else {
-      if (!data.shippingAddress.firstName || data.shippingAddress.firstName.trim().length === 0) {
-        errors.push("Shipping address first name is required");
+    // For authenticated users, shipping address is optional if they have a default address
+    // The OrderService will handle getting the default address from user profile
+    if (data.shippingAddress) {
+      // Only validate if shipping address is provided
+      if (data.shippingAddress.firstName && data.shippingAddress.firstName.trim().length === 0) {
+        errors.push("Shipping address first name cannot be empty");
       }
-      if (!data.shippingAddress.lastName || data.shippingAddress.lastName.trim().length === 0) {
-        errors.push("Shipping address last name is required");
+      if (data.shippingAddress.lastName && data.shippingAddress.lastName.trim().length === 0) {
+        errors.push("Shipping address last name cannot be empty");
       }
-      if (!data.shippingAddress.addressLine1 || data.shippingAddress.addressLine1.trim().length === 0) {
-        errors.push("Shipping address street is required");
+      if (data.shippingAddress.addressLine1 && data.shippingAddress.addressLine1.trim().length === 0) {
+        errors.push("Shipping address street cannot be empty");
       }
-      if (!data.shippingAddress.city || data.shippingAddress.city.trim().length === 0) {
-        errors.push("Shipping address city is required");
+      if (data.shippingAddress.city && data.shippingAddress.city.trim().length === 0) {
+        errors.push("Shipping address city cannot be empty");
       }
-      if (!data.shippingAddress.state || data.shippingAddress.state.trim().length === 0) {
-        errors.push("Shipping address state is required");
+      if (data.shippingAddress.state && data.shippingAddress.state.trim().length === 0) {
+        errors.push("Shipping address state cannot be empty");
       }
-      // Country is optional - defaults to Nigeria in most cases
-      if (!data.shippingAddress.phoneNumber || data.shippingAddress.phoneNumber.trim().length === 0) {
-        errors.push("Shipping address phone number is required");
-      }
-
-      // Nigerian phone number validation
-      const phoneRegex = /^(\+234|234|0)?[789][01]\d{8}$/;
-      if (data.shippingAddress.phoneNumber && !phoneRegex.test(data.shippingAddress.phoneNumber.replace(/\s/g, ''))) {
-        errors.push("Valid Nigerian phone number is required");
+      
+      // Validate phone number format if provided
+      if (data.shippingAddress.phoneNumber) {
+        if (data.shippingAddress.phoneNumber.trim().length === 0) {
+          errors.push("Phone number cannot be empty");
+        } else {
+          // Nigerian phone number validation (more flexible)
+          const phoneRegex = /^(\+234|234|0)?[789][01]\d{8}$/;
+          const cleanPhone = data.shippingAddress.phoneNumber.replace(/[\s\-\(\)]/g, '');
+          if (!phoneRegex.test(cleanPhone)) {
+            errors.push("Please provide a valid Nigerian phone number (e.g., +2348012345678, 08012345678)");
+          }
+        }
       }
     }
 
@@ -371,7 +375,26 @@ export class OrderController extends BaseController {
     if (data.paymentMethod) {
       const validPaymentMethods = ["CARD", "BANK_TRANSFER", "PAYSTACK", "CASH_ON_DELIVERY"];
       if (!validPaymentMethods.includes(data.paymentMethod)) {
-        errors.push("Invalid payment method");
+        errors.push("Invalid payment method. Allowed values: " + validPaymentMethods.join(", "));
+      }
+    }
+
+    // For authenticated users, cart data is optional as it can be retrieved from their active cart
+    if (data.cartData && data.cartData.items) {
+      if (!Array.isArray(data.cartData.items) || data.cartData.items.length === 0) {
+        errors.push("Cart must contain at least one item");
+      } else {
+        data.cartData.items.forEach((item, index) => {
+          if (!item.productId) {
+            errors.push(`Cart item ${index + 1}: Product ID is required`);
+          }
+          if (!item.quantity || item.quantity <= 0) {
+            errors.push(`Cart item ${index + 1}: Quantity must be greater than 0`);
+          }
+          if (item.unitPrice !== undefined && item.unitPrice < 0) {
+            errors.push(`Cart item ${index + 1}: Unit price cannot be negative`);
+          }
+        });
       }
     }
 

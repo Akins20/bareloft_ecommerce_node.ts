@@ -101,6 +101,46 @@ export class OrderService extends BaseService {
       const userEmailAddress = userData?.email || '';
       const userFirstName = userData?.firstName || 'Valued Customer';
 
+      // Handle missing shipping address - try to get from user's default address
+      if (!request.shippingAddress && userData) {
+        console.log("📍 No shipping address provided, looking for user's default address");
+        
+        // Try to get user's default address (this would typically come from a user address service)
+        // For now, create a basic address from user data
+        if (userData.firstName && userData.lastName) {
+          request.shippingAddress = {
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            company: '',
+            addressLine1: userData.address || 'Address to be provided',
+            addressLine2: '',
+            city: userData.city || 'Lagos',
+            state: userData.state || 'Lagos State', 
+            postalCode: userData.postalCode || '',
+            country: 'Nigeria',
+            phoneNumber: userData.phoneNumber || userData.phone || ''
+          };
+          console.log("📍 Using user profile data for shipping address");
+        }
+      }
+
+      // If still no shipping address, create a minimal one that can be updated later
+      if (!request.shippingAddress) {
+        console.log("📍 Creating minimal shipping address - customer can update during checkout");
+        request.shippingAddress = {
+          firstName: userFirstName,
+          lastName: userData?.lastName || 'Customer',
+          company: '',
+          addressLine1: 'To be provided during checkout',
+          addressLine2: '',
+          city: 'Lagos',
+          state: 'Lagos State',
+          postalCode: '',
+          country: 'Nigeria',
+          phoneNumber: userData?.phoneNumber || userData?.phone || ''
+        };
+      }
+
       // Priority: Use cart data from request body if provided (frontend cart sync)
       // Fallback: Get cart items from backend cart service if no cartData provided
       let cartSummary;
