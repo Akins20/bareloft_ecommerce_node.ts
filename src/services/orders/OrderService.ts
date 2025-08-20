@@ -1,11 +1,10 @@
 import { BaseService } from "../BaseService";
 import { OrderRepository } from "../../repositories/OrderRepository";
 import { UserRepository } from "../../repositories/UserRepository";
+import { AddressRepository } from "../../repositories/AddressRepository";
+import { ProductRepository } from "../../repositories/ProductRepository";
 import { CartService } from "../cart/CartService";
-import {
-  OrderEmailService,
-  OrderData,
-} from "../notifications/OrderEmailService";
+import { OrderEmailService, OrderData } from "./OrderEmailService";
 import { NotificationService } from "../notifications/NotificationService";
 import { PaystackService } from "../payments/PaystackService";
 import { JobService } from "../jobs/JobService";
@@ -51,32 +50,137 @@ export interface OrderListResponse {
 export class OrderService extends BaseService {
   private orderRepository: OrderRepository;
   private userRepository: UserRepository;
+  private addressRepository: AddressRepository;
   private cartService: CartService;
   private orderEmailService: OrderEmailService;
   private notificationService: NotificationService;
   private paystackService: PaystackService;
   private jobService: JobService;
-  private productRepository: any; // Will be injected for product validation
+  private productRepository: ProductRepository;
 
   constructor(
     orderRepository?: OrderRepository,
     userRepository?: UserRepository,
+    addressRepository?: AddressRepository,
     cartService?: CartService,
     orderEmailService?: OrderEmailService,
     notificationService?: NotificationService,
-    productRepository?: any
+    productRepository?: ProductRepository
   ) {
     super();
     this.orderRepository = orderRepository || ({} as OrderRepository);
     this.userRepository = userRepository || ({} as UserRepository);
+    this.addressRepository = addressRepository || new AddressRepository();
     this.cartService = cartService || ({} as CartService);
     this.orderEmailService = orderEmailService || new OrderEmailService();
     this.notificationService = notificationService || new NotificationService();
     this.paystackService = new PaystackService();
     this.jobService = new JobService(); // Will be replaced by global instance when needed
-    this.productRepository = productRepository || ({} as any);
+    this.productRepository = productRepository || new ProductRepository({} as any);
   }
 
+
+  /**
+   * Validate products and quantities in cart items
+   */
+  private async validateCartItems(cartItems: any[]): Promise<{ 
+    isValid: boolean; 
+    errors: string[]; 
+    validatedItems: any[] 
+  }> {
+    const errors: string[] = [];
+    const validatedItems: any[] = [];
+
+    console.log("🔍 Validating cart items:", cartItems.length);
+
+    for (const item of cartItems) {
+      try {
+        // Get product from database to verify it exists and is available
+        const product = await this.productRepository.findById(item.productId);
+        
+        if (!product) {
+          errors.push(`Product with ID ${item.productId} not found`);
+          continue;
+        }
+
+        if (!product.isActive) {
+          errors.push(`Product "${product.name}" is no longer available`);
+          continue;
+        }
+
+        if (product.trackQuantity && product.stock < item.quantity) {
+          errors.push(`Insufficient stock for "${product.name}". Available: ${product.stock}, Requested: ${item.quantity}`);
+          continue;
+        }
+
+        // If we get here, the item is valid
+        validatedItems.push({
+          ...item,
+          product: {
+            id: product.id,
+            name: product.name,
+            sku: product.sku,
+            price: product.price,
+            stock: product.stock,
+            isActive: product.isActive,
+            trackQuantity: product.trackQuantity,
+          }
+        });
+
+        console.log(`✅ Product validated: ${product.name} (${item.quantity} units)`);
+      } catch (error) {
+        console.error(`❌ Error validating product ${item.productId}:`, error);
+        errors.push(`Error validating product: ${error.message}`);
+      }
+    }
+
+    const isValid = errors.length === 0;
+    console.log(`🔍 Cart validation result: ${isValid ? 'VALID' : 'INVALID'}, Errors: ${errors.length}`);
+
+    return {
+      isValid,
+      errors,
+      validatedItems
+    };
+  }
+
+  /**
+   * Helper method to save shipping/billing address to database
+   */
+  private async saveOrderAddress(
+    userId: string,
+    addressData: any,
+    type: 'SHIPPING' | 'BILLING'
+  ): Promise<string | null> {
+    try {
+      if (!addressData) return null;
+
+      console.log(`📍 Saving ${type} address to database:`, addressData);
+
+      // Create address data in the format expected by AddressRepository
+      const addressRequest = {
+        type: type as any,
+        firstName: addressData.firstName || 'Unknown',
+        lastName: addressData.lastName || 'Customer',
+        company: addressData.company || undefined,
+        addressLine1: addressData.addressLine1 || 'To be provided',
+        addressLine2: addressData.addressLine2 || undefined,
+        city: addressData.city || 'Lagos',
+        state: addressData.state || 'Lagos State',
+        postalCode: addressData.postalCode || undefined,
+        phoneNumber: addressData.phoneNumber || '',
+        isDefault: false // Order addresses are typically not set as default
+      };
+
+      const savedAddress = await this.addressRepository.createAddress(userId, addressRequest);
+      console.log(`✅ ${type} address saved with ID:`, savedAddress.id);
+      
+      return savedAddress.id;
+    } catch (error) {
+      console.error(`❌ Failed to save ${type} address:`, error);
+      return null; // Continue with order creation even if address save fails
+    }
+  }
 
   /**
    * Create a new order from cart
@@ -182,6 +286,23 @@ export class OrderService extends BaseService {
         );
       }
 
+      // 🔥 NEW: Validate all products and quantities before proceeding
+      console.log("🔍 Step 3b: Validating cart items...");
+      const validation = await this.validateCartItems(cartSummary.items);
+      
+      if (!validation.isValid) {
+        console.error("❌ Cart validation failed:", validation.errors);
+        throw new AppError(
+          `Cart validation failed: ${validation.errors.join(', ')}`,
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_CODES.VALIDATION_ERROR
+        );
+      }
+      
+      console.log("✅ Cart validation passed - all items are available");
+      // Use validated items for order creation (contains updated product info)
+      cartSummary.items = validation.validatedItems;
+
       // Generate order number
       const orderNumber = await this.generateOrderNumber();
       console.log("📋 Generated order number:", orderNumber);
@@ -208,6 +329,22 @@ export class OrderService extends BaseService {
       // Generate consistent payment reference (same format as PaymentService)
       const paymentReference = this.generatePaymentReference(orderNumber);
 
+      // 🔥 NEW: Save shipping and billing addresses to database
+      console.log("📍 Step 3a: Saving addresses to database...");
+      const shippingAddressId = await this.saveOrderAddress(
+        userId,
+        request.shippingAddress,
+        'SHIPPING'
+      );
+      
+      const billingAddressId = await this.saveOrderAddress(
+        userId,
+        request.billingAddress || request.shippingAddress, // Use shipping as billing if no billing provided
+        'BILLING'
+      );
+
+      console.log("📍 Address IDs - Shipping:", shippingAddressId, "Billing:", billingAddressId);
+
       // Create order data for immediate database save
       const orderData = {
         orderNumber,
@@ -222,6 +359,9 @@ export class OrderService extends BaseService {
         paymentMethod: request.paymentMethod || "CARD",
         paymentReference: paymentReference, // Use the same reference sent to Paystack
         notes: request.customerNotes || `Order created by authenticated user. Shipping to ${request.shippingAddress.city}, ${request.shippingAddress.state}.`,
+        // 🔥 NEW: Link the saved addresses to the order
+        shippingAddressId,
+        billingAddressId,
       };
 
       // Convert cart items to order items format for database
@@ -575,7 +715,8 @@ export class OrderService extends BaseService {
         const orderEmailData = this.mapOrderToEmailData(updatedOrder);
         await this.orderEmailService.sendOrderStatusUpdateEmail(
           orderEmailData,
-          previousStatus?.toString()
+          { email: updatedOrder.user?.email || "" },
+          status.toString()
         );
       } catch (emailError) {
         // Log email error but don't fail the order update
@@ -950,6 +1091,23 @@ export class OrderService extends BaseService {
         );
       }
 
+      // 🔥 NEW: Validate all products and quantities before proceeding (guest orders)
+      console.log("🔍 Step 1.5: Validating guest cart items...");
+      const guestValidation = await this.validateCartItems(cartData.items);
+      
+      if (!guestValidation.isValid) {
+        console.error("❌ Guest cart validation failed:", guestValidation.errors);
+        throw new AppError(
+          `Cart validation failed: ${guestValidation.errors.join(', ')}`,
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_CODES.VALIDATION_ERROR
+        );
+      }
+      
+      console.log("✅ Guest cart validation passed - all items are available");
+      // Use validated items for guest order creation
+      cartData.items = guestValidation.validatedItems;
+
       console.log("🔄 Step 2: Generating order number...");
       // Generate unique order number
       const orderNumber = await this.generateOrderNumber();
@@ -1043,7 +1201,23 @@ export class OrderService extends BaseService {
         JSON.stringify(orderItems, null, 2)
       );
 
-      console.log("🔄 Step 6: Preparing database order data...");
+      console.log("🔄 Step 6: Saving guest addresses to database...");
+      // 🔥 NEW: Save shipping and billing addresses for guest orders too
+      const guestShippingAddressId = await this.saveOrderAddress(
+        guestUserId,
+        orderData.shippingAddress,
+        'SHIPPING'
+      );
+      
+      const guestBillingAddressId = await this.saveOrderAddress(
+        guestUserId,
+        orderData.billingAddress || orderData.shippingAddress, // Use shipping as billing if no billing provided
+        'BILLING'
+      );
+
+      console.log("📍 Guest Address IDs - Shipping:", guestShippingAddressId, "Billing:", guestBillingAddressId);
+
+      console.log("🔄 Step 7: Preparing database order data...");
       // Create actual order in database with items
       
       // Generate consistent payment reference (same format as PaymentService)
@@ -1065,6 +1239,9 @@ export class OrderService extends BaseService {
         paymentMethod: "CARD",
         paymentReference: guestPaymentReference, // Use the same reference sent to Paystack
         notes: guestNotes, // Store user-friendly guest order info
+        // 🔥 NEW: Link the saved addresses to the guest order
+        shippingAddressId: guestShippingAddressId,
+        billingAddressId: guestBillingAddressId,
       };
       console.log(
         "✅ Step 6 Complete: DB order data prepared:",
@@ -1344,7 +1521,7 @@ export class OrderService extends BaseService {
           savedOrder,
           paymentReference
         );
-        await this.orderEmailService.sendOrderConfirmationEmail(orderEmailData);
+        await this.orderEmailService.sendOrderConfirmationEmail(orderEmailData, savedOrder.user || {});
         console.log("✅ Step 3 Complete: Confirmation email sent");
       } catch (emailError) {
         console.error("❌ Failed to send confirmation email:", emailError);
@@ -1411,7 +1588,7 @@ export class OrderService extends BaseService {
           updatedOrder,
           paymentReference
         );
-        await this.orderEmailService.sendOrderConfirmationEmail(orderEmailData);
+        await this.orderEmailService.sendOrderConfirmationEmail(orderEmailData, updatedOrder.user || {});
       } catch (emailError) {
         // Log email error but don't fail the payment confirmation
         console.error("Failed to send order confirmation email:", emailError);
@@ -1542,7 +1719,7 @@ export class OrderService extends BaseService {
               email: email,
               firstName: order.shippingAddress?.firstName || "Valued Customer",
               lastName: order.shippingAddress?.lastName || "",
-              phone: order.shippingAddress?.phoneNumber || "",
+              phoneNumber: order.shippingAddress?.phoneNumber || "",
             };
           }
 
@@ -1620,6 +1797,8 @@ export class OrderService extends BaseService {
     return {
       orderNumber: order.orderNumber,
       status: order.status?.toString() || "PENDING",
+      totalAmount: order.total || 0,
+      updatedAt: order.updatedAt || new Date(),
       estimatedDelivery: estimatedDeliveryDate.toLocaleDateString("en-NG", {
         weekday: "long",
         year: "numeric",
@@ -1657,6 +1836,20 @@ export class OrderService extends BaseService {
             city: order.shippingAddress.city || "",
             state: order.shippingAddress.state || "",
             postalCode: order.shippingAddress.postalCode,
+          }
+        : undefined,
+      billingAddress: order.billingAddress
+        ? {
+            firstName: order.billingAddress.firstName || customerFirstName,
+            lastName: order.billingAddress.lastName || customerLastName,
+            email: customerEmail,
+            phoneNumber:
+              order.billingAddress.phoneNumber || guestInfo?.phone || "",
+            addressLine1: order.billingAddress.addressLine1 || "",
+            addressLine2: order.billingAddress.addressLine2,
+            city: order.billingAddress.city || "",
+            state: order.billingAddress.state || "",
+            postalCode: order.billingAddress.postalCode,
           }
         : undefined,
       guestInfo: guestInfo,

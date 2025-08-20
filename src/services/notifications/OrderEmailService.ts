@@ -34,6 +34,17 @@ export interface OrderData {
     state: string;
     postalCode?: string;
   };
+  billingAddress?: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phoneNumber: string;
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    state: string;
+    postalCode?: string;
+  };
   guestInfo?: {
     email: string;
     firstName: string;
@@ -80,6 +91,7 @@ export class OrderEmailService extends BaseService {
         shipping: orderData.shipping,
         items: orderData.items || [],
         shippingAddress: orderData.shippingAddress,
+        billingAddress: orderData.billingAddress,
         paymentMethod: orderData.paymentMethod,
         paymentReference: orderData.paymentReference,
         trackingUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/orders/track?orderNumber=${orderData.orderNumber}&email=${customerEmail}`,

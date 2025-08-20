@@ -99,7 +99,7 @@ export class ServiceContainer {
 
     // Initialize order service with proper dependencies
     const notificationService = new NotificationService();
-    const orderService = new OrderService(orderRepository, userRepository, cartService, undefined, notificationService, productRepository);
+    const orderService = new OrderService(orderRepository, userRepository, addressRepository, cartService, undefined, notificationService, productRepository);
 
     // Initialize user services
     const userService = new UserService();
