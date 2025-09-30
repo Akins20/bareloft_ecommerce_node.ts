@@ -1043,25 +1043,48 @@ export class OrderService extends BaseService {
                        "guest-" + Date.now(); // Fallback session ID
       console.log("🆔 Session ID:", sessionId);
 
-      // Get guest cart data from cart service if available, otherwise use provided cart data
+      // Priority: Use cart data from request body if provided, otherwise fetch from session
       let cartData;
-      try {
-        console.log("🔄 Attempting to retrieve guest cart from session...");
-        // Use the existing cart service if available
-        if (this.cartService && typeof this.cartService.getGuestCart === 'function') {
-          const guestCart = await this.cartService.getGuestCart(sessionId);
-          console.log("✅ Retrieved guest cart from service:", JSON.stringify(guestCart, null, 2));
-          
+
+      // First check if cart data is provided in the request body
+      if (orderData.cartData && orderData.cartData.items && orderData.cartData.items.length > 0) {
+        console.log("✅ Using cart data from request body");
+        cartData = {
+          items: orderData.cartData.items || [],
+          subtotal: orderData.cartData.subtotal || 0,
+          estimatedTax: orderData.cartData.estimatedTax || 0,
+          estimatedShipping: orderData.cartData.estimatedShipping || 0,
+          estimatedTotal: orderData.cartData.estimatedTotal || orderData.cartData.subtotal || 0,
+        };
+      } else {
+        // Fallback: Try to retrieve from cart service using session
+        try {
+          console.log("🔄 No cart data in request, attempting to retrieve from session...");
+
+          if (this.cartService && typeof this.cartService.getGuestCart === 'function') {
+            const guestCart = await this.cartService.getGuestCart(sessionId);
+            console.log("📦 Retrieved guest cart from service:", JSON.stringify(guestCart, null, 2));
+
+            cartData = {
+              items: guestCart.items || [],
+              subtotal: guestCart.subtotal || 0,
+              estimatedTax: guestCart.estimatedTax || 0,
+              estimatedShipping: guestCart.estimatedShipping || 0,
+              estimatedTotal: guestCart.estimatedTotal || guestCart.subtotal || 0,
+            };
+          } else {
+            console.log("⚠️ Cart service not available");
+            cartData = {
+              items: [],
+              subtotal: 0,
+              estimatedTax: 0,
+              estimatedShipping: 0,
+              estimatedTotal: 0,
+            };
+          }
+        } catch (cartError) {
+          console.warn("⚠️ Error retrieving guest cart from session:", cartError);
           cartData = {
-            items: guestCart.items || [],
-            subtotal: guestCart.subtotal || 0,
-            estimatedTax: guestCart.estimatedTax || 0,
-            estimatedShipping: guestCart.estimatedShipping || 0,
-            estimatedTotal: guestCart.estimatedTotal || guestCart.subtotal || 0,
-          };
-        } else {
-          console.log("⚠️ Cart service not available, using provided cart data");
-          cartData = orderData.cartData || {
             items: [],
             subtotal: 0,
             estimatedTax: 0,
@@ -1069,15 +1092,6 @@ export class OrderService extends BaseService {
             estimatedTotal: 0,
           };
         }
-      } catch (cartError) {
-        console.warn("⚠️ Error retrieving guest cart, falling back to provided cart data:", cartError);
-        cartData = orderData.cartData || {
-          items: [],
-          subtotal: 0,
-          estimatedTax: 0,
-          estimatedShipping: 0,
-          estimatedTotal: 0,
-        };
       }
 
       console.log("🛒 FINAL CART DATA:", JSON.stringify(cartData, null, 2));
