@@ -29,6 +29,7 @@ import {
 } from "../../types/notification.types";
 import { JobPriority } from "../../types/job.types";
 import { redisClient } from "../../config/redis";
+import { prisma } from "../../config/database";
 
 export interface CartItem {
   productId: string;
@@ -1628,7 +1629,7 @@ export class OrderService extends BaseService {
 
       // Reduce stock for ordered items
       console.log(`📦 Reducing stock for order ${orderNumber}`);
-      const orderItems = await this.prisma.orderItem.findMany({
+      const orderItems = await prisma.orderItem.findMany({
         where: { orderId: order.id },
         include: { product: true }
       });
@@ -1638,7 +1639,7 @@ export class OrderService extends BaseService {
           const newStock = item.product.stock - item.quantity;
           console.log(`   - ${item.product.name}: ${item.product.stock} → ${newStock} (ordered: ${item.quantity})`);
 
-          await this.prisma.product.update({
+          await prisma.product.update({
             where: { id: item.productId },
             data: { stock: newStock }
           });

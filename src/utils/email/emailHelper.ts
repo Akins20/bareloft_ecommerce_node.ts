@@ -55,14 +55,19 @@ export class EmailHelper {
         logger.info("✅ Email service initialized with credentials");
       }
 
-      // Try to verify if credentials are provided
+      // Try to verify if credentials are provided (with timeout)
       if (config.email.user && config.email.password) {
-        try {
-          await this.transporter.verify();
-          logger.info("✅ Email service verified successfully with nodemailer");
-        } catch (error) {
-          logger.warn("⚠️ Email verification failed, but will still attempt to send:", error);
-        }
+        // Don't await - verify in background to avoid blocking startup
+        Promise.race([
+          this.transporter.verify(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Verification timeout')), 3000))
+        ])
+          .then(() => {
+            logger.info("✅ Email service verified successfully with nodemailer");
+          })
+          .catch((error) => {
+            logger.warn("⚠️ Email verification failed/timeout, but will still attempt to send:", error.message);
+          });
       }
     } catch (error) {
       logger.error("❌ Failed to initialize email service, creating fallback transporter:", error);
