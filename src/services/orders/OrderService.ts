@@ -1626,6 +1626,26 @@ export class OrderService extends BaseService {
           paymentReference: paymentReference,
         })) || order;
 
+      // Reduce stock for ordered items
+      console.log(`📦 Reducing stock for order ${orderNumber}`);
+      const orderItems = await this.prisma.orderItem.findMany({
+        where: { orderId: order.id },
+        include: { product: true }
+      });
+
+      for (const item of orderItems) {
+        if (item.product.trackQuantity) {
+          const newStock = item.product.stock - item.quantity;
+          console.log(`   - ${item.product.name}: ${item.product.stock} → ${newStock} (ordered: ${item.quantity})`);
+
+          await this.prisma.product.update({
+            where: { id: item.productId },
+            data: { stock: newStock }
+          });
+        }
+      }
+      console.log(`✅ Stock reduced successfully for order ${orderNumber}`);
+
       // Create timeline event
       await this.createTimelineEvent(
         order.id,
