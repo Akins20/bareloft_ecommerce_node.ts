@@ -4,363 +4,152 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Order Confirmation - {{orderNumber}}</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Arial', sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background-color: #f8f9fa;
-        }
-        
-        .email-container {
-            max-width: 600px;
-            margin: 0 auto;
-            background-color: #ffffff;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #2D5CFF 0%, #1E40AF 100%);
-            color: white;
-            padding: 30px 20px;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 28px;
-            margin-bottom: 8px;
-            font-weight: 700;
-        }
-        
-        .header p {
-            font-size: 16px;
-            opacity: 0.9;
-        }
-        
-        .content {
-            padding: 30px 20px;
-        }
-        
-        .order-info {
-            background-color: #e3f2fd;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 25px;
-            border-left: 4px solid #2196f3;
-        }
-        
-        .order-info h2 {
-            color: #1976d2;
-            margin-bottom: 10px;
-            font-size: 24px;
-        }
-        
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            flex-wrap: wrap;
-        }
-        
-        .info-label {
-            font-weight: 600;
-            color: #666;
-        }
-        
-        .info-value {
-            color: #333;
-            font-weight: 500;
-        }
-        
-        .section {
-            margin-bottom: 30px;
-        }
-        
-        .section h3 {
-            color: #333;
-            margin-bottom: 15px;
-            font-size: 20px;
-            border-bottom: 2px solid #f0f0f0;
-            padding-bottom: 8px;
-        }
-        
-        .item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px 0;
-            border-bottom: 1px solid #eee;
-        }
-        
-        .item:last-child {
-            border-bottom: none;
-        }
-        
-        .item-info h4 {
-            font-size: 16px;
-            margin-bottom: 4px;
-            color: #333;
-        }
-        
-        .item-info p {
-            font-size: 14px;
-            color: #666;
-        }
-        
-        .item-price {
-            font-weight: 600;
-            color: #2196f3;
-            font-size: 16px;
-        }
-        
-        .total-section {
-            background-color: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 20px 0;
-        }
-        
-        .total-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-        }
-        
-        .total-final {
-            border-top: 2px solid #ddd;
-            padding-top: 10px;
-            margin-top: 10px;
-            font-size: 18px;
-            font-weight: bold;
-            color: #2196f3;
-        }
-        
-        .address-box {
-            background-color: #f8f9fa;
-            padding: 18px;
-            border-radius: 8px;
-            border: 1px solid #e0e0e0;
-        }
-        
-        .address-box p {
-            margin-bottom: 4px;
-        }
-        
-        .cta-button {
-            display: inline-block;
-            background: linear-gradient(135deg, #2D5CFF 0%, #1E40AF 100%);
-            color: white;
-            padding: 15px 30px;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 16px;
-            text-align: center;
-            transition: transform 0.2s ease;
-        }
-        
-        .cta-button:hover {
-            transform: translateY(-2px);
-        }
-        
-        .cta-section {
-            text-align: center;
-            margin: 30px 0;
-        }
-        
-        .footer {
-            background-color: #333;
-            color: white;
-            padding: 25px 20px;
-            text-align: center;
-        }
-        
-        .footer p {
-            margin-bottom: 8px;
-        }
-        
-        .footer a {
-            color: #2D5CFF;
-            text-decoration: none;
-        }
-        
-        .status-badge {
-            display: inline-block;
-            background-color: #4caf50;
-            color: white;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-        
-        @media (max-width: 600px) {
-            .email-container {
-                margin: 0 10px;
-            }
-            
-            .content {
-                padding: 20px 15px;
-            }
-            
-            .info-row {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            
-            .item {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            
-            .item-price {
-                margin-top: 8px;
-            }
-        }
-    </style>
 </head>
-<body>
-    <div class="email-container">
-        <!-- Header -->
-        <div class="header">
-            <h1>Order Confirmed! 🎉</h1>
-            <p>Thank you for shopping with Bareloft</p>
-        </div>
-        
-        <!-- Content -->
-        <div class="content">
-            <!-- Order Information -->
-            <div class="order-info">
-                <h2>Order #{{orderNumber}}</h2>
-                <div class="info-row">
-                    <span class="info-label">Status:</span>
-                    <span class="status-badge">{{status}}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Tracking Number:</span>
-                    <span class="info-value">{{trackingNumber}}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Order Date:</span>
-                    <span class="info-value">{{orderDate}}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Estimated Delivery:</span>
-                    <span class="info-value">{{estimatedDelivery}}</span>
-                </div>
-            </div>
-            
-            <!-- Order Items -->
-            {{#if items}}
-            <div class="section">
-                <h3>Items Ordered ({{items.length}})</h3>
-                {{#each items}}
-                <div class="item">
-                    <div class="item-info">
-                        <h4>{{name}}</h4>
-                        <p>Quantity: {{quantity}} × ₦{{unitPrice}}</p>
-                        {{#if sku}}<p>SKU: {{sku}}</p>{{/if}}
-                    </div>
-                    <div class="item-price">
-                        ₦{{totalPrice}}
-                    </div>
-                </div>
-                {{/each}}
-            </div>
-            {{/if}}
-            
-            <!-- Order Total -->
-            {{#if total}}
-            <div class="total-section">
-                {{#if subtotal}}
-                <div class="total-row">
-                    <span>Subtotal:</span>
-                    <span>₦{{subtotal}}</span>
-                </div>
-                {{/if}}
-                {{#if tax}}
-                <div class="total-row">
-                    <span>Tax (7.5% VAT):</span>
-                    <span>₦{{tax}}</span>
-                </div>
-                {{/if}}
-                {{#if shipping}}
-                <div class="total-row">
-                    <span>Shipping:</span>
-                    <span>{{#if (eq shipping 0)}}Free{{else}}₦{{shipping}}{{/if}}</span>
-                </div>
-                {{/if}}
-                <div class="total-row total-final">
-                    <span>Total:</span>
-                    <span>₦{{total}}</span>
-                </div>
-            </div>
-            {{/if}}
-            
-            <!-- Shipping Address -->
-            {{#if shippingAddress}}
-            <div class="section">
-                <h3>Shipping Address</h3>
-                <div class="address-box">
-                    <p><strong>{{shippingAddress.firstName}} {{shippingAddress.lastName}}</strong></p>
-                    <p>{{shippingAddress.addressLine1}}</p>
-                    {{#if shippingAddress.addressLine2}}<p>{{shippingAddress.addressLine2}}</p>{{/if}}
-                    <p>{{shippingAddress.city}}, {{shippingAddress.state}} {{shippingAddress.postalCode}}</p>
-                    <p>Phone: {{shippingAddress.phoneNumber}}</p>
-                    <p>Email: {{shippingAddress.email}}</p>
-                </div>
-            </div>
-            {{/if}}
-            
-            <!-- Payment Information -->
-            {{#if paymentReference}}
-            <div class="section">
-                <h3>Payment Information</h3>
-                <div class="address-box">
-                    {{#if paymentMethod}}<p><strong>Method:</strong> {{paymentMethod}}</p>{{/if}}
-                    <p><strong>Reference:</strong> {{paymentReference}}</p>
-                    <p><strong>Currency:</strong> Nigerian Naira (₦)</p>
-                </div>
-            </div>
-            {{/if}}
-            
-            <!-- Call to Action -->
-            <div class="cta-section">
-                <a href="{{trackingUrl}}" class="cta-button">Track Your Order</a>
-            </div>
-            
-            <!-- Additional Information -->
-            <div style="background-color: #fff3cd; padding: 20px; border-radius: 8px; border-left: 4px solid #ffc107;">
-                <h4 style="color: #856404; margin-bottom: 10px;">What's Next? 📦</h4>
-                <ul style="color: #856404; padding-left: 20px;">
-                    <li>We'll send you email updates as your order progresses</li>
-                    <li>Your order is being processed and will ship within 1-2 business days</li>
-                    <li>You can track your order anytime using the link above</li>
-                    <li>Check your email for shipping confirmation with carrier details</li>
-                </ul>
-            </div>
-        </div>
-        
-        <!-- Footer -->
-        <div class="footer">
-            <p><strong>Questions about your order?</strong></p>
-            <p>Contact our support team at <a href="mailto:{{supportEmail}}">{{supportEmail}}</a></p>
-            <p style="margin-top: 15px; font-size: 12px; opacity: 0.8;">
-                This email was sent to {{customerEmail}}. You received this because you placed an order with Bareloft.
-            </p>
-            <p style="font-size: 12px; opacity: 0.8;">
-                © 2024 Bareloft. Lagos, Nigeria.
-            </p>
-        </div>
-    </div>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden;">
+
+                    <!-- Header -->
+                    <tr>
+                        <td style="background-color: #007cba; padding: 30px; text-align: center;">
+                            <h1 style="margin: 0; color: #ffffff; font-size: 24px;">Order Confirmed!</h1>
+                            <p style="margin: 5px 0 0; color: #ffffff; font-size: 14px;">Thank you for shopping with Bareloft</p>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px 30px;">
+
+                            <!-- Order Info -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f0f8ff; border-radius: 8px; margin-bottom: 25px; padding: 20px; border-left: 4px solid #007cba;">
+                                <tr>
+                                    <td>
+                                        <p style="margin: 0 0 10px; color: #007cba; font-size: 20px; font-weight: bold;">Order #{{orderNumber}}</p>
+                                        <p style="margin: 5px 0; color: #555; font-size: 14px;"><strong>Status:</strong> {{status}}</p>
+                                        {{#if trackingNumber}}<p style="margin: 5px 0; color: #555; font-size: 14px;"><strong>Tracking:</strong> {{trackingNumber}}</p>{{/if}}
+                                        {{#if orderDate}}<p style="margin: 5px 0; color: #555; font-size: 14px;"><strong>Date:</strong> {{orderDate}}</p>{{/if}}
+                                        {{#if estimatedDelivery}}<p style="margin: 5px 0; color: #555; font-size: 14px;"><strong>Est. Delivery:</strong> {{estimatedDelivery}}</p>{{/if}}
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Order Items -->
+                            {{#if items}}
+                            <p style="margin: 0 0 15px; color: #333; font-size: 18px; font-weight: bold; border-bottom: 2px solid #f0f0f0; padding-bottom: 8px;">Items ({{items.length}})</p>
+                            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 25px;">
+                                {{#each items}}
+                                <tr>
+                                    <td style="padding: 12px 0; border-bottom: 1px solid #eee;">
+                                        <p style="margin: 0 0 4px; color: #333; font-size: 16px; font-weight: bold;">{{name}}</p>
+                                        <p style="margin: 0; color: #666; font-size: 14px;">Qty: {{quantity}} × ₦{{unitPrice}}</p>
+                                        {{#if sku}}<p style="margin: 0; color: #999; font-size: 12px;">SKU: {{sku}}</p>{{/if}}
+                                    </td>
+                                    <td style="padding: 12px 0; border-bottom: 1px solid #eee; text-align: right; color: #007cba; font-weight: bold;">
+                                        ₦{{totalPrice}}
+                                    </td>
+                                </tr>
+                                {{/each}}
+                            </table>
+                            {{/if}}
+
+                            <!-- Order Total -->
+                            {{#if total}}
+                            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+                                {{#if subtotal}}
+                                <tr>
+                                    <td style="padding: 5px 0;"><span style="color: #666; font-size: 14px;">Subtotal:</span></td>
+                                    <td style="padding: 5px 0; text-align: right;"><span style="color: #333; font-size: 14px;">₦{{subtotal}}</span></td>
+                                </tr>
+                                {{/if}}
+                                {{#if tax}}
+                                <tr>
+                                    <td style="padding: 5px 0;"><span style="color: #666; font-size: 14px;">Tax (7.5% VAT):</span></td>
+                                    <td style="padding: 5px 0; text-align: right;"><span style="color: #333; font-size: 14px;">₦{{tax}}</span></td>
+                                </tr>
+                                {{/if}}
+                                {{#if shipping}}
+                                <tr>
+                                    <td style="padding: 5px 0;"><span style="color: #666; font-size: 14px;">Shipping:</span></td>
+                                    <td style="padding: 5px 0; text-align: right;"><span style="color: #333; font-size: 14px;">{{#if (eq shipping 0)}}Free{{else}}₦{{shipping}}{{/if}}</span></td>
+                                </tr>
+                                {{/if}}
+                                <tr style="border-top: 2px solid #ddd;">
+                                    <td style="padding: 10px 0 0;"><span style="color: #333; font-size: 16px; font-weight: bold;">Total:</span></td>
+                                    <td style="padding: 10px 0 0; text-align: right;"><span style="color: #007cba; font-size: 18px; font-weight: bold;">₦{{total}}</span></td>
+                                </tr>
+                            </table>
+                            {{/if}}
+
+                            <!-- Shipping Address -->
+                            {{#if shippingAddress}}
+                            <p style="margin: 0 0 15px; color: #333; font-size: 18px; font-weight: bold; border-bottom: 2px solid #f0f0f0; padding-bottom: 8px;">Shipping Address</p>
+                            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; border-radius: 8px; padding: 18px; margin-bottom: 25px;">
+                                <tr>
+                                    <td>
+                                        <p style="margin: 0 0 4px; color: #333; font-weight: bold;">{{shippingAddress.firstName}} {{shippingAddress.lastName}}</p>
+                                        <p style="margin: 0 0 4px; color: #555; font-size: 14px;">{{shippingAddress.addressLine1}}</p>
+                                        {{#if shippingAddress.addressLine2}}<p style="margin: 0 0 4px; color: #555; font-size: 14px;">{{shippingAddress.addressLine2}}</p>{{/if}}
+                                        <p style="margin: 0 0 4px; color: #555; font-size: 14px;">{{shippingAddress.city}}, {{shippingAddress.state}} {{shippingAddress.postalCode}}</p>
+                                        <p style="margin: 0 0 4px; color: #555; font-size: 14px;">Phone: {{shippingAddress.phoneNumber}}</p>
+                                        <p style="margin: 0; color: #555; font-size: 14px;">Email: {{shippingAddress.email}}</p>
+                                    </td>
+                                </tr>
+                            </table>
+                            {{/if}}
+
+                            <!-- Payment Info -->
+                            {{#if paymentReference}}
+                            <p style="margin: 0 0 15px; color: #333; font-size: 18px; font-weight: bold; border-bottom: 2px solid #f0f0f0; padding-bottom: 8px;">Payment Information</p>
+                            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; border-radius: 8px; padding: 18px; margin-bottom: 25px;">
+                                <tr>
+                                    <td>
+                                        {{#if paymentMethod}}<p style="margin: 0 0 4px; color: #555; font-size: 14px;"><strong>Method:</strong> {{paymentMethod}}</p>{{/if}}
+                                        <p style="margin: 0 0 4px; color: #555; font-size: 14px;"><strong>Reference:</strong> {{paymentReference}}</p>
+                                        <p style="margin: 0; color: #555; font-size: 14px;"><strong>Currency:</strong> Nigerian Naira (₦)</p>
+                                    </td>
+                                </tr>
+                            </table>
+                            {{/if}}
+
+                            <!-- CTA Button -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
+                                <tr>
+                                    <td align="center">
+                                        <a href="{{trackingUrl}}" style="display: inline-block; background-color: #007cba; color: #ffffff; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold;">Track Your Order</a>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- What's Next -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #fff8e1; border-radius: 8px; padding: 20px; margin: 20px 0; border-left: 4px solid #ffc107;">
+                                <tr>
+                                    <td>
+                                        <p style="margin: 0 0 10px; color: #856404; font-weight: bold;">What's Next?</p>
+                                        <p style="margin: 5px 0; color: #856404; font-size: 14px;">• We'll send you updates as your order progresses</p>
+                                        <p style="margin: 5px 0; color: #856404; font-size: 14px;">• Your order ships within 1-2 business days</p>
+                                        <p style="margin: 5px 0; color: #856404; font-size: 14px;">• Track your order anytime using the link above</p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f5f5f5; padding: 20px; text-align: center; border-top: 1px solid #e0e0e0;">
+                            <p style="margin: 0 0 10px; color: #555; font-size: 14px;"><strong>Questions?</strong></p>
+                            <p style="margin: 0 0 10px; color: #555; font-size: 14px;">Contact us at <a href="mailto:{{supportEmail}}" style="color: #007cba;">{{supportEmail}}</a></p>
+                            <p style="margin: 10px 0 0; color: #999; font-size: 12px;">© 2025 Bareloft. Lagos, Nigeria. All rights reserved.</p>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>

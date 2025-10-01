@@ -4,339 +4,117 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Order Update - {{orderNumber}}</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Arial', sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background-color: #f8f9fa;
-        }
-        
-        .email-container {
-            max-width: 600px;
-            margin: 0 auto;
-            background-color: #ffffff;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #2D5CFF 0%, #1E40AF 100%);
-            color: white;
-            padding: 30px 20px;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 28px;
-            margin-bottom: 8px;
-            font-weight: 700;
-        }
-        
-        .header p {
-            font-size: 16px;
-            opacity: 0.9;
-        }
-        
-        .content {
-            padding: 30px 20px;
-        }
-        
-        .status-update {
-            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
-            padding: 25px;
-            border-radius: 12px;
-            margin-bottom: 25px;
-            border: 1px solid #e1bee7;
-            text-align: center;
-        }
-        
-        .status-icon {
-            font-size: 48px;
-            margin-bottom: 15px;
-            display: block;
-        }
-        
-        .status-title {
-            font-size: 24px;
-            font-weight: 700;
-            color: #333;
-            margin-bottom: 8px;
-        }
-        
-        .status-message {
-            font-size: 16px;
-            color: #666;
-            margin-bottom: 15px;
-        }
-        
-        .status-badge {
-            display: inline-block;
-            padding: 8px 16px;
-            border-radius: 25px;
-            font-size: 14px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .badge-processing { background-color: #2196f3; color: white; }
-        .badge-shipped { background-color: #ff9800; color: white; }
-        .badge-delivered { background-color: #4caf50; color: white; }
-        .badge-cancelled { background-color: #f44336; color: white; }
-        
-        .order-info {
-            background-color: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 25px;
-            border: 1px solid #e0e0e0;
-        }
-        
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 12px;
-            flex-wrap: wrap;
-        }
-        
-        .info-row:last-child {
-            margin-bottom: 0;
-        }
-        
-        .info-label {
-            font-weight: 600;
-            color: #666;
-            min-width: 140px;
-        }
-        
-        .info-value {
-            color: #333;
-            font-weight: 500;
-            text-align: right;
-            flex: 1;
-        }
-        
-        .tracking-number {
-            font-family: 'Courier New', monospace;
-            background-color: #e3f2fd;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        
-        .delivery-estimate {
-            background-color: #e8f5e8;
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #4caf50;
-            margin: 20px 0;
-        }
-        
-        .delivery-estimate h4 {
-            color: #2e7d32;
-            margin-bottom: 8px;
-        }
-        
-        .delivery-estimate p {
-            color: #388e3c;
-        }
-        
-        .cta-button {
-            display: inline-block;
-            background: linear-gradient(135deg, #2D5CFF 0%, #1E40AF 100%);
-            color: white;
-            padding: 15px 30px;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 16px;
-            text-align: center;
-            transition: transform 0.2s ease;
-        }
-        
-        .cta-button:hover {
-            transform: translateY(-2px);
-        }
-        
-        .cta-section {
-            text-align: center;
-            margin: 30px 0;
-        }
-        
-        .footer {
-            background-color: #333;
-            color: white;
-            padding: 25px 20px;
-            text-align: center;
-        }
-        
-        .footer p {
-            margin-bottom: 8px;
-        }
-        
-        .footer a {
-            color: #2D5CFF;
-            text-decoration: none;
-        }
-        
-        .help-section {
-            background-color: #fff8e1;
-            padding: 20px;
-            border-radius: 8px;
-            border-left: 4px solid #ffc107;
-            margin: 25px 0;
-        }
-        
-        .help-section h4 {
-            color: #f57f17;
-            margin-bottom: 10px;
-        }
-        
-        .help-section p {
-            color: #f57f17;
-            margin-bottom: 8px;
-        }
-        
-        @media (max-width: 600px) {
-            .email-container {
-                margin: 0 10px;
-            }
-            
-            .content {
-                padding: 20px 15px;
-            }
-            
-            .info-row {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            
-            .info-value {
-                text-align: left;
-                margin-top: 4px;
-            }
-            
-            .status-update {
-                padding: 20px 15px;
-            }
-        }
-    </style>
 </head>
-<body>
-    <div class="email-container">
-        <!-- Header -->
-        <div class="header">
-            <h1>Order Update 📦</h1>
-            <p>Your order status has been updated</p>
-        </div>
-        
-        <!-- Content -->
-        <div class="content">
-            <!-- Status Update Section -->
-            <div class="status-update">
-                <div class="status-icon">{{statusIcon}}</div>
-                <div class="status-title">{{statusTitle}}</div>
-                <div class="status-message">{{statusMessage}}</div>
-                <span class="status-badge badge-{{statusClass}}">{{status}}</span>
-            </div>
-            
-            <!-- Order Information -->
-            <div class="order-info">
-                <div class="info-row">
-                    <span class="info-label">Order Number:</span>
-                    <span class="info-value"><strong>{{orderNumber}}</strong></span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Tracking Number:</span>
-                    <span class="info-value">
-                        <span class="tracking-number">{{trackingNumber}}</span>
-                    </span>
-                </div>
-                {{#if orderDate}}
-                <div class="info-row">
-                    <span class="info-label">Order Date:</span>
-                    <span class="info-value">{{orderDate}}</span>
-                </div>
-                {{/if}}
-                <div class="info-row">
-                    <span class="info-label">Last Updated:</span>
-                    <span class="info-value">{{lastUpdated}}</span>
-                </div>
-            </div>
-            
-            <!-- Delivery Estimate (if available) -->
-            {{#if estimatedDelivery}}
-            <div class="delivery-estimate">
-                <h4>📦 Estimated Delivery</h4>
-                <p><strong>{{estimatedDelivery}}</strong></p>
-                <p style="margin-top: 8px; font-size: 14px;">We'll notify you when your order is out for delivery</p>
-            </div>
-            {{/if}}
-            
-            <!-- Call to Action -->
-            <div class="cta-section">
-                <a href="{{trackingUrl}}" class="cta-button">View Order Details</a>
-            </div>
-            
-            <!-- Help Section -->
-            <div class="help-section">
-                <h4>Need Help? 🤝</h4>
-                <p><strong>Questions about your order?</strong> Contact our support team</p>
-                <p>📧 Email: <a href="mailto:{{supportEmail}}" style="color: #f57f17;">{{supportEmail}}</a></p>
-                <p>🕒 We typically respond within 2-4 hours during business hours</p>
-            </div>
-            
-            <!-- Status-specific Information -->
-            {{#if (eq statusClass "processing")}}
-            <div style="background-color: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2196f3;">
-                <h4 style="color: #1976d2; margin-bottom: 8px;">⏳ What's happening now?</h4>
-                <p style="color: #1976d2; font-size: 14px;">
-                    Your order is being carefully prepared and will be shipped within 1-2 business days.
-                </p>
-            </div>
-            {{/if}}
-            
-            {{#if (eq statusClass "shipped")}}
-            <div style="background-color: #fff3e0; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ff9800;">
-                <h4 style="color: #f57c00; margin-bottom: 8px;">🚚 Your order is on the way!</h4>
-                <p style="color: #f57c00; font-size: 14px;">
-                    Your package is now with our delivery partner and heading to your address.
-                </p>
-            </div>
-            {{/if}}
-            
-            {{#if (eq statusClass "delivered")}}
-            <div style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4caf50;">
-                <h4 style="color: #388e3c; margin-bottom: 8px;">🎉 Delivery Complete!</h4>
-                <p style="color: #388e3c; font-size: 14px;">
-                    Thank you for shopping with Bareloft! We hope you love your purchase.
-                </p>
-            </div>
-            {{/if}}
-        </div>
-        
-        <!-- Footer -->
-        <div class="footer">
-            <p><strong>Stay Updated</strong></p>
-            <p>We'll continue to send you updates as your order progresses</p>
-            <p style="margin-top: 15px;">
-                Questions? Contact us at <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>
-            </p>
-            <p style="margin-top: 15px; font-size: 12px; opacity: 0.8;">
-                This email was sent to {{customerEmail}}. You received this because you have an active order with Bareloft.
-            </p>
-            <p style="font-size: 12px; opacity: 0.8;">
-                © 2024 Bareloft. Lagos, Nigeria.
-            </p>
-        </div>
-    </div>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden;">
+
+                    <!-- Header -->
+                    <tr>
+                        <td style="background-color: #007cba; padding: 30px; text-align: center;">
+                            <h1 style="margin: 0; color: #ffffff; font-size: 24px;">Order Update</h1>
+                            <p style="margin: 5px 0 0; color: #ffffff; font-size: 14px;">Your order status has been updated</p>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px 30px;">
+
+                            <!-- Status Update -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f0f8ff; border-radius: 8px; padding: 25px; margin-bottom: 25px; text-align: center;">
+                                <tr>
+                                    <td>
+                                        {{#if statusIcon}}<p style="margin: 0 0 15px; font-size: 48px;">{{statusIcon}}</p>{{/if}}
+                                        {{#if statusTitle}}<p style="margin: 0 0 8px; color: #333; font-size: 24px; font-weight: bold;">{{statusTitle}}</p>{{/if}}
+                                        {{#if statusMessage}}<p style="margin: 0 0 15px; color: #666; font-size: 16px;">{{statusMessage}}</p>{{/if}}
+                                        <span style="display: inline-block; background-color: #007cba; color: #ffffff; padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: bold; text-transform: uppercase;">{{status}}</span>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Order Information -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+                                <tr>
+                                    <td>
+                                        <table width="100%" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #666; font-weight: bold;">Order Number:</td>
+                                                <td style="padding: 6px 0; text-align: right; color: #333; font-weight: bold;">{{orderNumber}}</td>
+                                            </tr>
+                                            {{#if trackingNumber}}
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #666; font-weight: bold;">Tracking Number:</td>
+                                                <td style="padding: 6px 0; text-align: right; color: #333; font-family: monospace; background-color: #e3f2fd; padding: 4px 8px; border-radius: 4px;">{{trackingNumber}}</td>
+                                            </tr>
+                                            {{/if}}
+                                            {{#if orderDate}}
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #666; font-weight: bold;">Order Date:</td>
+                                                <td style="padding: 6px 0; text-align: right; color: #333;">{{orderDate}}</td>
+                                            </tr>
+                                            {{/if}}
+                                            {{#if lastUpdated}}
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #666; font-weight: bold;">Last Updated:</td>
+                                                <td style="padding: 6px 0; text-align: right; color: #333;">{{lastUpdated}}</td>
+                                            </tr>
+                                            {{/if}}
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Delivery Estimate -->
+                            {{#if estimatedDelivery}}
+                            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #e8f5e9; border-radius: 8px; padding: 15px; margin-bottom: 25px; border-left: 4px solid #4caf50;">
+                                <tr>
+                                    <td>
+                                        <p style="margin: 0 0 8px; color: #2e7d32; font-weight: bold;">Estimated Delivery</p>
+                                        <p style="margin: 0 0 8px; color: #388e3c; font-size: 16px; font-weight: bold;">{{estimatedDelivery}}</p>
+                                        <p style="margin: 0; color: #388e3c; font-size: 14px;">We'll notify you when your order is out for delivery</p>
+                                    </td>
+                                </tr>
+                            </table>
+                            {{/if}}
+
+                            <!-- CTA Button -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
+                                <tr>
+                                    <td align="center">
+                                        <a href="{{trackingUrl}}" style="display: inline-block; background-color: #007cba; color: #ffffff; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold;">View Order Details</a>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Help Section -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #fff8e1; border-radius: 8px; padding: 15px; margin: 20px 0; border-left: 4px solid #ffc107;">
+                                <tr>
+                                    <td>
+                                        <p style="margin: 0 0 8px; color: #f57f17; font-weight: bold;">Need Help?</p>
+                                        <p style="margin: 0 0 4px; color: #f57f17; font-size: 14px;">Questions about your order? Contact our support team</p>
+                                        <p style="margin: 0; color: #f57f17; font-size: 14px;">Email: <a href="mailto:{{supportEmail}}" style="color: #f57f17;">{{supportEmail}}</a></p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f5f5f5; padding: 20px; text-align: center; border-top: 1px solid #e0e0e0;">
+                            <p style="margin: 0 0 10px; color: #555; font-size: 14px;"><strong>Stay Updated</strong></p>
+                            <p style="margin: 0 0 10px; color: #555; font-size: 14px;">We'll continue to send you updates as your order progresses</p>
+                            <p style="margin: 10px 0 0; color: #999; font-size: 12px;">© 2025 Bareloft. Lagos, Nigeria. All rights reserved.</p>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>
