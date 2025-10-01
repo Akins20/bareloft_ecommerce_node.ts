@@ -308,6 +308,7 @@ export class OrderService extends BaseService {
       console.log("📋 Generated order number:", orderNumber);
 
       // Calculate totals (tax is included in product prices)
+      // Cart service returns amounts in Naira, need to convert to kobo for Paystack
       const subtotal = cartSummary.subtotal;
       const shippingAmount = this.calculateShippingAmount(
         subtotal,
@@ -318,12 +319,12 @@ export class OrderService extends BaseService {
         : 0;
       const totalAmount = subtotal + shippingAmount - discountAmount;
 
-      console.log("💰 Subtotal (Kobo):", subtotal);
-      console.log("🚚 Shipping (Kobo):", shippingAmount);
-      console.log("💰 Final Total (Kobo):", totalAmount);
+      console.log("💰 Subtotal (Naira):", subtotal);
+      console.log("🚚 Shipping (Naira):", shippingAmount);
+      console.log("💰 Final Total (Naira):", totalAmount);
 
-      // Amount is already in kobo, no conversion needed
-      const amountInKobo = Math.round(totalAmount);
+      // Convert from Naira to Kobo (multiply by 100) for Paystack
+      const amountInKobo = Math.round(totalAmount * 100);
       console.log("💰 Amount in Kobo for Paystack:", amountInKobo);
 
       // Generate consistent payment reference (same format as PaymentService)
@@ -1043,37 +1044,62 @@ export class OrderService extends BaseService {
                        "guest-" + Date.now(); // Fallback session ID
       console.log("🆔 Session ID:", sessionId);
 
-      // Priority: Use cart data from request body if provided, otherwise fetch from session
+      // Priority: Fetch cart from session by sessionId first, use request body as fallback
       let cartData;
 
-      // First check if cart data is provided in the request body
-      if (orderData.cartData && orderData.cartData.items && orderData.cartData.items.length > 0) {
-        console.log("✅ Using cart data from request body");
-        cartData = {
-          items: orderData.cartData.items || [],
-          subtotal: orderData.cartData.subtotal || 0,
-          estimatedTax: orderData.cartData.estimatedTax || 0,
-          estimatedShipping: orderData.cartData.estimatedShipping || 0,
-          estimatedTotal: orderData.cartData.estimatedTotal || orderData.cartData.subtotal || 0,
-        };
-      } else {
-        // Fallback: Try to retrieve from cart service using session
-        try {
-          console.log("🔄 No cart data in request, attempting to retrieve from session...");
+      // First try to retrieve from cart service using session
+      try {
+        console.log("🔄 Step 1: Attempting to retrieve cart from session...");
 
-          if (this.cartService && typeof this.cartService.getGuestCart === 'function') {
-            const guestCart = await this.cartService.getGuestCart(sessionId);
-            console.log("📦 Retrieved guest cart from service:", JSON.stringify(guestCart, null, 2));
+        if (this.cartService && typeof this.cartService.getGuestCart === 'function') {
+          const guestCart = await this.cartService.getGuestCart(sessionId);
+          console.log("📦 Retrieved guest cart from service:", JSON.stringify(guestCart, null, 2));
 
+          // If session cart has items, use it
+          if (guestCart && guestCart.items && guestCart.items.length > 0) {
+            console.log("✅ Using cart data from session");
             cartData = {
-              items: guestCart.items || [],
+              items: guestCart.items,
               subtotal: guestCart.subtotal || 0,
               estimatedTax: guestCart.estimatedTax || 0,
               estimatedShipping: guestCart.estimatedShipping || 0,
               estimatedTotal: guestCart.estimatedTotal || guestCart.subtotal || 0,
             };
           } else {
-            console.log("⚠️ Cart service not available");
+            // Fallback: Session cart is empty, try request body
+            console.log("⚠️ Session cart empty, checking request body cart data...");
+            if (orderData.cartData && orderData.cartData.items && orderData.cartData.items.length > 0) {
+              console.log("✅ Using cart data from request body as fallback");
+              cartData = {
+                items: orderData.cartData.items || [],
+                subtotal: orderData.cartData.subtotal || 0,
+                estimatedTax: orderData.cartData.estimatedTax || 0,
+                estimatedShipping: orderData.cartData.estimatedShipping || 0,
+                estimatedTotal: orderData.cartData.estimatedTotal || orderData.cartData.subtotal || 0,
+              };
+            } else {
+              console.log("❌ Both session and request body cart are empty");
+              cartData = {
+                items: [],
+                subtotal: 0,
+                estimatedTax: 0,
+                estimatedShipping: 0,
+                estimatedTotal: 0,
+              };
+            }
+          }
+        } else {
+          // Cart service not available, use request body
+          console.log("⚠️ Cart service not available, using request body");
+          if (orderData.cartData && orderData.cartData.items && orderData.cartData.items.length > 0) {
+            cartData = {
+              items: orderData.cartData.items || [],
+              subtotal: orderData.cartData.subtotal || 0,
+              estimatedTax: orderData.cartData.estimatedTax || 0,
+              estimatedShipping: orderData.cartData.estimatedShipping || 0,
+              estimatedTotal: orderData.cartData.estimatedTotal || orderData.cartData.subtotal || 0,
+            };
+          } else {
             cartData = {
               items: [],
               subtotal: 0,
@@ -1082,8 +1108,20 @@ export class OrderService extends BaseService {
               estimatedTotal: 0,
             };
           }
-        } catch (cartError) {
-          console.warn("⚠️ Error retrieving guest cart from session:", cartError);
+        }
+      } catch (cartError) {
+        console.warn("⚠️ Error retrieving guest cart from session, trying request body:", cartError);
+        // Final fallback: use request body if available
+        if (orderData.cartData && orderData.cartData.items && orderData.cartData.items.length > 0) {
+          console.log("✅ Using cart data from request body after session error");
+          cartData = {
+            items: orderData.cartData.items || [],
+            subtotal: orderData.cartData.subtotal || 0,
+            estimatedTax: orderData.cartData.estimatedTax || 0,
+            estimatedShipping: orderData.cartData.estimatedShipping || 0,
+            estimatedTotal: orderData.cartData.estimatedTotal || orderData.cartData.subtotal || 0,
+          };
+        } else {
           cartData = {
             items: [],
             subtotal: 0,
@@ -1129,7 +1167,7 @@ export class OrderService extends BaseService {
 
       console.log("🔄 Step 3: Calculating totals...");
       // Recalculate totals based on cart data and shipping address
-      // All calculations should be in naira, then convert to kobo for Paystack
+      // Frontend sends amounts in Naira, we need to convert to kobo for Paystack
       // Tax is included in product prices, so no separate tax calculation
       const subtotal = Number(cartData.subtotal) || 0;
       const shippingAmount = this.calculateShippingAmount(
@@ -1137,12 +1175,12 @@ export class OrderService extends BaseService {
         orderData.shippingAddress?.state
       );
       const finalTotal = subtotal + shippingAmount;
-      console.log("💰 Subtotal (Kobo):", subtotal);
-      console.log("🚚 Shipping (Kobo):", shippingAmount);
-      console.log("💰 Final Total (Kobo):", finalTotal);
+      console.log("💰 Subtotal (Naira):", subtotal);
+      console.log("🚚 Shipping (Naira):", shippingAmount);
+      console.log("💰 Final Total (Naira):", finalTotal);
 
-      // Amount is already in kobo, no conversion needed
-      const amountInKobo = Math.round(finalTotal);
+      // Convert from Naira to Kobo (multiply by 100) for Paystack
+      const amountInKobo = Math.round(finalTotal * 100);
       console.log("💰 Amount in Kobo for Paystack:", amountInKobo);
 
       console.log("🔄 Step 4: Setting up guest order user reference...");
