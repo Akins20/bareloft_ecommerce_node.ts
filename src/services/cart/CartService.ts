@@ -1,6 +1,7 @@
 import { BaseService } from "../BaseService";
 import { CartRepository } from "../../repositories/CartRepository";
 import { ProductRepository } from "../../repositories/ProductRepository";
+import { prisma } from "../../database/connection";
 import {
   CartItem,
   Product,
@@ -728,15 +729,64 @@ export class CartService extends BaseService {
   /**
    * Merge guest cart with user cart
    */
-  async mergeCart(userId: string, sessionId: string, data: MergeCartRequest): Promise<{ success: boolean; message: string; cart: any }> {
+  async mergeCart(userId: string, sessionId: string, data: MergeCartRequest, guestItems?: Array<{productId: string; quantity: number}>): Promise<{ success: boolean; message: string; cart: any }> {
     try {
-      // For now, return success without actual merge logic
-      // TODO: Implement guest cart merging
+      // Get guest cart items from parameter or empty array
+      const itemsToMerge = guestItems || [];
+
+      if (itemsToMerge.length === 0) {
+        // No guest items to merge, just return user's cart
+        const updatedCart = await this.getCart(userId);
+        return {
+          success: true,
+          message: "No items to merge",
+          cart: {
+            id: `cart_${userId}`,
+            userId,
+            items: updatedCart.items,
+            subtotal: updatedCart.subtotal,
+            estimatedTax: updatedCart.tax,
+            estimatedShipping: 0,
+            estimatedTotal: updatedCart.total,
+            currency: "NGN",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }
+        };
+      }
+
+      // Get user's existing cart items
+      const userCartItems = await this.cartRepository.findByUserId?.(userId) || [];
+
+      // Merge guest items into user cart
+      let mergedCount = 0;
+      for (const guestItem of itemsToMerge) {
+        // Check if product already exists in user's cart
+        const existingItem = userCartItems.find((item: any) => item.productId === guestItem.productId);
+
+        if (existingItem) {
+          // Update quantity (add guest quantity to existing)
+          await this.updateCartItem(userId, null, {
+            productId: guestItem.productId,
+            quantity: existingItem.quantity + guestItem.quantity,
+          });
+          mergedCount++;
+        } else {
+          // Add new item to user's cart
+          await this.addToCart(userId, {
+            productId: guestItem.productId,
+            quantity: guestItem.quantity,
+          });
+          mergedCount++;
+        }
+      }
+
+      // Get updated cart
       const updatedCart = await this.getCart(userId);
-      
+
       return {
         success: true,
-        message: "Carts merged successfully",
+        message: `Successfully merged ${mergedCount} item(s) from guest cart`,
         cart: {
           id: `cart_${userId}`,
           userId,
@@ -794,17 +844,40 @@ export class CartService extends BaseService {
   }
 
   /**
-   * Save item for later
+   * Save item for later (moves to wishlist)
    */
   async saveForLater(userId: string, productId: string): Promise<{ success: boolean; message: string; cart: any }> {
     try {
-      // TODO: Implement save for later functionality
-      // For now, remove from cart
+      // Get the cart items to check if product exists
+      const cartItems = await this.cartRepository.findByUserId?.(userId) || [];
+      const cartItem = cartItems.find((item: any) => item.productId === productId);
+
+      if (!cartItem) {
+        throw new AppError("Item not found in cart", HTTP_STATUS.NOT_FOUND, ERROR_CODES.RESOURCE_NOT_FOUND);
+      }
+
+      // Add to wishlist using prisma (wishlist isn't in repository pattern yet)
+      const { PrismaClient } = require("@prisma/client");
+      const prismaClient = new PrismaClient();
+
+      const existingWishlistItem = await prismaClient.wishlistItem.findFirst({
+        where: { userId, productId },
+      });
+
+      if (!existingWishlistItem) {
+        await prismaClient.wishlistItem.create({
+          data: { userId, productId },
+        });
+      }
+
+      // Remove from cart
       const result = await this.removeFromCart(userId, null, { productId });
-      
+
+      await prismaClient.$disconnect();
+
       return {
         success: true,
-        message: "Item saved for later",
+        message: "Item saved to wishlist",
         cart: result.cart
       };
     } catch (error) {
@@ -814,18 +887,38 @@ export class CartService extends BaseService {
   }
 
   /**
-   * Move saved item back to cart
+   * Move saved item from wishlist back to cart
    */
   async moveToCart(userId: string, productId: string): Promise<{ success: boolean; message: string; cart: any }> {
     try {
-      // TODO: Implement move from saved to cart functionality
-      // For now, add to cart with quantity 1
+      // Check if item is in wishlist using prisma
+      const { PrismaClient } = require("@prisma/client");
+      const prismaClient = new PrismaClient();
+
+      const wishlistItem = await prismaClient.wishlistItem.findFirst({
+        where: { userId, productId },
+      });
+
+      if (!wishlistItem) {
+        await prismaClient.$disconnect();
+        throw new AppError("Item not found in wishlist", HTTP_STATUS.NOT_FOUND, ERROR_CODES.RESOURCE_NOT_FOUND);
+      }
+
+      // Add to cart with quantity 1
       await this.addToCart(userId, { productId, quantity: 1 });
+
+      // Remove from wishlist
+      await prismaClient.wishlistItem.deleteMany({
+        where: { userId, productId },
+      });
+
+      await prismaClient.$disconnect();
+
       const updatedCart = await this.getCart(userId);
-      
+
       return {
         success: true,
-        message: "Item moved to cart",
+        message: "Item moved to cart from wishlist",
         cart: {
           id: `cart_${userId}`,
           userId,

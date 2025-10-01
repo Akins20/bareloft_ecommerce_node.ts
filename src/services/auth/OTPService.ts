@@ -1,7 +1,14 @@
 import crypto from "crypto";
 import { CONSTANTS } from "../../types/common.types";
+import { OTPRepository } from "../../repositories/OTPRepository";
+import { prisma } from "../../database/connection";
 
 export class OTPService {
+  private otpRepository: OTPRepository;
+
+  constructor(otpRepository?: OTPRepository) {
+    this.otpRepository = otpRepository || new OTPRepository(prisma);
+  }
   /**
    * Generate a secure 6-digit OTP
    */
@@ -233,8 +240,35 @@ export class OTPService {
    * Check if user can resend OTP
    */
   async canResendOTP(phoneNumber: string): Promise<{ allowed: boolean; message?: string }> {
-    // Placeholder implementation
-    return { allowed: true };
+    try {
+      // Find the most recent OTP for this phone number by trying to find recent OTPs
+      const recentOTPs = await this.otpRepository.findRecentOTPs(1, phoneNumber);
+      const recentOTP = recentOTPs[0];
+
+      if (!recentOTP) {
+        // No OTP found, can send
+        return { allowed: true };
+      }
+
+      // Check if OTP was sent recently (within last 60 seconds)
+      const now = new Date();
+      const timeSinceLastOTP = now.getTime() - recentOTP.createdAt.getTime();
+      const minResendInterval = 60 * 1000; // 60 seconds
+
+      if (timeSinceLastOTP < minResendInterval) {
+        const waitSeconds = Math.ceil((minResendInterval - timeSinceLastOTP) / 1000);
+        return {
+          allowed: false,
+          message: `Please wait ${waitSeconds} seconds before requesting a new OTP`,
+        };
+      }
+
+      return { allowed: true };
+    } catch (error) {
+      console.error("Error checking resend OTP permission:", error);
+      // On error, allow resend but log the issue
+      return { allowed: true };
+    }
   }
 
   /**
@@ -248,19 +282,64 @@ export class OTPService {
    * Get OTP status
    */
   async getOTPStatus(phoneNumber: string, purpose: string): Promise<{ exists: boolean; expiresIn?: number; attemptsLeft?: number }> {
-    // Placeholder implementation
-    return {
-      exists: true,
-      expiresIn: 600,
-      attemptsLeft: 3
-    };
+    try {
+      // Find valid OTP for this phone number and purpose
+      const otp = await this.otpRepository.findValidOTP(phoneNumber, purpose as any);
+
+      if (!otp) {
+        return { exists: false };
+      }
+
+      // Check if expired
+      const now = new Date();
+      if (now > otp.expiresAt) {
+        return { exists: false };
+      }
+
+      // Calculate remaining time in seconds
+      const expiresIn = Math.floor((otp.expiresAt.getTime() - now.getTime()) / 1000);
+
+      // Calculate remaining attempts
+      const attemptsLeft = otp.maxAttempts - otp.attempts;
+
+      return {
+        exists: true,
+        expiresIn,
+        attemptsLeft: Math.max(0, attemptsLeft),
+      };
+    } catch (error) {
+      console.error("Error getting OTP status:", error);
+      return { exists: false };
+    }
   }
 
   /**
    * Get remaining attempts
    */
-  getRemainingAttempts(phoneNumber: string, purpose: string): Promise<number> {
-    // Placeholder implementation
-    return Promise.resolve(3);
+  async getRemainingAttempts(phoneNumber: string, purpose: string): Promise<number> {
+    try {
+      // Find valid OTP for this phone number and purpose
+      const otp = await this.otpRepository.findValidOTP(phoneNumber, purpose as any);
+
+      if (!otp) {
+        // No OTP found, return max attempts
+        return CONSTANTS.MAX_OTP_ATTEMPTS;
+      }
+
+      // Check if expired
+      const now = new Date();
+      if (now > otp.expiresAt) {
+        // Expired OTP, return max attempts for new OTP
+        return CONSTANTS.MAX_OTP_ATTEMPTS;
+      }
+
+      // Calculate and return remaining attempts
+      const remaining = otp.maxAttempts - otp.attempts;
+      return Math.max(0, remaining);
+    } catch (error) {
+      console.error("Error getting remaining attempts:", error);
+      // On error, return default max attempts
+      return CONSTANTS.MAX_OTP_ATTEMPTS;
+    }
   }
 }

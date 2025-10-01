@@ -1,6 +1,7 @@
 import { BaseService } from "../BaseService";
 import { UserRepository } from "../../repositories/UserRepository";
 import { ProductRepository } from "../../repositories/ProductRepository";
+import { CartService } from "../cart/CartService";
 import { prisma } from "../../database/connection";
 import {
   Product,
@@ -24,11 +25,13 @@ import { PaginationParams } from "../../types/api.types";
 export class WishlistService extends BaseService {
   private userRepository: UserRepository;
   private productRepository: ProductRepository;
+  private cartService: CartService;
 
-  constructor(userRepository?: UserRepository, productRepository?: ProductRepository) {
+  constructor(userRepository?: UserRepository, productRepository?: ProductRepository, cartService?: CartService) {
     super();
     this.userRepository = userRepository || new UserRepository(prisma);
     this.productRepository = productRepository || new ProductRepository(prisma);
+    this.cartService = cartService || new CartService();
   }
 
   /**
@@ -47,17 +50,39 @@ export class WishlistService extends BaseService {
       const limit = options?.limit || 20;
       const includeOutOfStock = options?.includeOutOfStock ?? true;
 
-      // This would typically be in a WishlistRepository
-      // For now, return empty structure
+      // Calculate pagination
+      const skip = (page - 1) * limit;
+
+      // Get wishlist items from database
+      const [items, total] = await Promise.all([
+        prisma.wishlistItem.findMany({
+          where: { userId },
+          include: {
+            product: {
+              include: {
+                category: true,
+                images: true,
+              },
+            },
+          },
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+        }),
+        prisma.wishlistItem.count({ where: { userId } }),
+      ]);
+
+      const totalPages = Math.ceil(total / limit);
+
       return {
-        items: [],
+        items: items as any,
         pagination: {
           currentPage: page,
-          totalPages: 1,
-          totalItems: 0,
+          totalPages,
+          totalItems: total,
           itemsPerPage: limit,
-          hasNextPage: false,
-          hasPreviousPage: false,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1,
         },
       };
     } catch (error) {
@@ -98,32 +123,27 @@ export class WishlistService extends BaseService {
         };
       }
 
-      // Create wishlist item (placeholder)
-      const wishlistItem: WishlistItem = {
-        id: `wishlist_${Date.now()}`,
-        userId,
-        productId,
-        product,
-        user: {
-          id: user.id,
-          userId: user.id, // Alias for id
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email || '',
-          phoneNumber: user.phoneNumber,
-          avatar: user.avatar,
-          role: user.role,
-          isVerified: user.isVerified,
-          createdAt: user.createdAt
+      // Create wishlist item in database
+      const wishlistItem = await prisma.wishlistItem.create({
+        data: {
+          userId,
+          productId,
         },
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+        include: {
+          product: {
+            include: {
+              category: true,
+              images: true,
+            },
+          },
+          user: true,
+        },
+      });
 
       return {
         success: true,
         message: "Product added to wishlist successfully",
-        item: wishlistItem,
+        item: wishlistItem as any,
       };
     } catch (error) {
       this.handleError("Error adding to wishlist", error);
@@ -145,9 +165,14 @@ export class WishlistService extends BaseService {
         };
       }
 
-      // Placeholder implementation - would normally remove from database
-      console.log(`Removing product ${productId} from user ${userId} wishlist`);
-      
+      // Remove wishlist item from database
+      await prisma.wishlistItem.deleteMany({
+        where: {
+          userId,
+          productId,
+        },
+      });
+
       return {
         success: true,
         message: "Product removed from wishlist successfully",
@@ -163,12 +188,13 @@ export class WishlistService extends BaseService {
    */
   async clearWishlist(userId: string): Promise<WishlistClearResult> {
     try {
-      // Placeholder implementation - would normally clear from database
-      console.log(`Clearing wishlist for user ${userId}`);
-      
-      // For now, return 0 items removed
+      // Delete all wishlist items for the user
+      const result = await prisma.wishlistItem.deleteMany({
+        where: { userId },
+      });
+
       return {
-        itemsRemoved: 0,
+        itemsRemoved: result.count,
       };
     } catch (error) {
       this.handleError("Error clearing wishlist", error);
@@ -181,9 +207,13 @@ export class WishlistService extends BaseService {
    */
   async isProductInWishlist(userId: string, productId: string): Promise<boolean> {
     try {
-      // Placeholder implementation - would normally check database
-      console.log(`Checking if product ${productId} is in user ${userId} wishlist`);
-      return false;
+      const item = await prisma.wishlistItem.findFirst({
+        where: {
+          userId,
+          productId,
+        },
+      });
+      return !!item;
     } catch (error) {
       this.handleError("Error checking wishlist item", error);
       throw error;
@@ -195,9 +225,10 @@ export class WishlistService extends BaseService {
    */
   async getWishlistCount(userId: string): Promise<number> {
     try {
-      // Placeholder implementation - would normally count from database
-      console.log(`Getting wishlist count for user ${userId}`);
-      return 0;
+      const count = await prisma.wishlistItem.count({
+        where: { userId },
+      });
+      return count;
     } catch (error) {
       this.handleError("Error getting wishlist count", error);
       throw error;
@@ -232,9 +263,21 @@ export class WishlistService extends BaseService {
         };
       }
 
-      // Placeholder implementation - would normally add to cart and optionally remove from wishlist
-      console.log(`Moving product ${productId} to cart for user ${userId}`);
-      
+      // Check if product is in stock
+      if (product.stock < quantity) {
+        return {
+          success: false,
+          message: "Product is out of stock or insufficient quantity available",
+        };
+      }
+
+      // Add product to cart
+      await this.cartService.addToCart(userId, {
+        productId,
+        quantity,
+      });
+
+      // Optionally remove from wishlist
       if (removeFromWishlist) {
         await this.removeFromWishlist(userId, productId);
       }
@@ -307,15 +350,65 @@ export class WishlistService extends BaseService {
    */
   async getWishlistSummary(userId: string): Promise<WishlistSummary> {
     try {
-      // Placeholder implementation - would normally aggregate from database
-      console.log(`Getting wishlist summary for user ${userId}`);
-      
+      // Get all wishlist items with product details
+      const items = await prisma.wishlistItem.findMany({
+        where: { userId },
+        include: {
+          product: {
+            include: {
+              category: true,
+              images: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      // Calculate total value
+      const totalValue = items.reduce((sum, item) => {
+        const price = typeof item.product.price === 'string'
+          ? parseFloat(item.product.price)
+          : Number(item.product.price);
+        return sum + price;
+      }, 0);
+
+      // Count out of stock items
+      const outOfStockItems = items.filter(
+        item => item.product.stock === 0
+      ).length;
+
+      // Group by categories
+      const categoryMap = new Map<string, { name: string; count: number }>();
+      items.forEach(item => {
+        if (item.product.category) {
+          const categoryId = item.product.category.id;
+          const existing = categoryMap.get(categoryId);
+          if (existing) {
+            existing.count++;
+          } else {
+            categoryMap.set(categoryId, {
+              name: item.product.category.name,
+              count: 1,
+            });
+          }
+        }
+      });
+
+      const categories = Array.from(categoryMap.values());
+
+      // Get recently added items (last 5)
+      const recentlyAdded: any[] = items.slice(0, 5).map(item => ({
+        productId: item.productId,
+        productName: item.product.name,
+        addedAt: item.createdAt,
+      }));
+
       return {
-        totalItems: 0,
-        totalValue: 0,
-        categories: [],
-        outOfStockItems: 0,
-        recentlyAdded: [],
+        totalItems: items.length,
+        totalValue,
+        categories,
+        outOfStockItems,
+        recentlyAdded,
       };
     } catch (error) {
       this.handleError("Error getting wishlist summary", error);

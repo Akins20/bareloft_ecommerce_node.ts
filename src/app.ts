@@ -162,13 +162,19 @@ class App {
     );
 
     // Performance monitoring middleware - track response times and metrics
-    this.app.use(performanceMiddleware);
+    // Disabled in development for better performance
+    if (config.nodeEnv !== "development") {
+      this.app.use(performanceMiddleware);
+    }
 
     // Enhanced security headers
     this.app.use(securityEnhancements.enhancedSecurityHeaders);
 
     // Security audit logging
-    this.app.use(securityEnhancements.securityAuditLogger);
+    // Disabled in development for better performance
+    if (config.nodeEnv !== "development") {
+      this.app.use(securityEnhancements.securityAuditLogger);
+    }
 
     // Request size limits for DoS protection
     this.app.use(securityEnhancements.requestSizeLimit(config.security.maxRequestSizeMB));
@@ -219,7 +225,10 @@ class App {
     }
 
     // Custom request logger for audit trails
-    this.app.use(requestLogger);
+    // Disabled in development for better performance (morgan already logs requests)
+    if (config.nodeEnv !== "development") {
+      this.app.use(requestLogger);
+    }
 
     // Global rate limiting
     this.app.use(rateLimiter.general);
