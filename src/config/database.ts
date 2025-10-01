@@ -10,7 +10,7 @@ export const prisma = new PrismaClient({
   },
   log:
     config.nodeEnv === "development"
-      ? ["query", "info", "warn", "error"]
+      ? ["warn", "error"]  // Removed "query" and "info" for better performance
       : ["error"],
 });
 
