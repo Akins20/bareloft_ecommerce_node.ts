@@ -68,7 +68,22 @@ class App {
   constructor() {
     this.app = express();
     this.port = config.port;
-    this.prisma = new PrismaClient();
+
+    // Initialize Prisma with optimized connection pool settings
+    // Add connection pool parameters to DATABASE_URL for faster cold starts
+    const databaseUrl = process.env.DATABASE_URL || '';
+    const optimizedUrl = databaseUrl.includes('?')
+      ? `${databaseUrl}&connection_limit=10&pool_timeout=20`
+      : `${databaseUrl}?connection_limit=10&pool_timeout=20`;
+
+    this.prisma = new PrismaClient({
+      datasources: {
+        db: {
+          url: optimizedUrl,
+        },
+      },
+      log: config.nodeEnv === 'development' ? ['warn', 'error'] : ['error'],
+    });
 
     this.initializeMiddleware();
     this.initializeRoutes();
@@ -148,18 +163,7 @@ class App {
       })
     );
 
-    // Compression middleware
-    this.app.use(
-      compression({
-        filter: (req, res) => {
-          if (req.headers["x-no-compression"]) {
-            return false;
-          }
-          return compression.filter(req, res);
-        },
-        threshold: 1024, // Only compress if size > 1KB
-      })
-    );
+    // Note: Compression has been disabled due to compatibility issues (see line ~251)
 
     // Performance monitoring middleware - track response times and metrics
     // Disabled in development for better performance
@@ -243,6 +247,11 @@ class App {
         limit: "10mb",
       })
     );
+
+    // Compression disabled - causing "incorrect header check" errors with some clients
+    // Performance is already excellent (5-8ms) without compression
+    // Can re-enable later with proper testing if bandwidth becomes a concern
+    // this.app.use(compression());
 
     // Request logging
     if (config.nodeEnv === "development") {
@@ -608,6 +617,58 @@ class App {
     }
   }
 
+  /**
+   * Pre-warm critical queries to reduce cold start latency
+   * This executes and compiles frequently-used queries during startup
+   */
+  private async prewarmQueries(): Promise<void> {
+    try {
+      console.log("🔥 Pre-warming critical queries...");
+      const startTime = Date.now();
+
+      // Run queries in parallel for faster warmup
+      await Promise.all([
+        // Pre-warm product queries (most frequently accessed)
+        this.prisma.product.findFirst({
+          where: { isActive: true },
+          include: {
+            category: true,
+            images: true,
+            reviews: true,
+          }
+        }).catch(() => null), // Ignore errors if no data
+
+        // Pre-warm category queries
+        this.prisma.category.findFirst({
+          where: { isActive: true }
+        }).catch(() => null),
+
+        // Pre-warm user queries (for authentication)
+        this.prisma.user.findFirst({
+          select: {
+            id: true,
+            phoneNumber: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+          }
+        }).catch(() => null),
+
+        // Pre-warm session queries
+        this.prisma.session.findFirst({
+          where: { expiresAt: { gt: new Date() } }
+        }).catch(() => null),
+      ]);
+
+      const duration = Date.now() - startTime;
+      console.log(`✅ Query pre-warming completed in ${duration}ms`);
+    } catch (error) {
+      console.warn('⚠️ Query pre-warming failed, continuing anyway:', error);
+      // Don't throw - pre-warming is optional optimization
+    }
+  }
+
   private async verifyDatabaseSchema(): Promise<void> {
     try {
       // Check if critical tables exist
@@ -688,12 +749,12 @@ class App {
       const reconciliationScheduler = new PaymentReconciliationScheduler(jobService);
       reconciliationScheduler.start();
       console.log("✅ Payment reconciliation scheduler started successfully");
-      
+
       // Store scheduler reference for graceful shutdown
       (this as any).reconciliationScheduler = reconciliationScheduler;
 
-      // Run database migrations if needed
-      // await this.runMigrations();
+      // Pre-warm critical queries to reduce cold start latency
+      await this.prewarmQueries();
 
       console.log("🎉 All services initialized successfully");
     } catch (error) {

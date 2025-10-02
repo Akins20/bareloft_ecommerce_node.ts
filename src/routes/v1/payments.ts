@@ -6,12 +6,14 @@ import { authenticate } from "../../middleware/auth/authenticate";
 import { authorize } from "../../middleware/auth/authorize";
 import { validateRequest } from "../../middleware/validation/validateRequest";
 import { rateLimiter } from "../../middleware/security/rateLimiter";
+import { getServiceContainer } from "../../config/serviceContainer";
 
 const router = Router();
 
-// Initialize services and controller
-const paystackService = new PaystackService();
-const paymentService = new PaymentService(paystackService);
+// Get services from container (singleton)
+const serviceContainer = getServiceContainer();
+const paymentService = serviceContainer.getService<PaymentService>('paymentService');
+const paystackService = serviceContainer.getService<PaystackService>('paystackService');
 const paymentController = new PaymentController(paymentService, paystackService);
 
 // Rate limiting for payment operations

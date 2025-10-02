@@ -30,6 +30,7 @@ import { NotificationService } from '../../notifications/NotificationService';
 import { OrderModel, PaymentTransactionModel } from '../../../models';
 import { logger } from '../../../utils/logger/winston';
 import { NotificationType } from '../../../types/notification.types';
+import { getServiceContainer } from '../../../config/serviceContainer';
 
 interface ReconciliationSummary {
   totalProcessed: number;
@@ -57,11 +58,13 @@ export class PaymentReconciliationJobProcessor {
   private jobService: JobService | null = null;
 
   constructor() {
-    this.paymentService = new PaymentService();
-    this.orderService = new OrderService();
+    // Get services from container (singleton)
+    const serviceContainer = getServiceContainer();
+    this.paymentService = serviceContainer.getService<PaymentService>('paymentService');
+    this.orderService = serviceContainer.getService<OrderService>('orderService');
     this.notificationService = new NotificationService();
     // JobService will be initialized on demand
-    
+
     logger.info('🔧 PaymentReconciliationJobProcessor initialized');
   }
 

@@ -24,6 +24,7 @@ import { NotificationService } from '../../notifications/NotificationService';
 import { PaymentTransactionModel, OrderModel } from '../../../models';
 import { logger } from '../../../utils/logger/winston';
 import { AppError, HTTP_STATUS, ERROR_CODES } from '../../../types';
+import { getServiceContainer } from '../../../config/serviceContainer';
 
 export class PaymentVerificationJobProcessor {
   private paymentService: PaymentService;
@@ -36,10 +37,12 @@ export class PaymentVerificationJobProcessor {
   private readonly MAX_ATTEMPTS = 10;
 
   constructor() {
-    this.paymentService = new PaymentService();
-    this.orderService = new OrderService();
-    this.notificationService = new NotificationService(); 
-    
+    // Get services from container (singleton)
+    const serviceContainer = getServiceContainer();
+    this.paymentService = serviceContainer.getService<PaymentService>('paymentService');
+    this.orderService = serviceContainer.getService<OrderService>('orderService');
+    this.notificationService = new NotificationService();
+
     logger.info('🔧 PaymentVerificationJobProcessor initialized', {
       processor: 'PaymentVerificationJobProcessor',
       retryIntervals: this.RETRY_INTERVALS,

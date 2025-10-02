@@ -160,13 +160,12 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
           // Set ETag
           res.set("ETag", cachedEntry.etag);
 
-          // Decompress if needed
+          // Decompress if needed (data is stored compressed in Redis, but we send it decompressed)
           let responseData = cachedEntry.data;
-          if (cachedEntry.compressed && compress) {
+          if (cachedEntry.compressed) {
             responseData = decompressData(
               Buffer.from(cachedEntry.data, "base64")
             );
-            res.set("Content-Encoding", "gzip");
           }
 
           res.status(cachedEntry.statusCode).send(responseData);
@@ -193,11 +192,10 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
           });
 
           let responseData = cachedEntry.data;
-          if (cachedEntry.compressed && compress) {
+          if (cachedEntry.compressed) {
             responseData = decompressData(
               Buffer.from(cachedEntry.data, "base64")
             );
-            res.set("Content-Encoding", "gzip");
           }
 
           res.status(cachedEntry.statusCode).send(responseData);

@@ -10,6 +10,7 @@ import { ReportingService } from "../../services/analytics/ReportingService";
 import { NairaCurrencyUtils, NigerianPhoneUtils, NigerianEcommerceUtils } from "../../utils/helpers/nigerian";
 import { generateCSVReport, generatePDFReport } from "../../utils/helpers/formatters";
 import { OrderStatus, PaymentStatus, PaymentMethod } from "../../types";
+import { getServiceContainer } from "../../config/serviceContainer";
 
 /**
  * Comprehensive Admin Order Management Controller
@@ -26,12 +27,16 @@ export class AdminOrderController extends BaseAdminController {
 
   constructor() {
     super();
-    this.orderService = new OrderService();
+    // Get services from container (singleton)
+    const serviceContainer = getServiceContainer();
+    this.orderService = serviceContainer.getService<OrderService>('orderService');
+    this.orderRepository = serviceContainer.getService<OrderRepository>('orderRepository');
+    this.paymentService = serviceContainer.getService<PaymentService>('paymentService');
+
+    // Services not in container yet - create instances
     this.trackingService = {} as TrackingService;
     this.fulfillmentService = new FulfillmentService();
-    this.orderRepository = new OrderRepository({} as any);
     this.notificationService = new NotificationService();
-    this.paymentService = new PaymentService();
     this.reportingService = new ReportingService();
   }
 

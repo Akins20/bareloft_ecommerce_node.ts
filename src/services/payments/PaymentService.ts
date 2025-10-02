@@ -40,8 +40,6 @@ export class PaymentService extends BaseService {
     this.paystackService = paystackService || new PaystackService();
     this.notificationService = notificationService || {};
     this.orderService = orderService || null;
-    
-    console.log(`🔧 [PAYMENT SERVICE] Initialized with PaystackService:`, !!this.paystackService);
   }
 
   /**

@@ -5,6 +5,7 @@ import { FulfillmentService } from "./FulfillmentService";
 import { NotificationService } from "../notifications/NotificationService";
 import { PaymentService } from "../payments/PaymentService";
 import { redisClient } from "../../config/redis";
+import { getServiceContainer } from "../../config/serviceContainer";
 import {
   BulkOperationType,
   BulkJobStatus,
@@ -78,11 +79,21 @@ export class BulkOrderService extends BaseService {
     paymentService?: PaymentService
   ) {
     super();
-    this.orderRepository = orderRepository || {} as OrderRepository;
-    this.orderService = orderService || new OrderService();
+
+    // Use ServiceContainer for services if not provided
+    if (!orderRepository || !orderService || !paymentService) {
+      const serviceContainer = getServiceContainer();
+      this.orderRepository = orderRepository || serviceContainer.getService<OrderRepository>('orderRepository');
+      this.orderService = orderService || serviceContainer.getService<OrderService>('orderService');
+      this.paymentService = paymentService || serviceContainer.getService<PaymentService>('paymentService');
+    } else {
+      this.orderRepository = orderRepository;
+      this.orderService = orderService;
+      this.paymentService = paymentService;
+    }
+
     this.fulfillmentService = fulfillmentService || new FulfillmentService();
     this.notificationService = notificationService || new NotificationService();
-    this.paymentService = paymentService || new PaymentService();
 
     // Initialize queue processing
     this.initializeQueueProcessor();
