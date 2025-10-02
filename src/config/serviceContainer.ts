@@ -41,6 +41,7 @@ export class ServiceContainer {
   private services: Map<string, any> = new Map();
 
   private constructor() {
+    // Initialize with a Prisma instance immediately so routes can load
     this.prisma = new PrismaClient();
     this.initializeServices();
   }
@@ -50,6 +51,19 @@ export class ServiceContainer {
       ServiceContainer.instance = new ServiceContainer();
     }
     return ServiceContainer.instance;
+  }
+
+  public setPrismaClient(prisma: PrismaClient): void {
+    // Replace Prisma instance and reinitialize services
+    const oldPrisma = this.prisma;
+    this.prisma = prisma;
+    this.services.clear();
+    this.initializeServices();
+
+    // Disconnect old instance if different
+    if (oldPrisma && oldPrisma !== prisma) {
+      oldPrisma.$disconnect().catch(console.error);
+    }
   }
 
   private initializeServices(): void {
@@ -146,7 +160,7 @@ export class ServiceContainer {
   public getService<T>(serviceName: string): T {
     const service = this.services.get(serviceName);
     if (!service) {
-      throw new Error(`Service ${serviceName} not found in container`);
+      throw new Error(`Service ${serviceName} not found in container. Available services: ${Array.from(this.services.keys()).join(', ')}`);
     }
     return service as T;
   }
@@ -169,23 +183,13 @@ export class ServiceContainer {
   }
 
   public async initialize(): Promise<void> {
-    try {
-      await this.prisma.$connect();
-      console.log("✅ Service container initialized successfully");
-    } catch (error) {
-      console.error("❌ Failed to initialize service container:", error);
-      throw error;
-    }
+    // No need to connect - App already handles Prisma connection
+    console.log("✅ Service container initialized successfully");
   }
 
   public async cleanup(): Promise<void> {
-    try {
-      await this.prisma.$disconnect();
-      console.log("✅ Service container cleaned up successfully");
-    } catch (error) {
-      console.error("❌ Failed to cleanup service container:", error);
-      throw error;
-    }
+    // No need to disconnect - App handles Prisma cleanup
+    console.log("✅ Service container cleaned up successfully");
   }
 }
 

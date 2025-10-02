@@ -179,18 +179,45 @@ class App {
     // Request size limits for DoS protection
     this.app.use(securityEnhancements.requestSizeLimit(config.security.maxRequestSizeMB));
 
-    // Suspicious activity detection
-    this.app.use(securityEnhancements.suspiciousActivityDetection);
+    // Suspicious activity detection - ONLY on write operations to reduce overhead
+    this.app.use((req, res, next) => {
+      if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH' || req.method === 'DELETE') {
+        return securityEnhancements.suspiciousActivityDetection(req, res, next);
+      }
+      next();
+    });
 
-    // SQL and NoSQL injection protection
-    this.app.use(securityEnhancements.sqlInjectionProtection);
-    this.app.use(securityEnhancements.noSqlInjectionProtection);
+    // SQL and NoSQL injection protection - ONLY on write operations
+    // Skip expensive regex checks on GET/HEAD/OPTIONS requests
+    this.app.use((req, res, next) => {
+      if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH' || req.method === 'DELETE') {
+        return securityEnhancements.sqlInjectionProtection(req, res, next);
+      }
+      next();
+    });
 
-    // XSS Protection
-    this.app.use(xssProtection);
+    this.app.use((req, res, next) => {
+      if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH' || req.method === 'DELETE') {
+        return securityEnhancements.noSqlInjectionProtection(req, res, next);
+      }
+      next();
+    });
 
-    // Input sanitization
-    this.app.use(sanitizeInput);
+    // XSS Protection - only on write operations
+    this.app.use((req, res, next) => {
+      if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+        return xssProtection(req, res, next);
+      }
+      next();
+    });
+
+    // Input sanitization - only on write operations
+    this.app.use((req, res, next) => {
+      if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+        return sanitizeInput(req, res, next);
+      }
+      next();
+    });
 
     // Content type validation for POST/PUT requests
     this.app.use(securityEnhancements.contentTypeValidation(['application/json', 'multipart/form-data']));
@@ -637,10 +664,11 @@ class App {
         console.log("⚠️ Redis connection failed, continuing without cache");
       }
 
-      // Initialize service container with proper dependencies
+      // Initialize service container with shared Prisma instance
       const serviceContainer = getServiceContainer();
+      serviceContainer.setPrismaClient(this.prisma);
       await serviceContainer.initialize();
-      console.log("✅ Service container initialized successfully");
+      console.log("✅ Service container initialized with shared Prisma instance");
 
       // Initialize email service
       const { EmailHelper } = await import('./utils/email/emailHelper');

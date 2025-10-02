@@ -14,6 +14,26 @@ import { UserRole } from "../../types/user.types";
 import { AuthenticatedRequest } from "../../types/auth.types";
 import { getServiceContainer } from "../../config/serviceContainer";
 
+// Simple in-memory cache for user sessions (TTL: 5 minutes)
+interface CachedUserSession {
+  user: any;
+  session: any;
+  timestamp: number;
+}
+
+const sessionCache = new Map<string, CachedUserSession>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Clean up cache every 10 minutes to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of sessionCache.entries()) {
+    if (now - value.timestamp > CACHE_TTL) {
+      sessionCache.delete(key);
+    }
+  }
+}, 10 * 60 * 1000);
+
 // Extend Express Request type to include user
 declare global {
   namespace Express {
@@ -116,30 +136,50 @@ export const authenticate = async (
       return;
     }
 
-    // Check if session exists and is valid
-    const serviceContainer = getServiceContainer();
-    const sessionRepo = serviceContainer.getService<SessionRepository>('sessionRepository');
-    const session = await sessionRepo.findBySessionId(decoded.sessionId);
+    // Check cache first
+    const cacheKey = `${decoded.userId}:${decoded.sessionId}`;
+    const cached = sessionCache.get(cacheKey);
 
-    if (!session || session.expiresAt < new Date()) {
-      logger.warn("Invalid or expired session", {
-        sessionId: decoded.sessionId,
-        userId: decoded.userId,
-        ip: req.ip,
-      });
+    let session: any;
+    let user: any;
 
-      res.status(401).json({
-        success: false,
-        error: "SESSION_EXPIRED",
-        message: "Your session has expired. Please log in again",
-        code: "AUTH_006",
+    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+      // Use cached data
+      session = cached.session;
+      user = cached.user;
+    } else {
+      // Fetch from database
+      const serviceContainer = getServiceContainer();
+      const sessionRepo = serviceContainer.getService<SessionRepository>('sessionRepository');
+      session = await sessionRepo.findBySessionId(decoded.sessionId);
+
+      if (!session || session.expiresAt < new Date()) {
+        logger.warn("Invalid or expired session", {
+          sessionId: decoded.sessionId,
+          userId: decoded.userId,
+          ip: req.ip,
+        });
+
+        res.status(401).json({
+          success: false,
+          error: "SESSION_EXPIRED",
+          message: "Your session has expired. Please log in again",
+          code: "AUTH_006",
+        });
+        return;
+      }
+
+      // Get user details
+      const userRepo = serviceContainer.getService<UserRepository>('userRepository');
+      user = await userRepo.findById(decoded.userId);
+
+      // Cache the result
+      sessionCache.set(cacheKey, {
+        user,
+        session,
+        timestamp: Date.now()
       });
-      return;
     }
-
-    // Get user details
-    const userRepo = serviceContainer.getService<UserRepository>('userRepository');
-    const user = await userRepo.findById(decoded.userId);
 
     if (!user) {
       logger.error("User not found for valid token", {
@@ -184,8 +224,14 @@ export const authenticate = async (
       req.user.email = user.email;
     }
 
-    // Update session last activity
-    await sessionRepo.updateLastUsed(session.id);
+    // Update session last activity (fire and forget - don't wait)
+    if (!cached) {
+      const serviceContainer = getServiceContainer();
+      const sessionRepo = serviceContainer.getService<SessionRepository>('sessionRepository');
+      sessionRepo.updateLastUsed(session.id).catch(err => {
+        logger.error('Failed to update session last used:', err);
+      });
+    }
 
     // Add token to request for sliding session middleware
     (req as AuthenticatedRequest).token = token;

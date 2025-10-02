@@ -21,15 +21,15 @@ import { AuthenticatedRequest } from '../../types/auth.types';
 export const SLIDING_SESSION_CONFIG = {
   // Extend token if it expires within this threshold
   EXTENSION_THRESHOLD: 24 * 60 * 60, // 1 day in seconds
-  
+
   // Add this much time when extending
   EXTENSION_PERIOD: 3 * 24 * 60 * 60, // 3 days in seconds
-  
+
   // Maximum inactive time before forced logout
   MAX_INACTIVE_DAYS: 7,
-  
+
   // Only check/update every N requests to reduce DB calls
-  CHECK_FREQUENCY: 10, // Check every 10th request per user
+  CHECK_FREQUENCY: 50, // Check every 50th request per user (reduced from 10)
 } as const;
 
 // Track request counts per user (in-memory cache)
@@ -95,7 +95,10 @@ export const slidingSessionMiddleware = async (
     }
 
     // Update last activity timestamp (for inactive user cleanup)
-    await sessionService.updateLastActivity(sessionId);
+    // Fire and forget - don't wait for this to complete
+    sessionService.updateLastActivity(sessionId).catch(err => {
+      console.error('Failed to update last activity:', err);
+    });
 
     next();
 
