@@ -3,23 +3,14 @@ import { config } from "../../config/environment";
 import { logger } from "../logger/winston";
 import fs from "fs/promises";
 import path from "path";
-import handlebars from "handlebars";
-
-// Register Handlebars helpers
-handlebars.registerHelper('lte', function(a: any, b: any) {
-  return a <= b;
-});
-
-handlebars.registerHelper('eq', function(a: any, b: any) {
-  return a === b;
-});
 
 /**
  * Email service helper for Bareloft e-commerce platform using nodemailer
+ * Uses plain HTML templates with simple variable substitution
  */
 export class EmailHelper {
   private static transporter: nodemailer.Transporter;
-  private static templateCache = new Map<string, HandlebarsTemplateDelegate>();
+  private static templateCache = new Map<string, string>();
 
   /**
    * Initialize email transporter with nodemailer
@@ -112,11 +103,19 @@ export class EmailHelper {
         attachments,
       } = options;
 
-      // Load and compile template
-      const compiledTemplate = await this.getTemplate(template);
-      const html = compiledTemplate(data);
+      logger.info(`📧 Preparing to send template email: ${template}`, {
+        to: Array.isArray(to) ? to.join(', ') : to,
+        subject,
+        template
+      });
 
-      return await this.sendPlainEmail({
+      // Load template and replace variables
+      const templateContent = await this.getTemplate(template);
+      const html = this.replaceVariables(templateContent, data);
+
+      logger.info(`✅ Template loaded and variables replaced for: ${template}`);
+
+      const result = await this.sendPlainEmail({
         to,
         subject,
         text: data.text || `Message from ${config.email.fromName}`,
@@ -125,8 +124,20 @@ export class EmailHelper {
         replyTo,
         attachments,
       });
+
+      if (result) {
+        logger.info(`✅ Template email sent successfully: ${template} to ${Array.isArray(to) ? to.join(', ') : to}`);
+      } else {
+        logger.error(`❌ Failed to send template email: ${template}`);
+      }
+
+      return result;
     } catch (error) {
-      logger.error("Failed to send template email:", error);
+      logger.error("Failed to send template email:", {
+        template: options.template,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
       return false;
     }
   }
@@ -179,18 +190,39 @@ export class EmailHelper {
         throw new Error("Email service not properly initialized");
       }
 
+      logger.info("📤 Sending email via nodemailer...", {
+        to: mailOptions.to,
+        subject: mailOptions.subject,
+        from: mailOptions.from
+      });
+
       // Always attempt to send the email through nodemailer
       const info = await this.transporter.sendMail(mailOptions);
 
-      logger.info("Email sent successfully:", {
+      logger.info("✅ Email sent successfully!", {
         messageId: info.messageId,
         to: mailOptions.to,
         subject: mailOptions.subject,
+        response: info.response,
+        accepted: info.accepted,
+        rejected: info.rejected
+      });
+
+      console.log("✅ Email delivered:", {
+        to: mailOptions.to,
+        subject: mailOptions.subject,
+        messageId: info.messageId
       });
 
       return true;
     } catch (error) {
-      logger.error("Failed to send email:", error);
+      logger.error("❌ Failed to send email:", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        to: options.to,
+        subject: options.subject
+      });
+      console.error("❌ Email error:", error);
       return false;
     }
   }
@@ -231,44 +263,82 @@ export class EmailHelper {
   }
 
   /**
-   * Get and compile email template
+   * Get email template and replace variables
    */
-  private static async getTemplate(templateName: string): Promise<HandlebarsTemplateDelegate> {
+  private static async getTemplate(templateName: string): Promise<string> {
     const cacheKey = templateName;
-    
+
     if (this.templateCache.has(cacheKey)) {
       return this.templateCache.get(cacheKey)!;
     }
 
     try {
-      const templatePath = path.join(
+      // Try .html extension first, fallback to .hbs
+      let templatePath = path.join(
         __dirname,
         "..",
         "..",
         "templates",
         "email",
-        `${templateName}.hbs`
+        `${templateName}.html`
       );
 
-      const templateContent = await fs.readFile(templatePath, "utf-8");
-      const compiledTemplate = handlebars.compile(templateContent);
-
-      this.templateCache.set(cacheKey, compiledTemplate);
-      return compiledTemplate;
+      try {
+        const templateContent = await fs.readFile(templatePath, "utf-8");
+        this.templateCache.set(cacheKey, templateContent);
+        return templateContent;
+      } catch {
+        // Try .hbs extension as fallback
+        templatePath = path.join(
+          __dirname,
+          "..",
+          "..",
+          "templates",
+          "email",
+          `${templateName}.hbs`
+        );
+        const templateContent = await fs.readFile(templatePath, "utf-8");
+        this.templateCache.set(cacheKey, templateContent);
+        return templateContent;
+      }
     } catch (error) {
       logger.error(`Failed to load email template ${templateName}:`, error);
-      
+
       // Return a basic template as fallback
-      const fallbackTemplate = handlebars.compile(`
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2>{{subject}}</h2>
-          <div>{{{content}}}</div>
-        </div>
-      `);
-      
+      const fallbackTemplate = `
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="UTF-8"></head>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: #f5f5f5; padding: 20px; border-radius: 8px;">
+            <h2 style="color: #333;">{{subject}}</h2>
+            <div style="color: #555;">{{content}}</div>
+          </div>
+        </body>
+        </html>
+      `;
+
       this.templateCache.set(cacheKey, fallbackTemplate);
       return fallbackTemplate;
     }
+  }
+
+  /**
+   * Replace template variables with actual values
+   */
+  private static replaceVariables(template: string, data: Record<string, any>): string {
+    let result = template;
+
+    // Replace all {{variable}} with actual values
+    for (const [key, value] of Object.entries(data)) {
+      const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
+      result = result.replace(regex, String(value ?? ''));
+    }
+
+    // Clean up any remaining unreplaced variables
+    result = result.replace(/{{[^}]+}}/g, '');
+
+    return result;
   }
 
   /**
