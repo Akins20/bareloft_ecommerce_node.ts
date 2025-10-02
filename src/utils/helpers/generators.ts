@@ -1,10 +1,19 @@
 import crypto from "crypto";
-import { customAlphabet } from "nanoid";
 
 /**
  * ID and code generation utilities for e-commerce operations
  */
 export class IDGenerators {
+  /**
+   * Helper to generate custom alphabet string
+   */
+  private static generateCustomId(alphabet: string, length: number): string {
+    let result = "";
+    for (let i = 0; i < length; i++) {
+      result += alphabet[crypto.randomInt(0, alphabet.length)];
+    }
+    return result;
+  }
   /**
    * Generate a secure random OTP code
    */
@@ -62,9 +71,9 @@ export class IDGenerators {
    */
   static generateTrackingNumber(): string {
     const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    const nanoid = customAlphabet(alphabet, 12);
+    const randomId = this.generateCustomId(alphabet, 12);
 
-    return `BL${nanoid()}`;
+    return `BL${randomId}`;
   }
 
   /**
@@ -123,8 +132,7 @@ export class IDGenerators {
       chars = chars.replace(/[0O1IL]/g, "");
     }
 
-    const nanoid = customAlphabet(chars, length);
-    const code = nanoid();
+    const code = this.generateCustomId(chars, length);
 
     return prefix ? `${prefix.toUpperCase()}${code}` : code;
   }
@@ -312,9 +320,8 @@ export class IDGenerators {
   static generateUrlSafeString(length: number = 16): string {
     const alphabet =
       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    const nanoid = customAlphabet(alphabet, length);
 
-    return nanoid();
+    return this.generateCustomId(alphabet, length);
   }
 
   /**
