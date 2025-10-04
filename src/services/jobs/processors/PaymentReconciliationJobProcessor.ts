@@ -610,15 +610,16 @@ export class PaymentReconciliationJobProcessor {
       return null; // No discrepancy
 
     } catch (error) {
-      return {
+      // DON'T return a discrepancy for verification errors
+      // This prevents incorrectly marking paid orders as failed
+      logger.error(`❌ [RECONCILIATION] Error during payment verification`, {
         orderId: order.id,
         orderNumber: order.orderNumber,
-        databaseStatus: order.paymentStatus,
-        paystackStatus: PaymentStatus.FAILED,
-        amount: order.totalPrice,
-        paymentReference: order.paymentReference,
-        reason: `Error during verification: ${error.message}`
-      };
+        error: error.message
+      });
+
+      // Return null to skip this order instead of marking it as failed
+      return null;
     }
   }
 
