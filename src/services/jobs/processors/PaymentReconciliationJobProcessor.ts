@@ -185,33 +185,48 @@ export class PaymentReconciliationJobProcessor {
           gte: extendedTimeThreshold // Use extended threshold to catch timezone differences
         },
         OR: [
-          // Orders with proper Paystack payment references
+          // CRITICAL: Only reconcile orders that are in uncertain states
+          // This prevents re-processing already completed/failed orders
           {
-            paymentReference: {
-              not: null,
-              startsWith: 'T_' // Paystack transaction references start with 'T_'
+            // Orders with PENDING/PROCESSING status (need verification)
+            paymentStatus: {
+              in: [PaymentStatus.PENDING, PaymentStatus.PROCESSING]
             }
           },
-          // Orders that still have orderNumber as paymentReference (need reconciliation)
+          // Orders that have orderNumber as paymentReference (needs proper Paystack ref)
           {
             paymentReference: {
               not: null,
               startsWith: 'BL' // Bareloft order numbers start with 'BL'
+            },
+            paymentStatus: {
+              in: [PaymentStatus.PENDING, PaymentStatus.PROCESSING, PaymentStatus.COMPLETED]
             }
           },
-          // Orders with null paymentReference (need reconciliation)
+          // Orders with null paymentReference but in active payment states
           {
-            paymentReference: null
+            paymentReference: null,
+            paymentStatus: {
+              in: [PaymentStatus.PENDING, PaymentStatus.PROCESSING]
+            }
           }
         ]
       };
 
-      // If only checking unconfirmed orders
+      // If only checking unconfirmed orders, further restrict the status filter
       if (data.onlyUnconfirmed) {
+        // Override the OR clause to ONLY check unconfirmed orders
         whereClause.paymentStatus = {
           in: [PaymentStatus.PENDING, PaymentStatus.PROCESSING]
         };
       }
+
+      // CRITICAL: Exclude orders that were recently updated (within last 10 minutes)
+      // This prevents hammering the same orders repeatedly when cron runs every 15 min
+      const recentUpdateThreshold = new Date(Date.now() - 10 * 60 * 1000); // 10 minutes ago
+      whereClause.updatedAt = {
+        lt: recentUpdateThreshold // Only process orders NOT updated in last 10 minutes
+      };
 
       const orders = await OrderModel.findMany({
         where: whereClause,
@@ -675,9 +690,9 @@ export class PaymentReconciliationJobProcessor {
       if (discrepancy.paystackStatus === PaymentStatus.COMPLETED && !order.paymentReference) {
         try {
           // If we found the transaction via metadata search, update the paymentReference
-          const paystackTransaction = discrepancy.reason.includes('metadata') ? 
+          const paystackTransaction = discrepancy.reason.includes('metadata') ?
             await this.paymentService.findTransactionByOrderNumber(order.orderNumber) : null;
-          
+
           if (paystackTransaction?.data?.reference) {
             await OrderModel.update({
               where: { id: order.id },
@@ -685,7 +700,7 @@ export class PaymentReconciliationJobProcessor {
                 paymentReference: paystackTransaction.data.reference
               }
             });
-            
+
             logger.info(`✅ [RECONCILIATION] Updated missing paymentReference`, {
               orderId: order.id,
               orderNumber: order.orderNumber,
@@ -700,8 +715,28 @@ export class PaymentReconciliationJobProcessor {
         }
       }
 
-      // Send appropriate notifications for status changes
-      await this.sendReconciliationNotifications(order, discrepancy, newPaymentStatus, newOrderStatus);
+      // CRITICAL FIX: Only send notifications if status ACTUALLY changed
+      // Check if the old status was different from new status
+      const statusActuallyChanged = order.paymentStatus !== newPaymentStatus;
+
+      if (statusActuallyChanged) {
+        logger.info(`🔔 [RECONCILIATION] Status changed, sending notifications`, {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          oldStatus: order.paymentStatus,
+          newStatus: newPaymentStatus
+        });
+
+        // Send appropriate notifications for status changes
+        await this.sendReconciliationNotifications(order, discrepancy, newPaymentStatus, newOrderStatus);
+      } else {
+        logger.info(`⏭️ [RECONCILIATION] Status unchanged, skipping notification`, {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          status: newPaymentStatus,
+          reason: 'Already processed - preventing duplicate emails'
+        });
+      }
 
       return true;
 

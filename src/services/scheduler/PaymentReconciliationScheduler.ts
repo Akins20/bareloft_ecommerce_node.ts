@@ -80,10 +80,9 @@ export class PaymentReconciliationScheduler {
         ]
       });
 
-      // Run an initial reconciliation immediately on startup
-      setTimeout(() => {
-        this.scheduleInitialReconciliation();
-      }, 5000); // 5 second delay to let services fully initialize
+      // REMOVED: Initial reconciliation on startup to reduce server load
+      // The scheduled jobs will handle reconciliation at proper intervals
+      // If urgent reconciliation needed, use manual trigger endpoint
 
     } catch (error) {
       logger.error('❌ Failed to start PaymentReconciliationScheduler', {
