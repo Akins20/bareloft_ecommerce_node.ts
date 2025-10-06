@@ -93,7 +93,7 @@ POST /api/v1/auth/test-login
 #### **2. Authentication Middleware**
 - **Location**: `/src/middleware/auth/authenticate.ts`
 - **Pattern**: Service container for stability
-- **Features**: JWT validation, session management, Nigerian phone support
+- **Features**: JWT validation, session management, Nigerian phone support.
 
 #### **3. Authorization Levels**
 ```typescript
