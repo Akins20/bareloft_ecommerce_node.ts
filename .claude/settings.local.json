@@ -44,7 +44,8 @@
       "Bash(sed:*)",
       "Bash(tsc --noEmit)",
       "Bash(redis-cli:*)",
-      "Bash(tsx scripts/createTestUser.ts:*)"
+      "Bash(tsx scripts/createTestUser.ts:*)",
+      "Bash(git log:*)"
     ],
     "deny": []
   }

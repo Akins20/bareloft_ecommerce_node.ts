@@ -70,26 +70,51 @@ export class SearchService extends BaseService {
     try {
       const startTime = Date.now();
       const processedQuery = this.processSearchQuery(query.query);
-      
-      // Execute search with filters
-      const products = await this.productRepo.findMany({}, {
-        pagination: {
+
+      // Build search filters
+      const filters: any = {};
+
+      if (query.filters?.categoryId) {
+        filters.categoryId = query.filters.categoryId;
+      }
+
+      if (query.filters?.priceMin !== undefined || query.filters?.priceMax !== undefined) {
+        if (query.filters.priceMin !== undefined) {
+          filters.priceMin = query.filters.priceMin;
+        }
+        if (query.filters.priceMax !== undefined) {
+          filters.priceMax = query.filters.priceMax;
+        }
+      }
+
+      if (query.filters?.brand) {
+        filters.brand = query.filters.brand;
+      }
+
+      if (query.filters?.inStock) {
+        filters.inStock = true;
+      }
+
+      // Execute search with the processed query
+      const products = await this.productRepo.searchProducts(
+        processedQuery,
+        filters,
+        {
           page: query.page || 1,
           limit: query.limit || 20,
         }
-        // Add search filters as needed
-      });
+      );
 
       const suggestions = await this.getSuggestions(query.query, 5);
-      
+
       return {
         products: products.data,
         pagination: {
-          currentPage: (products.pagination as any).page || 1,
+          currentPage: products.pagination.currentPage,
           totalPages: products.pagination.totalPages,
-          total: (products.pagination as any).total || 0,
-          hasNext: (products.pagination as any).hasNext || false,
-          hasPrev: (products.pagination as any).hasPrev || false,
+          total: products.pagination.totalItems,
+          hasNext: products.pagination.hasNextPage,
+          hasPrev: products.pagination.hasPreviousPage,
         },
         suggestions,
         searchTime: Date.now() - startTime,
@@ -197,13 +222,15 @@ export class SearchService extends BaseService {
 
       const suggestions: SearchSuggestion[] = [];
 
-      // Product name suggestions (mock implementation)
-      const productSuggestions = await this.productRepo.findMany({}, {
-        pagination: {
+      // Product name suggestions - use actual search
+      const productSuggestions = await this.productRepo.searchProducts(
+        partialQuery,
+        { inStock: true },
+        {
           page: 1,
           limit: Math.ceil(limit * 0.6),
         }
-      });
+      );
       suggestions.push(
         ...productSuggestions.data.map((product: any) => ({
           text: product.name,
@@ -215,13 +242,22 @@ export class SearchService extends BaseService {
         }))
       );
 
-      // Category suggestions (mock implementation)
-      const categorySuggestions = await this.categoryRepo.findMany({}, {
-        pagination: {
-          page: 1,
-          limit: Math.ceil(limit * 0.4),
+      // Category suggestions - search by name
+      const categorySuggestions = await this.categoryRepo.findMany(
+        {
+          isActive: true,
+          name: {
+            contains: partialQuery,
+            mode: "insensitive" as const,
+          },
+        },
+        {
+          pagination: {
+            page: 1,
+            limit: Math.ceil(limit * 0.4),
+          },
         }
-      });
+      );
       suggestions.push(
         ...categorySuggestions.data.map((category: any) => ({
           text: category.name,
@@ -528,39 +564,36 @@ export class SearchService extends BaseService {
     filters: any
   ): Promise<any> {
     try {
-      // Multi-field search with different weights
-      const searchConfig = {
-        query: processedQuery,
-        fields: {
-          name: { weight: 3, boost: true },
-          description: { weight: 2 },
-          tags: { weight: 2 },
-          sku: { weight: 1 },
-          category: { weight: 1.5 },
-        },
-        filters,
-        ranking: {
-          factors: [
-            { field: "popularity", weight: 0.3 },
-            { field: "rating", weight: 0.2 },
-            { field: "relevance", weight: 0.3 },
-            { field: "recency", weight: 0.1 },
-            { field: "availability", weight: 0.1 },
-          ],
-        },
-        pagination: {
-          page: filters.page || 1,
-          limit: filters.limit || 20,
-        },
+      // Build search filters for the repository
+      const searchFilters: any = {
+        inStock: filters.inStock,
       };
 
-      const results = await this.productRepo.findMany({}, {
-        pagination: {
+      if (filters.categoryId) {
+        searchFilters.categoryId = filters.categoryId;
+      }
+
+      if (filters.priceMin !== undefined) {
+        searchFilters.priceMin = filters.priceMin;
+      }
+
+      if (filters.priceMax !== undefined) {
+        searchFilters.priceMax = filters.priceMax;
+      }
+
+      if (filters.brand) {
+        searchFilters.brand = filters.brand;
+      }
+
+      // Execute search using ProductRepository's search method
+      const results = await this.productRepo.searchProducts(
+        processedQuery,
+        searchFilters,
+        {
           page: filters.page || 1,
           limit: filters.limit || 20,
         }
-        // Add search filters as needed
-      });
+      );
 
       // Apply Nigerian market ranking adjustments
       results.data = this.applyNigerianMarketRanking(
