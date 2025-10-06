@@ -26,8 +26,14 @@ export class EmailHelper {
 
       // Create nodemailer transporter with the available credentials
       console.log("🔧 Creating nodemailer transporter...");
+
+      // Use explicit SMTP configuration for better production compatibility
+      // Port 587 with STARTTLS is less likely to be blocked than port 465
+      const isProduction = config.nodeEnv === 'production';
       this.transporter = nodemailer.createTransport({
-        service: 'gmail', // Use Gmail service
+        host: 'smtp.gmail.com',
+        port: isProduction ? 587 : 465, // Use 587 (STARTTLS) in production, 465 (SSL) in dev
+        secure: !isProduction, // true for 465 (SSL), false for 587 (STARTTLS)
         auth: {
           user: config.email.user,
           pass: config.email.password,
@@ -45,7 +51,7 @@ export class EmailHelper {
         logger: config.nodeEnv === 'development',
         pool: false // Disable connection pooling for simpler debugging
       } as any); // Type assertion to avoid TypeScript issues with Gmail service
-      console.log("✅ Transporter created:", !!this.transporter);
+      console.log(`✅ Transporter created (${isProduction ? 'production' : 'development'} mode, port ${isProduction ? 587 : 465}):`, !!this.transporter);
 
       // Log what we're using for debugging
       if (!config.email.user || !config.email.password) {
@@ -71,8 +77,11 @@ export class EmailHelper {
     } catch (error) {
       logger.error("❌ Failed to initialize email service, creating fallback transporter:", error);
       // Create a basic transporter even if initialization fails
+      const isProduction = config.nodeEnv === 'production';
       this.transporter = nodemailer.createTransport({
-        service: 'gmail',
+        host: 'smtp.gmail.com',
+        port: isProduction ? 587 : 465,
+        secure: !isProduction,
         auth: {
           user: config.email.user || 'fallback@gmail.com',
           pass: config.email.password || 'fallback-password',
