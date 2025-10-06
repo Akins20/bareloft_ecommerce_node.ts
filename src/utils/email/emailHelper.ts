@@ -35,8 +35,16 @@ export class EmailHelper {
         // Handle TLS unauthorized issues
         tls: {
           rejectUnauthorized: false
-        }
-      });
+        },
+        // Add connection timeout and socket timeout (in milliseconds)
+        connectionTimeout: 10000, // 10 seconds
+        greetingTimeout: 10000, // 10 seconds
+        socketTimeout: 10000, // 10 seconds
+        // Enable debug output
+        debug: config.nodeEnv === 'development',
+        logger: config.nodeEnv === 'development',
+        pool: false // Disable connection pooling for simpler debugging
+      } as any); // Type assertion to avoid TypeScript issues with Gmail service
       console.log("✅ Transporter created:", !!this.transporter);
 
       // Log what we're using for debugging
@@ -71,8 +79,12 @@ export class EmailHelper {
         },
         tls: {
           rejectUnauthorized: false
-        }
-      });
+        },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 10000,
+        pool: false // Disable connection pooling for fallback
+      } as any);
     }
   }
 
@@ -196,8 +208,15 @@ export class EmailHelper {
         from: mailOptions.from
       });
 
-      // Always attempt to send the email through nodemailer
-      const info = await this.transporter.sendMail(mailOptions);
+      // Add timeout to email sending (30 seconds)
+      const sendEmailWithTimeout = Promise.race([
+        this.transporter.sendMail(mailOptions),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Email sending timeout after 30 seconds')), 30000)
+        )
+      ]);
+
+      const info = await sendEmailWithTimeout as any;
 
       logger.info("✅ Email sent successfully!", {
         messageId: info.messageId,
