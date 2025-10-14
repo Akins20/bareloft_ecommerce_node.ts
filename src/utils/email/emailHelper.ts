@@ -146,7 +146,7 @@ export class EmailHelper {
         subject,
         text,
         html: html || text,
-        reply_to: replyTo || config.email.replyTo,
+        replyTo: replyTo || config.email.replyTo,
         attachments: resendAttachments,
       });
 

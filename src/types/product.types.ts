@@ -548,6 +548,8 @@ export interface SearchFilters {
   brands?: string[] | undefined;
   minPrice?: number | undefined;
   maxPrice?: number | undefined;
+  priceMin?: number | undefined;
+  priceMax?: number | undefined;
   priceRange?: { min: number; max: number } | undefined;
   rating?: number | undefined;
   inStock?: boolean | undefined;
