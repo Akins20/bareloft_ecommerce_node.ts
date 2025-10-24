@@ -9,7 +9,7 @@ import path from "path";
  */
 export class EmailHelper {
   private static resend: Resend;
-  private static templateCache = new Map<string, HandlebarsTemplateDelegate>();
+  private static templateCache = new Map<string, string>();
 
   /**
    * Initialize email service with Resend API
@@ -251,12 +251,12 @@ export class EmailHelper {
       logger.error(`Failed to load email template ${templateName}:`, error);
 
       // Return a basic template as fallback
-      const fallbackTemplate = handlebars.compile(`
+      const fallbackTemplate = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2>{{subject}}</h2>
-          <div>{{{content}}}</div>
+          <div>{{content}}</div>
         </div>
-      `);
+      `;
 
       this.templateCache.set(cacheKey, fallbackTemplate);
       return fallbackTemplate;
