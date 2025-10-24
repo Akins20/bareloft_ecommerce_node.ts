@@ -21,9 +21,10 @@ import jobsRoutes from "./jobs";
 const router = Router();
 
 // Global admin middleware - applies to all admin routes
-router.use(authenticate);
-router.use(authorize(["ADMIN", "SUPER_ADMIN"]));
-router.use(securityEnhancements.apiKeyAuthentication); // Additional API key security for admin
+router.use(authenticate); // JWT authentication
+router.use(authorize(["ADMIN", "SUPER_ADMIN"])); // Role-based authorization
+// REMOVED: API key authentication - admins can access with JWT tokens from email-login
+// router.use(securityEnhancements.apiKeyAuthentication);
 router.use(rateLimiter.admin);
 
 /**
@@ -295,8 +296,8 @@ router.get("/", (req, res) => {
       "Real-time job performance monitoring"
     ],
     security: {
-      authentication: "JWT with session validation",
-      authorization: "Role-based access control (RBAC)",
+      authentication: "JWT with session validation (login via /api/v1/auth/email-login)",
+      authorization: "Role-based access control (RBAC) - ADMIN and SUPER_ADMIN roles",
       rateLimiting: "Enhanced limits for admin operations",
       auditLogging: "Complete action logging",
       sessionManagement: "Secure admin session handling"
