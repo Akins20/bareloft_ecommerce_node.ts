@@ -744,14 +744,13 @@ class App {
       // Store job service reference for graceful shutdown
       (this as any).jobService = jobService;
 
-      // Initialize payment reconciliation scheduler
-      const { PaymentReconciliationScheduler } = await import('./services/scheduler/PaymentReconciliationScheduler');
-      const reconciliationScheduler = new PaymentReconciliationScheduler(jobService);
-      reconciliationScheduler.start();
-      console.log("✅ Payment reconciliation scheduler started successfully");
-
-      // Store scheduler reference for graceful shutdown
-      (this as any).reconciliationScheduler = reconciliationScheduler;
+      // DISABLED: Payment reconciliation scheduler
+      // Uncomment below to re-enable automatic payment reconciliation
+      // const { PaymentReconciliationScheduler } = await import('./services/scheduler/PaymentReconciliationScheduler');
+      // const reconciliationScheduler = new PaymentReconciliationScheduler(jobService);
+      // reconciliationScheduler.start();
+      // console.log("✅ Payment reconciliation scheduler started successfully");
+      // (this as any).reconciliationScheduler = reconciliationScheduler;
 
       // Pre-warm critical queries to reduce cold start latency
       await this.prewarmQueries();
