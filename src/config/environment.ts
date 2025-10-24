@@ -40,8 +40,7 @@ export interface Config {
     allowedFormats: string[];
   };
   email: {
-    user: string;
-    password: string;
+    resendApiKey: string;
     fromEmail: string;
     fromName: string;
     replyTo: string;
@@ -124,8 +123,7 @@ export const config: Config = {
   },
 
   email: {
-    user: process.env.SMTP_USER || "",
-    password: process.env.SMTP_PASSWORD || "",
+    resendApiKey: process.env.RESEND_API_KEY || "",
     fromEmail: process.env.FROM_EMAIL || "noreply@bareloft.com",
     fromName: process.env.FROM_NAME || "Bareloft",
     replyTo: process.env.REPLY_TO_EMAIL || process.env.FROM_EMAIL || "noreply@bareloft.com",

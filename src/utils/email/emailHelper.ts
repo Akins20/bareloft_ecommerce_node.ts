@@ -1,99 +1,45 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import { config } from "../../config/environment";
 import { logger } from "../logger/winston";
 import fs from "fs/promises";
 import path from "path";
 
 /**
- * Email service helper for Bareloft e-commerce platform using nodemailer
- * Uses plain HTML templates with simple variable substitution
+ * Email service helper for Bareloft e-commerce platform using Resend API
  */
 export class EmailHelper {
-  private static transporter: nodemailer.Transporter;
-  private static templateCache = new Map<string, string>();
+  private static resend: Resend;
+  private static templateCache = new Map<string, HandlebarsTemplateDelegate>();
 
   /**
-   * Initialize email transporter with nodemailer
+   * Initialize email service with Resend API
    */
   static async initialize(): Promise<void> {
     try {
       // Debug log the email configuration
       console.log("🔍 Email config debug:", {
-        user: config.email.user ? `${config.email.user.substring(0, 3)}***` : 'NOT SET',
-        password: config.email.password ? `***${config.email.password.length} chars***` : 'NOT SET',
+        apiKey: config.email.resendApiKey
+          ? `${config.email.resendApiKey.substring(0, 6)}***`
+          : "NOT SET",
         fromEmail: config.email.fromEmail,
+        fromName: config.email.fromName,
       });
 
-      // Create nodemailer transporter with the available credentials
-      console.log("🔧 Creating nodemailer transporter...");
+      // Initialize Resend with API key
+      console.log("🔧 Creating Resend client...");
+      this.resend = new Resend(config.email.resendApiKey);
+      console.log("✅ Resend client created:", !!this.resend);
 
-      // Use explicit SMTP configuration for better production compatibility
-      // Port 587 with STARTTLS is less likely to be blocked than port 465
-      const isProduction = config.nodeEnv === 'production';
-      this.transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: isProduction ? 587 : 465, // Use 587 (STARTTLS) in production, 465 (SSL) in dev
-        secure: !isProduction, // true for 465 (SSL), false for 587 (STARTTLS)
-        auth: {
-          user: config.email.user,
-          pass: config.email.password,
-        },
-        // Handle TLS unauthorized issues
-        tls: {
-          rejectUnauthorized: false
-        },
-        // Add connection timeout and socket timeout (in milliseconds)
-        connectionTimeout: 10000, // 10 seconds
-        greetingTimeout: 10000, // 10 seconds
-        socketTimeout: 10000, // 10 seconds
-        // Enable debug output
-        debug: config.nodeEnv === 'development',
-        logger: config.nodeEnv === 'development',
-        pool: false // Disable connection pooling for simpler debugging
-      } as any); // Type assertion to avoid TypeScript issues with Gmail service
-      console.log(`✅ Transporter created (${isProduction ? 'production' : 'development'} mode, port ${isProduction ? 587 : 465}):`, !!this.transporter);
-
-      // Log what we're using for debugging
-      if (!config.email.user || !config.email.password) {
-        logger.warn("⚠️ Email credentials missing, but will still attempt to send emails");
+      if (!config.email.resendApiKey) {
+        logger.warn(
+          "⚠️ Resend API key missing, email functionality will not work"
+        );
       } else {
-        logger.info("✅ Email service initialized with credentials");
-      }
-
-      // Try to verify if credentials are provided (with timeout)
-      if (config.email.user && config.email.password) {
-        // Don't await - verify in background to avoid blocking startup
-        Promise.race([
-          this.transporter.verify(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Verification timeout')), 3000))
-        ])
-          .then(() => {
-            logger.info("✅ Email service verified successfully with nodemailer");
-          })
-          .catch((error) => {
-            logger.warn("⚠️ Email verification failed/timeout, but will still attempt to send:", error.message);
-          });
+        logger.info("✅ Email service initialized with Resend API");
       }
     } catch (error) {
-      logger.error("❌ Failed to initialize email service, creating fallback transporter:", error);
-      // Create a basic transporter even if initialization fails
-      const isProduction = config.nodeEnv === 'production';
-      this.transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: isProduction ? 587 : 465,
-        secure: !isProduction,
-        auth: {
-          user: config.email.user || 'fallback@gmail.com',
-          pass: config.email.password || 'fallback-password',
-        },
-        tls: {
-          rejectUnauthorized: false
-        },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 10000,
-        pool: false // Disable connection pooling for fallback
-      } as any);
+      logger.error("❌ Failed to initialize email service:", error);
+      throw error;
     }
   }
 
@@ -114,20 +60,13 @@ export class EmailHelper {
     }>;
   }): Promise<boolean> {
     try {
-      const {
-        to,
-        template,
-        subject,
-        data,
-        from = `${config.email.fromName} <${config.email.fromEmail}>`,
-        replyTo = config.email.replyTo,
-        attachments,
-      } = options;
+      const { to, template, subject, data, from, replyTo, attachments } =
+        options;
 
       logger.info(`📧 Preparing to send template email: ${template}`, {
-        to: Array.isArray(to) ? to.join(', ') : to,
+        to: Array.isArray(to) ? to.join(", ") : to,
         subject,
-        template
+        template,
       });
 
       // Load template and replace variables
@@ -147,7 +86,9 @@ export class EmailHelper {
       });
 
       if (result) {
-        logger.info(`✅ Template email sent successfully: ${template} to ${Array.isArray(to) ? to.join(', ') : to}`);
+        logger.info(
+          `✅ Template email sent successfully: ${template} to ${Array.isArray(to) ? to.join(", ") : to}`
+        );
       } else {
         logger.error(`❌ Failed to send template email: ${template}`);
       }
@@ -157,7 +98,7 @@ export class EmailHelper {
       logger.error("Failed to send template email:", {
         template: options.template,
         error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
+        stack: error instanceof Error ? error.stack : undefined,
       });
       return false;
     }
@@ -180,66 +121,41 @@ export class EmailHelper {
     }>;
   }): Promise<boolean> {
     try {
-      const {
-        to,
-        subject,
-        text,
-        html,
-        from = `${config.email.fromName} <${config.email.fromEmail}>`,
-        replyTo = config.email.replyTo,
-        attachments,
-      } = options;
+      const { to, subject, text, html, from, replyTo, attachments } = options;
 
-      const mailOptions: nodemailer.SendMailOptions = {
-        from,
-        to: Array.isArray(to) ? to.join(", ") : to,
-        subject,
-        text,
-        html,
-        replyTo,
-        attachments,
-      };
-
-      // Check if transporter is available
-      if (!this.transporter) {
-        logger.error("❌ Email transporter not initialized. Cannot send email.");
-        console.log("🔍 Debug: Transporter status:", {
-          transporterExists: !!this.transporter,
-          configUser: !!config.email.user,
-          configPassword: !!config.email.password,
-        });
+      // Check if Resend client is available
+      if (!this.resend) {
+        logger.error("❌ Resend client not initialized. Cannot send email.");
         throw new Error("Email service not properly initialized");
       }
 
-      logger.info("📤 Sending email via nodemailer...", {
-        to: mailOptions.to,
-        subject: mailOptions.subject,
-        from: mailOptions.from
+      // Prepare from address
+      const fromAddress =
+        from || `${config.email.fromName} <${config.email.fromEmail}>`;
+
+      // Convert attachments to Resend format if provided
+      const resendAttachments = attachments?.map((att) => ({
+        filename: att.filename,
+        content: Buffer.isBuffer(att.content)
+          ? att.content
+          : Buffer.from(att.content),
+      }));
+
+      // Send email using Resend API
+      const result = await this.resend.emails.send({
+        from: fromAddress,
+        to: Array.isArray(to) ? to : [to],
+        subject,
+        text,
+        html: html || text,
+        replyTo: replyTo || config.email.replyTo,
+        attachments: resendAttachments,
       });
 
-      // Add timeout to email sending (30 seconds)
-      const sendEmailWithTimeout = Promise.race([
-        this.transporter.sendMail(mailOptions),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Email sending timeout after 30 seconds')), 30000)
-        )
-      ]);
-
-      const info = await sendEmailWithTimeout as any;
-
-      logger.info("✅ Email sent successfully!", {
-        messageId: info.messageId,
-        to: mailOptions.to,
-        subject: mailOptions.subject,
-        response: info.response,
-        accepted: info.accepted,
-        rejected: info.rejected
-      });
-
-      console.log("✅ Email delivered:", {
-        to: mailOptions.to,
-        subject: mailOptions.subject,
-        messageId: info.messageId
+      logger.info("Email sent successfully:", {
+        id: result.data?.id,
+        to: Array.isArray(to) ? to.join(", ") : to,
+        subject,
       });
 
       return true;
@@ -248,7 +164,7 @@ export class EmailHelper {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
         to: options.to,
-        subject: options.subject
+        subject: options.subject,
       });
       console.error("❌ Email error:", error);
       return false;
@@ -258,14 +174,16 @@ export class EmailHelper {
   /**
    * Send bulk emails
    */
-  static async sendBulkEmails(emails: Array<{
-    to: string;
-    subject: string;
-    text: string;
-    html?: string;
-    from?: string;
-    replyTo?: string;
-  }>): Promise<{ sent: number; failed: number }> {
+  static async sendBulkEmails(
+    emails: Array<{
+      to: string;
+      subject: string;
+      text: string;
+      html?: string;
+      from?: string;
+      replyTo?: string;
+    }>
+  ): Promise<{ sent: number; failed: number }> {
     let sent = 0;
     let failed = 0;
 
@@ -277,9 +195,9 @@ export class EmailHelper {
         } else {
           failed++;
         }
-        
+
         // Add small delay between emails to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       } catch (error) {
         failed++;
         logger.error(`Failed to send bulk email to ${email.to}:`, error);
@@ -333,18 +251,12 @@ export class EmailHelper {
       logger.error(`Failed to load email template ${templateName}:`, error);
 
       // Return a basic template as fallback
-      const fallbackTemplate = `
-        <!DOCTYPE html>
-        <html>
-        <head><meta charset="UTF-8"></head>
-        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background: #f5f5f5; padding: 20px; border-radius: 8px;">
-            <h2 style="color: #333;">{{subject}}</h2>
-            <div style="color: #555;">{{content}}</div>
-          </div>
-        </body>
-        </html>
-      `;
+      const fallbackTemplate = handlebars.compile(`
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>{{subject}}</h2>
+          <div>{{{content}}}</div>
+        </div>
+      `);
 
       this.templateCache.set(cacheKey, fallbackTemplate);
       return fallbackTemplate;
@@ -354,17 +266,20 @@ export class EmailHelper {
   /**
    * Replace template variables with actual values
    */
-  private static replaceVariables(template: string, data: Record<string, any>): string {
+  private static replaceVariables(
+    template: string,
+    data: Record<string, any>
+  ): string {
     let result = template;
 
     // Replace all {{variable}} with actual values
     for (const [key, value] of Object.entries(data)) {
-      const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
-      result = result.replace(regex, String(value ?? ''));
+      const regex = new RegExp(`{{\\s*${key}\\s*}}`, "g");
+      result = result.replace(regex, String(value ?? ""));
     }
 
     // Clean up any remaining unreplaced variables
-    result = result.replace(/{{[^}]+}}/g, '');
+    result = result.replace(/{{[^}]+}}/g, "");
 
     return result;
   }
@@ -382,12 +297,16 @@ export class EmailHelper {
    */
   static async testConfiguration(): Promise<boolean> {
     try {
-      if (!this.transporter) {
-        logger.info("Email service is in development mode");
-        return true;
+      if (!this.resend) {
+        logger.warn("Email service not initialized");
+        return false;
       }
 
-      await this.transporter.verify();
+      if (!config.email.resendApiKey) {
+        logger.warn("Resend API key not configured");
+        return false;
+      }
+
       logger.info("✅ Email configuration test passed");
       return true;
     } catch (error) {
@@ -402,13 +321,15 @@ export class EmailHelper {
   static async sendTestEmail(to: string): Promise<boolean> {
     return await this.sendPlainEmail({
       to,
-      subject: "Test Email from Bareloft",
-      text: "This is a test email to verify your email configuration is working correctly.",
+      subject: "Test Email from Bareloft - Resend API",
+      text: "This is a test email to verify your Resend email configuration is working correctly.",
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <h2 style="color: #333;">Test Email from Bareloft</h2>
-          <p>This is a test email to verify your email configuration is working correctly.</p>
+          <p>This is a test email to verify your <strong>Resend</strong> email configuration is working correctly.</p>
           <p style="color: #666; font-size: 12px;">Sent at: ${new Date().toISOString()}</p>
+          <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
+          <p style="color: #999; font-size: 11px;">Powered by Resend API</p>
         </div>
       `,
     });
