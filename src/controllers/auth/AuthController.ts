@@ -188,29 +188,32 @@ export class AuthController extends BaseController {
       
       console.log('🍪 Setting auth cookies for user:', result.data.user.email);
       
-      res.cookie('accessToken', result.data.accessToken, {
+      // Cross-domain cookie configuration for Railway backend
+      const isProduction = process.env.NODE_ENV === 'production';
+      const cookieConfig = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        secure: true, // Always true for cross-domain support (Railway uses HTTPS)
+        sameSite: 'none' as const, // Allow cross-domain requests
         maxAge: accessTokenExpiry,
         path: '/'
-      });
-      
-      res.cookie('refreshToken', result.data.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: refreshTokenExpiry,
-        path: '/'
-      });
-      
-      res.cookie('user', JSON.stringify(result.data.user), {
+      };
+
+      const userCookieConfig = {
         httpOnly: false, // Allow client-side access to user data
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        secure: true, // Always true for cross-domain support
+        sameSite: 'none' as const, // Allow cross-domain requests
         maxAge: refreshTokenExpiry,
         path: '/'
+      };
+
+      res.cookie('accessToken', result.data.accessToken, cookieConfig);
+
+      res.cookie('refreshToken', result.data.refreshToken, {
+        ...cookieConfig,
+        maxAge: refreshTokenExpiry,
       });
+
+      res.cookie('user', JSON.stringify(result.data.user), userCookieConfig);
       
       console.log('✅ Auth cookies set successfully');
 
@@ -539,6 +542,19 @@ export class AuthController extends BaseController {
         userAgent: req.get("User-Agent"),
       });
 
+      // Update HTTP-only cookie with new access token for cross-domain support
+      const accessTokenExpiry = 15 * 60 * 1000; // 15 minutes
+      const cookieConfig = {
+        httpOnly: true,
+        secure: true, // Always true for cross-domain support (Railway uses HTTPS)
+        sameSite: 'none' as const, // Allow cross-domain requests
+        maxAge: accessTokenExpiry,
+        path: '/'
+      };
+
+      res.cookie('accessToken', result.accessToken, cookieConfig);
+      console.log('🔄 Updated accessToken cookie during refresh');
+
       const response: ApiResponse<{ accessToken: string; expiresIn: number }> =
         {
           success: true,
@@ -595,6 +611,19 @@ req: AuthenticatedRequest, res: Response): Promise<void> => {
         ipAddress: req.ip,
         userAgent: req.get("User-Agent"),
       });
+
+      // Clear HTTP-only cookies for cross-domain support
+      const cookieClearConfig = {
+        httpOnly: true,
+        secure: true, // Always true for cross-domain support
+        sameSite: 'none' as const, // Allow cross-domain requests
+        path: '/'
+      };
+
+      res.clearCookie('accessToken', cookieClearConfig);
+      res.clearCookie('refreshToken', cookieClearConfig);
+      res.clearCookie('user', { ...cookieClearConfig, httpOnly: false });
+      console.log('🧹 Cleared auth cookies during logout');
 
       const response: ApiResponse<{ sessionsInvalidated: number }> = {
         success: true,
@@ -821,29 +850,32 @@ req: Request, res: Response, next?: unknown  ): Promise<void> => {
       
       console.log('🍪 Setting auth cookies for email login user:', email);
       
-      res.cookie('accessToken', result.data.accessToken, {
+      // Cross-domain cookie configuration for Railway backend
+      const isProduction = process.env.NODE_ENV === 'production';
+      const cookieConfig = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        secure: true, // Always true for cross-domain support (Railway uses HTTPS)
+        sameSite: 'none' as const, // Allow cross-domain requests
         maxAge: accessTokenExpiry,
         path: '/'
-      });
-      
-      res.cookie('refreshToken', result.data.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: refreshTokenExpiry,
-        path: '/'
-      });
-      
-      res.cookie('user', JSON.stringify(result.data.user), {
+      };
+
+      const userCookieConfig = {
         httpOnly: false, // Allow client-side access to user data
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        secure: true, // Always true for cross-domain support
+        sameSite: 'none' as const, // Allow cross-domain requests
         maxAge: refreshTokenExpiry,
         path: '/'
+      };
+
+      res.cookie('accessToken', result.data.accessToken, cookieConfig);
+
+      res.cookie('refreshToken', result.data.refreshToken, {
+        ...cookieConfig,
+        maxAge: refreshTokenExpiry,
       });
+
+      res.cookie('user', JSON.stringify(result.data.user), userCookieConfig);
       
       console.log('✅ Email login auth cookies set successfully');
 

@@ -241,6 +241,38 @@ router.post(
 );
 
 /**
+ * @route   POST /api/v1/auth/refresh-token
+ * @desc    Refresh access token using HTTP-only cookies (alternative endpoint)
+ * @access  Public
+ * @rateLimit 10 requests per minute
+ *
+ * @body {
+ *   refreshToken: string     // Valid refresh token (optional if using cookies)
+ * }
+ *
+ * @response {
+ *   success: true,
+ *   message: "Token refreshed successfully",
+ *   data: {
+ *     accessToken: string,
+ *     expiresIn: number
+ *   }
+ * }
+ */
+router.post(
+  "/refresh-token", // Alternative endpoint for frontend compatibility
+  rateLimiter.auth,
+  // validateRequest(authSchemas.refreshToken), // Skip validation for now due to empty schema
+  (req, res, next) => {
+    try {
+      authController.refreshToken(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * @route   POST /api/v1/auth/logout
  * @desc    User logout (invalidate session)
  * @access  Private
