@@ -8,6 +8,7 @@ import { securityEnhancements } from "../../middleware/security/securityEnhancem
 import dashboardRoutes from "./dashboard";
 import userRoutes from "./users";
 import productRoutes from "./products";
+import categoriesRoutes from "./categories";
 import orderRoutes from "./orders";
 import bulkOrderRoutes from "./bulkOrders";
 import inventoryRoutes from "./inventory";
@@ -78,6 +79,21 @@ router.get("/", (req, res) => {
           "PUT /:id - Update product",
           "DELETE /:id - Delete/deactivate product",
           "POST /bulk - Bulk product actions"
+        ]
+      },
+      categories: {
+        base: "/api/admin/categories",
+        description: "Category management with image upload support",
+        endpoints: [
+          "GET / - List all categories with filtering",
+          "GET /statistics - Category statistics",
+          "GET /:id - Get category details",
+          "POST / - Create new category (with image upload)",
+          "PUT /:id - Update category (with image upload)",
+          "DELETE /:id - Delete category",
+          "POST /bulk - Bulk category actions",
+          "POST /:id/image - Upload category image",
+          "DELETE /:id/image - Remove category image"
         ]
       },
       orders: {
@@ -367,6 +383,7 @@ router.get("/health", (req, res) => {
 router.use("/dashboard", dashboardRoutes);
 router.use("/users", userRoutes);
 router.use("/products", productRoutes);
+router.use("/categories", categoriesRoutes);
 router.use("/orders/bulk", bulkOrderRoutes); // Mount bulk routes before general order routes
 router.use("/orders", orderRoutes);
 router.use("/inventory", inventoryRoutes);
