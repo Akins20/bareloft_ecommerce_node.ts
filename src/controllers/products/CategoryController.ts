@@ -486,4 +486,72 @@ export class CategoryController extends BaseController {
 
     return errors;
   }
+
+  /**
+   * Create a new category (Admin only)
+   * POST /api/admin/categories
+   */
+  public createCategory = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const categoryData: CreateCategoryRequest = req.body;
+
+      const result = await this.categoryService.createCategory(categoryData);
+
+      const response: ApiResponse<Category> = {
+        success: true,
+        message: "Category created successfully",
+        data: result,
+      };
+
+      res.status(201).json(response);
+    } catch (error) {
+      this.handleError(error, req, res);
+    }
+  };
+
+  /**
+   * Update an existing category (Admin only)
+   * PUT /api/admin/categories/:id
+   */
+  public updateCategory = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const categoryId = req.params.id;
+      const updateData: UpdateCategoryRequest = req.body;
+
+      const result = await this.categoryService.updateCategory(categoryId, updateData);
+
+      const response: ApiResponse<Category> = {
+        success: true,
+        message: "Category updated successfully",
+        data: result,
+      };
+
+      res.json(response);
+    } catch (error) {
+      this.handleError(error, req, res);
+    }
+  };
+
+  /**
+   * Delete a category (Admin only)
+   * DELETE /api/admin/categories/:id
+   */
+  public deleteCategory = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const categoryId = req.params.id;
+      const handleChildren = (req.query.handleChildren as 'delete' | 'move_to_parent' | 'move_to_root') || 'move_to_parent';
+
+      await this.categoryService.deleteCategory(categoryId, handleChildren);
+
+      const response: ApiResponse<null> = {
+        success: true,
+        message: "Category deleted successfully",
+        data: null,
+      };
+
+      res.json(response);
+    } catch (error) {
+      this.handleError(error, req, res);
+    }
+  };
 }
