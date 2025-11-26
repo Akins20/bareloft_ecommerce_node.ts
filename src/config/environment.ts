@@ -83,9 +83,16 @@ export const config: Config = {
   nodeEnv: (process.env.NODE_ENV as Config["nodeEnv"]) || "development",
 
   cors: {
-    origin: process.env.NODE_ENV === 'development' 
+    origin: process.env.NODE_ENV === 'development'
       ? true // Allow all origins in development for easier debugging
-      : process.env.CORS_ORIGIN?.split(",") || ["http://localhost:3000", "http://localhost:3001", "http://localhost:3003", "http://localhost:3004"],
+      : process.env.CORS_ORIGIN?.split(",") || [
+          "http://localhost:3000",
+          "http://localhost:3001",
+          "http://localhost:3003",
+          "http://localhost:3004",
+          "https://bareloft-admin.vercel.app",
+          "https://bareloft-web.vercel.app"
+        ],
     credentials: true,
   },
 

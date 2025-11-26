@@ -21,9 +21,9 @@ export const authConfig = {
     secret: process.env.SESSION_SECRET || "your-session-secret",
     expiresMs: parseInt(process.env.SESSION_EXPIRES_MS || "86400000"), // 24 hours
     cookieName: "bareloft_session",
-    secure: process.env.NODE_ENV === "production",
+    secure: true, // Always true for cross-domain (HTTPS required)
     httpOnly: true,
-    sameSite: "strict" as const,
+    sameSite: "none" as const, // Allow cross-origin requests (frontend on different domain)
   },
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000"), // 15 minutes

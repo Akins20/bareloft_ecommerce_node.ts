@@ -513,11 +513,13 @@ export class AuthController extends BaseController {
 
   /**
    * Refresh access token
-   * POST /api/v1/auth/refresh
+   * POST /api/v1/auth/refresh-token or POST /api/v1/auth/refresh
+   * Supports both body and cookie-based refresh tokens
    */
   public refreshToken = async (req: Request, res: Response, next?: unknown): Promise<void> => {
     try {
-      const { refreshToken }: RefreshTokenRequest = req.body;
+      // Try to get refresh token from body first, then from cookies
+      const refreshToken = req.body.refreshToken || req.cookies?.refreshToken;
 
       if (!refreshToken) {
         this.sendError(
